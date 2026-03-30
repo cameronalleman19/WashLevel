@@ -271,9 +271,10 @@ const isManager = user?.role === "manager";
 const locs = isManager ? locations : locations.filter(l => l.id === user?.locationId);
 const nav = [
 { id: "overview",   label: "Overview"   },
+{ id: "calendar",   label: "Calendar"   },
 { id: "timeclock",  label: "Time Clock" },
-{ id: "tasks",      label: "My Tasks"   },
-...(isManager ? [{ id: "all-tasks", label: "All Tasks" }] : []),
+{ id: "tasks",      label: "Tasks"      },
+{ id: "inventory",  label: "Inventory"  },
 { id: "equipment",  label: "Equipment"  },
 { id: "sensors",    label: "Sensors"    },
 ...(isManager ? [{ id: "settings", label: "Settings" }] : []),
@@ -319,7 +320,7 @@ return (
 );
 }
 
-function Overview({ location, tasks, sensors, equipment }) {
+function Overview({ location, tasks, sensors, equipment, onNavigate }) {
 const done = tasks.filter(t => t.status === "done").length;
 const inprog = tasks.filter(t => t.status === "in-progress").length;
 const eqBad = equipment.filter(e => e.status !== "ok").length;
@@ -332,10 +333,10 @@ return (
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
-<StatCard icon="?" label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" />
-<StatCard icon="?" label="Tasks Done" value={`${done}/${tasks.length}`} sub={`${pct}% complete`} accent="#10b981" />
-<StatCard icon="?" label="In Progress" value={inprog} accent="#f59e0b" />
-<StatCard icon="?" label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" />
+<div style={{ cursor: "default" }}><StatCard icon="?" label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard icon="?" label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard icon="?" label="In Progress" value={inprog} accent="#f59e0b" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard icon="?" label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
@@ -390,12 +391,58 @@ return (
 );
 }
 
-function TaskRow({ task, onStatus }) {
+function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials }) {
 const [open, setOpen] = useState(false);
+const [note, setNote] = useState(task.note || "");
+const [showHistory, setShowHistory] = useState(false);
+const [history, setHistory] = useState([]);
+const { user } = useAuth();
 const st = STS[task.status] || STS.pending;
 const next = task.status === "pending" ? "in-progress" : task.status === "in-progress" ? "done" : "pending";
 const nextLabel = task.status === "pending" ? "Start" : task.status === "in-progress" ? "Complete" : "Reopen";
 const btnC = task.status === "pending" ? "#6366f1" : task.status === "in-progress" ? "#059669" : "#9ca3af";
+
+const loadHistory = async () => {
+if (!locId) return;
+const snap = await getDocs(collection(db, "locations", locId, "tasks", task.id, "history"));
+const entries = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.completedAt > a.completedAt ? 1 : -1);
+setHistory(entries);
+setShowHistory(true);
+};
+
+const handleStatus = async (e) => {
+e.stopPropagation();
+if (next === "done" && locId) {
+const histId = "h" + Date.now();
+const duration = task.startedAt ? Math.round((Date.now() - new Date(task.startedAt).getTime()) / 60000) : null;
+await setDoc(doc(db, "locations", locId, "tasks", task.id, "history", histId), {
+completedAt: new Date().toISOString(),
+completedBy: user?.name || user?.email || "Unknown",
+completedById: user?.uid,
+note: note,
+duration: duration,
+date: new Date().toLocaleDateString(),
+});
+await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
+status: "done",
+completedAt: new Date().toISOString(),
+completedBy: user?.name || user?.email,
+duration: duration,
+updatedAt: new Date().toISOString(),
+note: note,
+});
+} else if (next === "in-progress" && locId) {
+await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
+status: "in-progress",
+startedAt: new Date().toISOString(),
+updatedAt: new Date().toISOString(),
+});
+} else {
+onStatus(task.id, next);
+}
+};
+
+const recurrenceLabel = task.recurrence ? "Repeats: " + task.recurrence : null;
 
 return (
 <div style={{ background: task.status === "done" ? "#fafafa" : "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, overflow: "hidden", opacity: task.status === "done" ? 0.72 : 1 }}>
@@ -406,33 +453,75 @@ return (
 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
 <Pill label={task.category} bg={CAT[task.category]?.bg} color={CAT[task.category]?.color} />
 <Pill label={task.priority} bg={PRI[task.priority]?.bg} color={PRI[task.priority]?.color} />
-<span style={{ fontSize: 11, color: "#9ca3af" }}>? {task.due}</span>
+<span style={{ fontSize: 11, color: "#9ca3af" }}>{task.due}</span>
+{recurrenceLabel && <span style={{ fontSize: 11, color: "#6366f1", background: "#ede9fe", padding: "1px 7px", borderRadius: 99 }}>{recurrenceLabel}</span>}
 </div>
 </div>
-<button onClick={e => { e.stopPropagation(); onStatus(task.id, next); }} style={{ background: btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>{nextLabel}</button>
-<span style={{ color: "#d1d5db", fontSize: 11 }}>{open ? "?" : "?"}</span>
+<button onClick={handleStatus} style={{ background: btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>{nextLabel}</button>
+<span style={{ color: "#d1d5db", fontSize: 11 }}>{open ? "v" : ">"}</span>
 </div>
 {open && (
-<div style={{ padding: "10px 14px 13px", borderTop: "1px solid #f3f4f6", background: "#fafbfc", fontSize: 12, color: "#6b7280" }}>
-<span style={{ marginRight: 16 }}><b>Shift:</b> {task.shift}</span>
+<div style={{ padding: "12px 14px 14px", borderTop: "1px solid #f3f4f6", background: "#fafbfc" }}>
+<div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
+<span><b>Shift:</b> {task.shift}</span>
 <span><b>Status:</b> <Pill label={st.label} bg={st.bg} color={st.color} /></span>
+{task.completedBy && <span><b>Completed by:</b> {task.completedBy}</span>}
+{task.completedAt && <span><b>Completed:</b> {new Date(task.completedAt).toLocaleDateString()}</span>}
+{task.duration != null && <span><b>Duration:</b> {task.duration} min</span>}
+</div>
+<div style={{ marginBottom: 10 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Notes</label>
+<textarea
+value={note}
+onChange={e => setNote(e.target.value)}
+onBlur={() => onSaveNote && onSaveNote(task.id, note)}
+placeholder="Add notes about this task..."
+rows={2}
+style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 12, resize: "vertical", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+/>
+</div>
+<div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+<button onClick={loadHistory} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#6b7280", cursor: "pointer" }}>
+View History
+</button>
+{task.status === "in-progress" && onSelectMaterials && (
+<button onClick={e => { e.stopPropagation(); onSelectMaterials(task); }} style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#059669", cursor: "pointer", fontWeight: 600 }}>
++ Materials Used
+</button>
+)}
+</div>
+{showHistory && (
+<div style={{ marginTop: 12 }}>
+<div style={{ fontWeight: 600, fontSize: 12, color: "#374151", marginBottom: 8 }}>Task History</div>
+{history.length === 0 ? (
+<div style={{ fontSize: 12, color: "#9ca3af" }}>No history yet.</div>
+) : history.map(h => (
+<div key={h.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, padding: "8px 12px", marginBottom: 6, fontSize: 12 }}>
+<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+<span style={{ fontWeight: 600, color: "#374151" }}>{h.date}</span>
+<span style={{ color: "#9ca3af" }}>{h.duration != null ? h.duration + " min" : ""}</span>
+</div>
+<div style={{ color: "#6b7280" }}><b>By:</b> {h.completedBy}</div>
+{h.note && <div style={{ color: "#374151", marginTop: 4, fontStyle: "italic" }}>{h.note}</div>}
+</div>
+))}
+</div>
+)}
 </div>
 )}
 </div>
 );
 }
 
-function Tasks({ tasks, onStatus, showAll, locationName, onAddTask }) {
+function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, locId, onSelectMaterials }) {
 const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
-const [fShift, setFSH] = useState("all");
 
 const mine = showAll ? tasks : tasks.filter(t => t.assignedRole === user?.role);
 const filtered = mine.filter(t => {
 if (fStatus !== "all" && t.status !== fStatus) return false;
 if (fCat !== "all" && t.category !== fCat) return false;
-if (fShift !== "all" && t.shift !== fShift) return false;
 return true;
 });
 const done = mine.filter(t => t.status === "done").length;
@@ -462,22 +551,14 @@ return (
 {chip("all", fStatus, setFS, "All")} {chip("pending", fStatus, setFS, "Pending")} {chip("in-progress", fStatus, setFS, "In Progress")} {chip("done", fStatus, setFS, "Done")}
 <div style={{ width: 1, background: "#e5e7eb" }} />
 {["all", "cleaning", "equipment", "chemicals", "supplies"].map(c => chip(c, fCat, setFC, c === "all" ? "All Types" : c.charAt(0).toUpperCase() + c.slice(1)))}
-<div style={{ width: 1, background: "#e5e7eb" }} />
-{chip("all", fShift, setFSH, "All Shifts")} {chip("opening", fShift, setFSH, "? Opening")} {chip("midday", fShift, setFSH, "?? Midday")} {chip("afternoon", fShift, setFSH, "? Afternoon")}
+
+  </div>
+  <div>
+    {filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} />)}
+    {filtered.length === 0 && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
+  </div>
 </div>
-{["opening", "midday", "afternoon"].map(shift => {
-const group = filtered.filter(t => t.shift === shift);
-if (!group.length) return null;
-const icons = { opening: "?", midday: "??", afternoon: "?" };
-return (
-<div key={shift} style={{ marginBottom: 22 }}>
-<div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 9 }}>{icons[shift]} {shift.charAt(0).toUpperCase() + shift.slice(1)}</div>
-{group.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} />)}
-</div>
-);
-})}
-{filtered.length === 0 && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
-</div>
+
 );
 }
 
@@ -645,7 +726,6 @@ return (
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
 </div>
 
-```
   {/* Main clock in/out */}
   <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 18, textAlign: "center" }}>
     <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Today's Shift</div>
@@ -723,7 +803,6 @@ return (
     </div>
   )}
 </div>
-```
 
 );
 }
@@ -736,13 +815,14 @@ const [priority, setPriority] = useState("medium");
 const [shift, setShift] = useState("opening");
 const [due, setDue] = useState("09:00 AM");
 const [saving, setSaving] = useState(false);
+const [recurrence, setRecurrence] = useState("");
 
 const handleSubmit = async (e) => {
 e.preventDefault();
 if (!title.trim()) return;
 setSaving(true);
 const id = "t" + Date.now();
-const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
 setSaving(false);
 onClose();
@@ -796,6 +876,19 @@ return (
 <input value={due} onChange={e => setDue(e.target.value)} placeholder="09:00 AM" style={inp} />
 </div>
 </div>
+<div style={{ marginBottom: 14 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Recurrence</label>
+<select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={sel}>
+<option value="">No recurrence</option>
+<option value="daily">Daily</option>
+<option value="weekly">Weekly</option>
+<option value="monthly">Monthly</option>
+<option value="quarterly">Quarterly</option>
+<option value="every 100 cars">Every 100 cars</option>
+<option value="every 500 cars">Every 500 cars</option>
+<option value="every 1000 cars">Every 1,000 cars</option>
+</select>
+</div>
 <div style={{ display: "flex", gap: 10 }}>
 <button type="submit" disabled={saving} style={{ flex: 1, background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
 {saving ? "Adding..." : "Add Task"}
@@ -805,6 +898,381 @@ return (
 </form>
 </div>
 </div>
+);
+}
+
+//  INVENTORY
+function Inventory({ locId, locationName }) {
+const [items, setItems] = useState([]);
+const [showAdd, setShowAdd] = useState(false);
+const [newItem, setNewItem] = useState({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5 });
+const [saving, setSaving] = useState(false);
+
+useEffect(() => {
+if (!locId) return;
+const unsub = onSnapshot(collection(db, "locations", locId, "inventory"), snap => {
+setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name)));
+});
+return unsub;
+}, [locId]);
+
+const handleAdd = async () => {
+if (!newItem.name.trim()) return;
+setSaving(true);
+const id = "inv" + Date.now();
+await setDoc(doc(db, "locations", locId, "inventory", id), { ...newItem, id, createdAt: new Date().toISOString() });
+setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5 });
+setShowAdd(false);
+setSaving(false);
+};
+
+const handleUpdate = async (itemId, qty) => {
+const val = parseFloat(qty);
+if (isNaN(val)) return;
+await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: val, updatedAt: new Date().toISOString() });
+};
+
+const handleDelete = async (itemId) => {
+if (!window.confirm("Delete this item?")) return;
+const { deleteDoc } = await import("firebase/firestore");
+await deleteDoc(doc(db, "locations", locId, "inventory", itemId));
+};
+
+const CAT_GROUPS = ["chemicals", "supplies", "equipment parts"];
+const CAT_COLORS2 = { chemicals: "#8b5cf6", supplies: "#f59e0b", "equipment parts": "#3b82f6" };
+
+const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fafafa" };
+
+return (
+<div>
+<div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+<div>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Inventory</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+</div>
+<button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>
+</div>
+
+  {showAdd && (
+    <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 14 }}>New Inventory Item</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Item Name</label>
+          <input value={newItem.name} onChange={e => setNewItem(p => ({...p, name: e.target.value}))} placeholder="e.g. Tire Shine" style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
+          <select value={newItem.category} onChange={e => setNewItem(p => ({...p, category: e.target.value}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }}>
+            <option value="chemicals">Chemicals</option>
+            <option value="supplies">Supplies</option>
+            <option value="equipment parts">Equipment Parts</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Quantity</label>
+          <input type="number" value={newItem.quantity} onChange={e => setNewItem(p => ({...p, quantity: parseFloat(e.target.value) || 0}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Unit</label>
+          <select value={newItem.unit} onChange={e => setNewItem(p => ({...p, unit: e.target.value}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }}>
+            <option value="gal">Gallons</option>
+            <option value="L">Liters</option>
+            <option value="oz">Oz</option>
+            <option value="lbs">Lbs</option>
+            <option value="units">Units</option>
+            <option value="rolls">Rolls</option>
+            <option value="boxes">Boxes</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label>
+          <input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value) || 0}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={handleAdd} disabled={saving} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add Item"}</button>
+        <button onClick={() => setShowAdd(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+      </div>
+    </div>
+  )}
+
+  {items.filter(i => i.quantity <= i.lowThreshold).length > 0 && (
+    <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#991b1b", fontWeight: 500 }}>
+      Low stock: {items.filter(i => i.quantity <= i.lowThreshold).map(i => i.name).join(", ")}
+    </div>
+  )}
+
+  {CAT_GROUPS.map(cat => {
+    const group = items.filter(i => i.category === cat);
+    if (!group.length) return null;
+    return (
+      <div key={cat} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: CAT_COLORS2[cat] || "#374151", marginBottom: 14, textTransform: "capitalize" }}>{cat}</div>
+        {group.map(item => {
+          const low = item.quantity <= item.lowThreshold;
+          return (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{item.name}</div>
+                {low && <div style={{ fontSize: 11, color: "#ef4444", fontWeight: 600 }}>LOW STOCK</div>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button onClick={() => handleUpdate(item.id, Math.max(0, item.quantity - 1))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
+                <div style={{ textAlign: "center", minWidth: 70 }}>
+                  <span style={{ fontWeight: 700, fontSize: 16, color: low ? "#ef4444" : "#111827" }}>{item.quantity}</span>
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}> {item.unit}</span>
+                </div>
+                <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+              </div>
+              <button onClick={() => handleDelete(item.id)} style={{ background: "none", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: 16, padding: "0 4px" }}>x</button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  })}
+  {items.length === 0 && !showAdd && (
+    <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No inventory items yet. Tap + Add Item to get started.</div>
+  )}
+</div>
+
+);
+}
+
+//  MATERIALS MODAL
+function MaterialsModal({ locId, task, onClose }) {
+const [items, setItems] = useState([]);
+const [selected, setSelected] = useState({});
+const [saving, setSaving] = useState(false);
+
+useEffect(() => {
+if (!locId) return;
+getDocs(collection(db, "locations", locId, "inventory")).then(snap => {
+setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+});
+}, [locId]);
+
+const handleQty = (id, val) => {
+setSelected(p => ({ ...p, [id]: parseFloat(val) || 0 }));
+};
+
+const handleSave = async () => {
+setSaving(true);
+for (const [itemId, qty] of Object.entries(selected)) {
+if (qty <= 0) continue;
+const item = items.find(i => i.id === itemId);
+if (!item) continue;
+const newQty = Math.max(0, item.quantity - qty);
+await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: newQty, updatedAt: new Date().toISOString() });
+}
+setSaving(false);
+onClose();
+};
+
+const inp = { width: 70, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none" };
+
+return (
+<div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+<div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "80vh", overflowY: "auto" }}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+<div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Materials Used</div>
+<button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+</div>
+<div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Task: <b>{task?.title}</b></div>
+{items.length === 0 ? (
+<div style={{ color: "#9ca3af", fontSize: 13 }}>No inventory items found. Add items in the Inventory section first.</div>
+) : items.map(item => (
+<div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+<div style={{ flex: 1 }}>
+<div style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</div>
+<div style={{ fontSize: 12, color: "#9ca3af" }}>Available: {item.quantity} {item.unit}</div>
+</div>
+<div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6b7280" }}>
+<span>Used:</span>
+<input type="number" min="0" max={item.quantity} value={selected[item.id] || ""} onChange={e => handleQty(item.id, e.target.value)} placeholder="0" style={inp} />
+<span>{item.unit}</span>
+</div>
+</div>
+))}
+<div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+<button onClick={handleSave} disabled={saving} style={{ flex: 1, background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{saving ? "Saving..." : "Deduct from Inventory"}</button>
+<button onClick={onClose} style={{ flex: 1, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+</div>
+</div>
+</div>
+);
+}
+
+//  CALENDAR
+function Calendar({ locId, locationName, tasks, sensors }) {
+const [currentDate, setCurrentDate] = useState(new Date());
+const [selectedDate, setSelectedDate] = useState(null);
+const [daySummaries, setDaySummaries] = useState({});
+const [weather, setWeather] = useState({});
+const [selectedSummary, setSelectedSummary] = useState(null);
+const [noteText, setNoteText] = useState("");
+const [savingNote, setSavingNote] = useState(false);
+
+const year = currentDate.getFullYear();
+const month = currentDate.getMonth();
+const today = new Date().toISOString().split("T")[0];
+
+useEffect(() => {
+if (!locId) return;
+const unsub = onSnapshot(collection(db, "locations", locId, "daySummaries"), snap => {
+const summaries = {};
+snap.docs.forEach(d => { summaries[d.id] = d.data(); });
+setDaySummaries(summaries);
+});
+return unsub;
+}, [locId]);
+
+const fetchWeather = async (dateStr, lat, lon) => {
+if (weather[dateStr]) return;
+try {
+const res = await fetch("https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr);
+const data = await res.json();
+if (data.daily) {
+const code = data.daily.weathercode[0];
+const max = Math.round(data.daily.temperature_2m_max[0] * 9/5 + 32);
+const min = Math.round(data.daily.temperature_2m_min[0] * 9/5 + 32);
+const desc = code <= 1 ? "Sunny" : code <= 3 ? "Partly Cloudy" : code <= 48 ? "Foggy" : code <= 67 ? "Rainy" : code <= 77 ? "Snowy" : "Stormy";
+setWeather(p => ({ ...p, [dateStr]: { max, min, desc } }));
+}
+} catch(e) {}
+};
+
+const handleSelectDate = async (dateStr) => {
+setSelectedDate(dateStr);
+setNoteText(daySummaries[dateStr]?.note || "");
+// Try to get weather - use default coords if no location coords
+fetchWeather(dateStr, 39.8283, -98.5795);
+// Auto-save day summary if today
+if (dateStr === today) {
+const doneTasks = tasks.filter(t => t.status === "done").length;
+const totalTasks = tasks.length;
+await setDoc(doc(db, "locations", locId, "daySummaries", dateStr), {
+date: dateStr,
+carsWashed: sensors?.carsToday || 0,
+tasksDone: doneTasks,
+tasksTotal: totalTasks,
+equipmentAlerts: 0,
+updatedAt: new Date().toISOString(),
+}, { merge: true });
+}
+setSelectedSummary(daySummaries[dateStr] || null);
+};
+
+const handleSaveNote = async () => {
+if (!selectedDate) return;
+setSavingNote(true);
+await setDoc(doc(db, "locations", locId, "daySummaries", selectedDate), { note: noteText, date: selectedDate, updatedAt: new Date().toISOString() }, { merge: true });
+setSavingNote(false);
+};
+
+const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+const getFirstDayOfMonth = (y, m) => new Date(y, m, 1).getDay();
+
+const daysInMonth = getDaysInMonth(year, month);
+const firstDay = getFirstDayOfMonth(year, month);
+const monthName = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+const dateStr = (d) => year + "-" + String(month + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+
+const summary = selectedDate ? (daySummaries[selectedDate] || {}) : null;
+const selWeather = selectedDate ? weather[selectedDate] : null;
+
+return (
+<div>
+<div style={{ marginBottom: 22 }}>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Calendar</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+</div>
+
+  <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
+    {/* Calendar grid */}
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <button onClick={prevMonth} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 14 }}>{"<"}</button>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{monthName}</div>
+        <button onClick={nextMonth} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 14 }}>{">"}</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 8 }}>
+        {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
+          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#9ca3af", padding: "4px 0" }}>{d}</div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+        {Array(firstDay).fill(null).map((_, i) => <div key={"e"+i} />)}
+        {Array(daysInMonth).fill(null).map((_, i) => {
+          const d = i + 1;
+          const ds = dateStr(d);
+          const isToday = ds === today;
+          const isSelected = ds === selectedDate;
+          const hasSummary = !!daySummaries[ds];
+          const isPast = ds < today;
+          return (
+            <button key={d} onClick={() => handleSelectDate(ds)} style={{
+              aspectRatio: "1", borderRadius: 8, border: isSelected ? "2px solid #1a3352" : "1px solid transparent",
+              background: isToday ? "#1a3352" : isSelected ? "#e0e7ff" : hasSummary ? "#f0fdf4" : "#fafafa",
+              color: isToday ? "#fff" : "#111827",
+              cursor: "pointer", fontSize: 13, fontWeight: isToday || isSelected ? 700 : 400,
+              display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2,
+              padding: "4px 2px",
+            }}>
+              {d}
+              {hasSummary && <div style={{ width: 4, height: 4, borderRadius: "50%", background: isToday ? "#34d399" : "#10b981" }} />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Day summary panel */}
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+      {!selectedDate ? (
+        <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>&#128197;</div>
+          Select a date to view summary
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>
+            {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          </div>
+          {selWeather && (
+            <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+              <div style={{ fontWeight: 600, color: "#0369a1" }}>{selWeather.desc}</div>
+              <div style={{ color: "#0284c7" }}>High {selWeather.max}F / Low {selWeather.min}F</div>
+            </div>
+          )}
+          {summary?.carsWashed != null && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>{summary.carsWashed}</div>
+                <div style={{ fontSize: 11, color: "#6b7280" }}>Cars Washed</div>
+              </div>
+              <div style={{ background: "#ede9fe", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#7c3aed" }}>{summary.tasksDone}/{summary.tasksTotal}</div>
+                <div style={{ fontSize: 11, color: "#6b7280" }}>Tasks Done</div>
+              </div>
+            </div>
+          )}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Notes / Issues</label>
+            <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="Add notes about this day..." style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 12, resize: "vertical", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <button onClick={handleSaveNote} disabled={savingNote} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingNote ? "Saving..." : "Save Notes"}</button>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
 );
 }
 
@@ -917,6 +1385,7 @@ const [view, setView] = useState("overview");
 const [locId, setLocId] = useState(null);
 const [ready, setReady] = useState(false);
 const [showAddTask, setShowAddTask] = useState(false);
+const [materialsTask, setMaterialsTask] = useState(null);
 
 useEffect(() => {
 if (!user) return;
@@ -950,6 +1419,11 @@ if (!locId) return;
 await updateDoc(doc(db, "locations", locId, "tasks", taskId), { status: newStatus, updatedAt: new Date().toISOString() });
 };
 
+const handleSaveNote = async (taskId, note) => {
+if (!locId) return;
+await updateDoc(doc(db, "locations", locId, "tasks", taskId), { note, updatedAt: new Date().toISOString() });
+};
+
 if (!ready || !locId) return <Spinner />;
 
 const curLoc = locations.find(l => l.id === locId);
@@ -962,15 +1436,18 @@ return (
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} />
 <main style={{ flex: 1, overflowY: "auto", padding: "28px 32px" }}>
-{view === "overview"  && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} />}
-{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} />}
-{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} />}
+{view === "overview"  && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} />}
+{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
+{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
+{view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} />}
 {view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} />}
+{view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} />}
 {view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => setShowAddTask(false)} onAdd={() => {}} />}
+{materialsTask && <MaterialsModal locId={locId} task={materialsTask} onClose={() => setMaterialsTask(null)} />}
 </div>
 );
 }
