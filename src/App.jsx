@@ -1,0 +1,986 @@
+// Paste into App.tsx, then in Dependencies panel add: firebase (10.8.0)
+
+import { useState, useEffect, createContext, useContext } from "react";
+import { initializeApp, getApps } from "firebase/app";
+import {
+getAuth,
+signInWithEmailAndPassword,
+signOut,
+onAuthStateChanged,
+} from "firebase/auth";
+import {
+getFirestore,
+collection,
+doc,
+setDoc,
+getDoc,
+getDocs,
+updateDoc,
+onSnapshot,
+} from "firebase/firestore";
+
+const firebaseConfig = {
+apiKey: "AIzaSyDzPJI6OzB4KFpRgXv1uv3jNUEK7dr8oMQ",
+authDomain: "washlevel-c16d9.firebaseapp.com",
+projectId: "washlevel-c16d9",
+storageBucket: "washlevel-c16d9.firebasestorage.app",
+messagingSenderId: "756159059921",
+appId: "1:756159059921:web:9c9f2948e4bdd21945b2f0",
+};
+
+const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
+const LOCATIONS = [
+{ id: "loc1", name: "North Station", address: "1240 N. Highway Blvd" },
+{ id: "loc2", name: "Downtown Express", address: "88 Central Ave" },
+{ id: "loc3", name: "Southside Wash", address: "5500 South Park Dr" },
+];
+
+const SEED_TASKS = {
+loc1: [
+{ id: "t1", title: "Restock soap dispensers", category: "supplies", priority: "high", status: "pending", assignedRole: "attendant", due: "09:00 AM", shift: "opening" },
+{ id: "t2", title: "Inspect brush rollers", category: "equipment", priority: "high", status: "in-progress", assignedRole: "technician", due: "10:00 AM", shift: "opening" },
+{ id: "t3", title: "Clean vacuum stations 1-4", category: "cleaning", priority: "medium", status: "pending", assignedRole: "attendant", due: "11:00 AM", shift: "midday" },
+{ id: "t4", title: "Check chemical levels - Bay A", category: "chemicals", priority: "high", status: "done", assignedRole: "technician", due: "08:00 AM", shift: "opening" },
+{ id: "t5", title: "Wipe down pay kiosks", category: "cleaning", priority: "low", status: "pending", assignedRole: "attendant", due: "12:00 PM", shift: "midday" },
+{ id: "t6", title: "Test conveyor belt tension", category: "equipment", priority: "medium", status: "pending", assignedRole: "technician", due: "02:00 PM", shift: "afternoon" },
+{ id: "t7", title: "Water softener salt check", category: "chemicals", priority: "medium", status: "pending", assignedRole: "technician", due: "03:00 PM", shift: "afternoon" },
+{ id: "t8", title: "Sweep & squeegee entrance", category: "cleaning", priority: "low", status: "done", assignedRole: "attendant", due: "08:30 AM", shift: "opening" },
+],
+loc2: [
+{ id: "t9", title: "Fill rinse aid tank", category: "chemicals", priority: "high", status: "in-progress", assignedRole: "attendant", due: "09:30 AM", shift: "opening" },
+{ id: "t10", title: "Sweep entrance area", category: "cleaning", priority: "low", status: "done", assignedRole: "attendant", due: "08:00 AM", shift: "opening" },
+{ id: "t11", title: "Lubricate door tracks", category: "equipment", priority: "medium", status: "pending", assignedRole: "attendant", due: "01:00 PM", shift: "afternoon" },
+{ id: "t12", title: "Check nozzle spray pattern", category: "equipment", priority: "high", status: "pending", assignedRole: "attendant", due: "10:00 AM", shift: "opening" },
+],
+loc3: [
+{ id: "t13", title: "Replace air freshener units", category: "supplies", priority: "medium", status: "pending", assignedRole: "attendant", due: "10:00 AM", shift: "opening" },
+{ id: "t14", title: "Inspect undercarriage nozzles", category: "equipment", priority: "high", status: "pending", assignedRole: "attendant", due: "09:00 AM", shift: "opening" },
+{ id: "t15", title: "Clean drainage grates", category: "cleaning", priority: "medium", status: "done", assignedRole: "attendant", due: "07:30 AM", shift: "opening" },
+{ id: "t16", title: "Restock paper towels & trash", category: "supplies", priority: "low", status: "pending", assignedRole: "attendant", due: "11:00 AM", shift: "midday" },
+],
+};
+
+const SEED_SENSORS = {
+loc1: { soapLevel: 62, rinseAid: 74, waxLevel: 55, waterPressure: 87, tempF: 68, conveyorRPM: 24, carsToday: 142 },
+loc2: { soapLevel: 28, rinseAid: 18, waxLevel: 80, waterPressure: 91, tempF: 71, conveyorRPM: 22, carsToday: 98 },
+loc3: { soapLevel: 85, rinseAid: 92, waxLevel: 66, waterPressure: 79, tempF: 66, conveyorRPM: 25, carsToday: 73 },
+};
+
+const SEED_EQUIPMENT = {
+loc1: [
+{ id: "e1", name: "Conveyor Belt", status: "ok", lastService: "Mar 15", nextService: "Apr 15" },
+{ id: "e2", name: "Brush Rollers", status: "warning", lastService: "Mar 01", nextService: "Apr 01" },
+{ id: "e3", name: "High-Pressure Arch", status: "ok", lastService: "Mar 20", nextService: "Apr 20" },
+{ id: "e4", name: "Dryer Blowers", status: "ok", lastService: "Mar 10", nextService: "Apr 10" },
+{ id: "e5", name: "Chemical Injectors", status: "ok", lastService: "Mar 22", nextService: "Apr 22" },
+],
+loc2: [
+{ id: "e6", name: "Conveyor Belt", status: "ok", lastService: "Mar 18", nextService: "Apr 18" },
+{ id: "e7", name: "Brush Rollers", status: "ok", lastService: "Mar 12", nextService: "Apr 12" },
+{ id: "e8", name: "High-Pressure Arch", status: "error", lastService: "Mar 05", nextService: "Overdue" },
+{ id: "e9", name: "Dryer Blowers", status: "ok", lastService: "Mar 17", nextService: "Apr 17" },
+],
+loc3: [
+{ id: "e10", name: "Conveyor Belt", status: "ok", lastService: "Mar 21", nextService: "Apr 21" },
+{ id: "e11", name: "Brush Rollers", status: "ok", lastService: "Mar 14", nextService: "Apr 14" },
+{ id: "e12", name: "Undercarriage Wash", status: "warning", lastService: "Feb 28", nextService: "Mar 28" },
+{ id: "e13", name: "Chemical Injectors", status: "ok", lastService: "Mar 19", nextService: "Apr 19" },
+],
+};
+
+const DEMO_PROFILES = {
+"manager@washlevel.com": { name: "Alex Rivera", role: "manager", locationId: null, color: "#6366f1" },
+"jordan@washlevel.com": { name: "Jordan Lee", role: "attendant", locationId: "loc1", color: "#0ea5e9" },
+"casey@washlevel.com": { name: "Casey Kim", role: "technician", locationId: "loc1", color: "#f59e0b" },
+"sam@washlevel.com": { name: "Sam Torres", role: "attendant", locationId: "loc2", color: "#10b981" },
+"morgan@washlevel.com": { name: "Morgan Blake", role: "attendant", locationId: "loc3", color: "#ec4899" },
+};
+
+let seeding = false;
+async function seedDatabase() {
+if (seeding) return;
+seeding = true;
+try {
+const snap = await getDocs(collection(db, "locations"));
+if (!snap.empty) return;
+for (const loc of LOCATIONS) {
+await setDoc(doc(db, "locations", loc.id), loc);
+for (const task of SEED_TASKS[loc.id] || []) {
+await setDoc(doc(db, "locations", loc.id, "tasks", task.id), {
+...task, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+});
+}
+await setDoc(doc(db, "sensors", loc.id), { ...SEED_SENSORS[loc.id], updatedAt: new Date().toISOString() });
+for (const eq of SEED_EQUIPMENT[loc.id] || []) {
+await setDoc(doc(db, "locations", loc.id, "equipment", eq.id), eq);
+}
+}
+} catch (e) {
+console.error("Seed error:", e);
+} finally {
+seeding = false;
+}
+}
+
+const CAT = { supplies: { bg: "#fef3c7", color: "#b45309" }, equipment: { bg: "#dbeafe", color: "#1d4ed8" }, cleaning: { bg: "#d1fae5", color: "#065f46" }, chemicals: { bg: "#ede9fe", color: "#5b21b6" } };
+const PRI = { high: { bg: "#fee2e2", color: "#991b1b" }, medium: { bg: "#fef3c7", color: "#92400e" }, low: { bg: "#f3f4f6", color: "#6b7280" } };
+const STS = { pending: { bg: "#f3f4f6", color: "#6b7280", dot: "#9ca3af", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
+const EQS = { ok: { bg: "#d1fae5", color: "#059669", icon: "?", label: "OK" }, warning: { bg: "#fef3c7", color: "#d97706", icon: "!", label: "Warning" }, error: { bg: "#fee2e2", color: "#dc2626", icon: "?", label: "Alert" } };
+
+const AuthCtx = createContext(null);
+
+function AuthProvider({ children }) {
+const [user, setUser] = useState(null);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+const unsub = onAuthStateChanged(auth, async (fu) => {
+if (fu) {
+let profile = DEMO_PROFILES[fu.email] || { name: fu.email, role: "attendant", locationId: "loc1", color: "#6366f1" };
+try {
+const snap = await getDoc(doc(db, "users", fu.uid));
+if (snap.exists()) profile = snap.data();
+else await setDoc(doc(db, "users", fu.uid), { ...profile, email: fu.email });
+} catch (e) {}
+setUser({ uid: fu.uid, email: fu.email, ...profile });
+} else {
+setUser(null);
+}
+setLoading(false);
+});
+return unsub;
+}, []);
+
+return (
+<AuthCtx.Provider value={{
+user, loading,
+login: (e, p) => signInWithEmailAndPassword(auth, e, p),
+logout: () => signOut(auth),
+}}>
+{!loading && children}
+</AuthCtx.Provider>
+);
+}
+
+const useAuth = () => useContext(AuthCtx);
+
+const Pill = ({ label, bg, color }) => (
+<span style={{ background: bg, color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99, textTransform: "capitalize", whiteSpace: "nowrap" }}>{label}</span>
+);
+
+const Bar = ({ value, color = "#3b82f6", height = 6 }) => {
+const c = value < 25 ? "#ef4444" : value < 45 ? "#f59e0b" : color;
+return (
+<div style={{ height, background: "#e5e7eb", borderRadius: 99, overflow: "hidden" }}>
+<div style={{ height: "100%", width: `${Math.min(value || 0, 100)}%`, background: c, borderRadius: 99 }} />
+</div>
+);
+};
+
+const Avatar = ({ name = "", color = "#6366f1", size = 32 }) => {
+const i = name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+return <div style={{ width: size, height: size, borderRadius: "50%", background: color, color: "#fff", fontWeight: 700, fontSize: size * 0.35, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i}</div>;
+};
+
+const StatCard = ({ icon, label, value, sub, accent = "#3b82f6", alert = false }) => (
+
+  <div style={{ background: "#fff", border: alert ? "1.5px solid #fca5a5" : "1px solid #e5e7eb", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+    <div style={{ width: 42, height: 42, borderRadius: 10, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
+    <div>
+      <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: alert ? "#dc2626" : "#111827", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{sub}</div>}
+    </div>
+  </div>
+);
+
+const Spinner = () => (
+
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
+    <div style={{ width: 36, height: 36, border: "3px solid #e5e7eb", borderTop: "3px solid #1a3352", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+  </div>
+);
+
+function Login() {
+const { login } = useAuth();
+const [email, setEmail] = useState("");
+const [password, setPassword] = useState("");
+const [error, setError] = useState("");
+const [loading, setLoading] = useState(false);
+
+const handleSubmit = async (e) => {
+e.preventDefault();
+setError(""); setLoading(true);
+try { await login(email, password); }
+catch { setError("Invalid email or password."); }
+setLoading(false);
+};
+
+const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" };
+
+return (
+<div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<div style={{ width: "100%", maxWidth: 420, padding: "0 20px" }}>
+<div style={{ textAlign: "center", marginBottom: 32 }}>
+<div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#1a3352", borderRadius: 14, padding: "10px 22px" }}>
+<span style={{ fontSize: 22 }}>?</span>
+<span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
+<span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
+</div>
+<div style={{ color: "#94a3b8", fontSize: 13, marginTop: 8 }}>Operations & Task Management</div>
+</div>
+<div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+<div style={{ fontWeight: 700, fontSize: 18, color: "#111827", marginBottom: 4 }}>Sign in</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Enter your credentials to continue</div>
+<form onSubmit={handleSubmit}>
+<div style={{ marginBottom: 16 }}>
+<label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Email</label>
+<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@washlevel.com" required style={inp} />
+</div>
+<div style={{ marginBottom: 20 }}>
+<label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Password</label>
+<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="????????" required style={inp} />
+</div>
+{error && <div style={{ background: "#fee2e2", color: "#991b1b", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>{error}</div>}
+<button type="submit" disabled={loading} style={{ width: "100%", background: loading ? "#9ca3af" : "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+{loading ? "Signing in..." : "Sign In"}
+</button>
+</form>
+<div style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 10, fontSize: 12, color: "#6b7280" }}>
+<div style={{ fontWeight: 700, color: "#374151", marginBottom: 6 }}>Demo accounts (password: washlevel123)</div>
+<div>manager@washlevel.com - All locations</div>
+<div>jordan@washlevel.com - North Station</div>
+<div>casey@washlevel.com - North Station</div>
+<div>sam@washlevel.com - Downtown Express</div>
+<div>morgan@washlevel.com - Southside Wash</div>
+</div>
+</div>
+</div>
+</div>
+);
+}
+
+function Sidebar({ locations, view, setView, locId, setLocId }) {
+const { user, logout } = useAuth();
+const isManager = user?.role === "manager";
+const locs = isManager ? locations : locations.filter(l => l.id === user?.locationId);
+const nav = [
+{ id: "overview",   label: "Overview"   },
+{ id: "timeclock",  label: "Time Clock" },
+{ id: "tasks",      label: "My Tasks"   },
+...(isManager ? [{ id: "all-tasks", label: "All Tasks" }] : []),
+{ id: "equipment",  label: "Equipment"  },
+{ id: "sensors",    label: "Sensors"    },
+...(isManager ? [{ id: "settings", label: "Settings" }] : []),
+];
+const RC = { manager: "#6366f1", attendant: "#0ea5e9", technician: "#f59e0b" };
+
+return (
+<aside style={{ width: 220, flexShrink: 0, background: "#1a3352", display: "flex", flexDirection: "column", height: "100vh", overflowY: "auto" }}>
+<div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+<span style={{ fontSize: 20 }}>?</span>
+<span style={{ color: "#fff", fontWeight: 700, fontSize: 17 }}>WashLevel</span>
+<span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px" }}>PRO</span>
+</div>
+</div>
+<div style={{ padding: "14px 12px 8px" }}>
+<div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Location</div>
+{locs.map(l => (
+<button key={l.id} onClick={() => setLocId(l.id)} style={{ width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: locId === l.id ? "rgba(255,255,255,0.1)" : "transparent", color: locId === l.id ? "#fff" : "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 13, fontWeight: locId === l.id ? 600 : 400, marginBottom: 2, display: "flex", alignItems: "center", gap: 8 }}>
+<span style={{ width: 7, height: 7, borderRadius: "50%", background: locId === l.id ? "#34d399" : "rgba(255,255,255,0.15)", flexShrink: 0 }} />{l.name}
+</button>
+))}
+</div>
+<div style={{ padding: "6px 12px", flex: 1, borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 4 }}>
+<div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, marginTop: 10 }}>Menu</div>
+{nav.map(item => (
+<button key={item.id} onClick={() => setView(item.id)} style={{ width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 7, border: "none", background: view === item.id ? "#0ea5e9" : "transparent", color: view === item.id ? "#fff" : "rgba(255,255,255,0.55)", cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 600 : 400, marginBottom: 2 }}>
+{item.label}
+</button>
+))}
+</div>
+<div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+<div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+<Avatar name={user?.name || user?.email || ""} color={RC[user?.role] || "#6366f1"} size={34} />
+<div style={{ minWidth: 0 }}>
+<div style={{ color: "#fff", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user?.name || user?.email}</div>
+<div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, textTransform: "capitalize" }}>{user?.role}</div>
+</div>
+</div>
+<button onClick={logout} style={{ width: "100%", background: "rgba(255,255,255,0.07)", border: "none", color: "rgba(255,255,255,0.6)", borderRadius: 7, padding: "8px 0", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
+</div>
+</aside>
+);
+}
+
+function Overview({ location, tasks, sensors, equipment }) {
+const done = tasks.filter(t => t.status === "done").length;
+const inprog = tasks.filter(t => t.status === "in-progress").length;
+const eqBad = equipment.filter(e => e.status !== "ok").length;
+const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+
+return (
+<div>
+<div style={{ marginBottom: 22 }}>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{location?.name} - Overview</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
+<StatCard icon="?" label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" />
+<StatCard icon="?" label="Tasks Done" value={`${done}/${tasks.length}`} sub={`${pct}% complete`} accent="#10b981" />
+<StatCard icon="?" label="In Progress" value={inprog} accent="#f59e0b" />
+<StatCard icon="?" label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" />
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+<span>?</span> Live Sensors
+<span style={{ marginLeft: "auto", fontSize: 11, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: 99, fontWeight: 600 }}>LIVE</span>
+</div>
+{[
+{ label: "Soap Level", val: sensors?.soapLevel, c: "#8b5cf6" },
+{ label: "Rinse Aid", val: sensors?.rinseAid, c: "#0ea5e9" },
+{ label: "Wax Level", val: sensors?.waxLevel, c: "#f59e0b" },
+{ label: "Water Pressure", val: sensors?.waterPressure, c: "#10b981" },
+].map(s => (
+<div key={s.label} style={{ marginBottom: 14 }}>
+<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+<span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>{s.label}</span>
+<span style={{ fontSize: 13, fontWeight: 700, color: (s.val ?? 100) < 30 ? "#ef4444" : "#111827" }}>{s.val ?? "-"}%</span>
+</div>
+<Bar value={s.val ?? 0} color={s.c} />
+</div>
+))}
+{sensors && <div style={{ marginTop: 6, padding: "10px 12px", background: "#f0f9ff", borderRadius: 8, fontSize: 12, color: "#0369a1" }}>? Temp: <b>{sensors.tempF}?F</b> ? Conveyor: <b>{sensors.conveyorRPM} RPM</b></div>}
+</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>? Equipment Status</div>
+{equipment.map(eq => {
+const s = EQS[eq.status] || EQS.ok;
+return (
+<div key={eq.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e5e7eb"}`, marginBottom: 7 }}>
+<span style={{ fontWeight: 700, color: s.color, fontSize: 13, width: 16, textAlign: "center" }}>{s.icon}</span>
+<span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#374151" }}>{eq.name}</span>
+<span style={{ fontSize: 11, color: "#9ca3af" }}>{eq.nextService}</span>
+<Pill label={s.label} bg={s.bg} color={s.color} />
+</div>
+);
+})}
+</div>
+</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>? Open Tasks</div>
+{tasks.filter(t => t.status !== "done").slice(0, 6).map((t, i, arr) => (
+<div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+<div style={{ width: 8, height: 8, borderRadius: "50%", background: STS[t.status]?.dot, flexShrink: 0 }} />
+<span style={{ flex: 1, fontSize: 13, color: "#374151", fontWeight: 500 }}>{t.title}</span>
+<Pill label={t.priority} bg={PRI[t.priority]?.bg} color={PRI[t.priority]?.color} />
+<span style={{ fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap" }}>{t.due}</span>
+</div>
+))}
+{tasks.filter(t => t.status !== "done").length === 0 && <div style={{ textAlign: "center", color: "#10b981", fontWeight: 600, padding: "20px 0" }}>? All tasks complete!</div>}
+</div>
+</div>
+);
+}
+
+function TaskRow({ task, onStatus }) {
+const [open, setOpen] = useState(false);
+const st = STS[task.status] || STS.pending;
+const next = task.status === "pending" ? "in-progress" : task.status === "in-progress" ? "done" : "pending";
+const nextLabel = task.status === "pending" ? "Start" : task.status === "in-progress" ? "Complete" : "Reopen";
+const btnC = task.status === "pending" ? "#6366f1" : task.status === "in-progress" ? "#059669" : "#9ca3af";
+
+return (
+<div style={{ background: task.status === "done" ? "#fafafa" : "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, overflow: "hidden", opacity: task.status === "done" ? 0.72 : 1 }}>
+<div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", cursor: "pointer" }} onClick={() => setOpen(!open)}>
+<div style={{ width: 9, height: 9, borderRadius: "50%", background: st.dot, flexShrink: 0 }} />
+<div style={{ flex: 1, minWidth: 0 }}>
+<div style={{ fontWeight: 600, fontSize: 13.5, color: task.status === "done" ? "#9ca3af" : "#111827", textDecoration: task.status === "done" ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.title}</div>
+<div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+<Pill label={task.category} bg={CAT[task.category]?.bg} color={CAT[task.category]?.color} />
+<Pill label={task.priority} bg={PRI[task.priority]?.bg} color={PRI[task.priority]?.color} />
+<span style={{ fontSize: 11, color: "#9ca3af" }}>? {task.due}</span>
+</div>
+</div>
+<button onClick={e => { e.stopPropagation(); onStatus(task.id, next); }} style={{ background: btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>{nextLabel}</button>
+<span style={{ color: "#d1d5db", fontSize: 11 }}>{open ? "?" : "?"}</span>
+</div>
+{open && (
+<div style={{ padding: "10px 14px 13px", borderTop: "1px solid #f3f4f6", background: "#fafbfc", fontSize: 12, color: "#6b7280" }}>
+<span style={{ marginRight: 16 }}><b>Shift:</b> {task.shift}</span>
+<span><b>Status:</b> <Pill label={st.label} bg={st.bg} color={st.color} /></span>
+</div>
+)}
+</div>
+);
+}
+
+function Tasks({ tasks, onStatus, showAll, locationName, onAddTask }) {
+const { user } = useAuth();
+const [fStatus, setFS] = useState("all");
+const [fCat, setFC] = useState("all");
+const [fShift, setFSH] = useState("all");
+
+const mine = showAll ? tasks : tasks.filter(t => t.assignedRole === user?.role);
+const filtered = mine.filter(t => {
+if (fStatus !== "all" && t.status !== fStatus) return false;
+if (fCat !== "all" && t.category !== fCat) return false;
+if (fShift !== "all" && t.shift !== fShift) return false;
+return true;
+});
+const done = mine.filter(t => t.status === "done").length;
+const pct = mine.length ? Math.round(done / mine.length * 100) : 0;
+
+const chip = (val, cur, set, label) => (
+<button onClick={() => set(val)} style={{ padding: "5px 12px", borderRadius: 99, border: "1px solid #e5e7eb", background: cur === val ? "#1a3352" : "#fff", color: cur === val ? "#fff" : "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}>{label}</button>
+);
+
+return (
+<div>
+<div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+<div>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{showAll ? "All Tasks" : "My Tasks"}</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+</div>
+<button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>+ Add Task</button>
+</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
+<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+<span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>Today's Progress</span>
+<span style={{ fontSize: 13, fontWeight: 700 }}>{done}/{mine.length} ({pct}%)</span>
+</div>
+<Bar value={pct} color={pct === 100 ? "#10b981" : "#6366f1"} height={8} />
+</div>
+<div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 18 }}>
+{chip("all", fStatus, setFS, "All")} {chip("pending", fStatus, setFS, "Pending")} {chip("in-progress", fStatus, setFS, "In Progress")} {chip("done", fStatus, setFS, "Done")}
+<div style={{ width: 1, background: "#e5e7eb" }} />
+{["all", "cleaning", "equipment", "chemicals", "supplies"].map(c => chip(c, fCat, setFC, c === "all" ? "All Types" : c.charAt(0).toUpperCase() + c.slice(1)))}
+<div style={{ width: 1, background: "#e5e7eb" }} />
+{chip("all", fShift, setFSH, "All Shifts")} {chip("opening", fShift, setFSH, "? Opening")} {chip("midday", fShift, setFSH, "?? Midday")} {chip("afternoon", fShift, setFSH, "? Afternoon")}
+</div>
+{["opening", "midday", "afternoon"].map(shift => {
+const group = filtered.filter(t => t.shift === shift);
+if (!group.length) return null;
+const icons = { opening: "?", midday: "??", afternoon: "?" };
+return (
+<div key={shift} style={{ marginBottom: 22 }}>
+<div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 9 }}>{icons[shift]} {shift.charAt(0).toUpperCase() + shift.slice(1)}</div>
+{group.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} />)}
+</div>
+);
+})}
+{filtered.length === 0 && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
+</div>
+);
+}
+
+function Equipment({ equipment, locationName }) {
+return (
+<div>
+<div style={{ marginBottom: 22 }}>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Equipment Status</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(270px,1fr))", gap: 16 }}>
+{equipment.map(eq => {
+const s = EQS[eq.status] || EQS.ok;
+return (
+<div key={eq.id} style={{ background: "#fff", border: `1.5px solid ${eq.status !== "ok" ? s.color + "60" : "#e5e7eb"}`, borderRadius: 12, padding: 20 }}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+<div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{eq.name}</div>
+<Pill label={s.label} bg={s.bg} color={s.color} />
+</div>
+<div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13, color: "#6b7280" }}>
+<div style={{ display: "flex", justifyContent: "space-between" }}><span>Last Service</span><span style={{ fontWeight: 600, color: "#374151" }}>{eq.lastService}</span></div>
+<div style={{ display: "flex", justifyContent: "space-between" }}><span>Next Service</span><span style={{ fontWeight: 600, color: eq.nextService === "Overdue" ? "#ef4444" : "#374151" }}>{eq.nextService}</span></div>
+</div>
+{eq.status !== "ok" && <div style={{ marginTop: 12, padding: "8px 12px", background: s.bg, borderRadius: 8, fontSize: 12, color: s.color, fontWeight: 500 }}>{eq.status === "warning" ? "? Service approaching" : "? Requires immediate attention"}</div>}
+</div>
+);
+})}
+</div>
+</div>
+);
+}
+
+function Sensors({ sensors, locationName }) {
+const s = sensors || {};
+const cards = [
+{ label: "Soap Level", val: s.soapLevel, unit: "%", icon: "?", color: "#8b5cf6", low: 30 },
+{ label: "Rinse Aid", val: s.rinseAid, unit: "%", icon: "?", color: "#0ea5e9", low: 25 },
+{ label: "Wax Level", val: s.waxLevel, unit: "%", icon: "?", color: "#f59e0b", low: 20 },
+{ label: "Water Pressure", val: s.waterPressure, unit: "%", icon: "?", color: "#10b981", low: 60 },
+{ label: "Water Temp", val: s.tempF, unit: "?F", icon: "?", color: "#3b82f6", low: 0 },
+{ label: "Conveyor Speed", val: s.conveyorRPM, unit: " RPM", icon: "?", color: "#6366f1", low: 0 },
+{ label: "Cars Today", val: s.carsToday, unit: "", icon: "?", color: "#059669", low: 0 },
+];
+return (
+<div>
+<div style={{ marginBottom: 22 }}>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Sensor Dashboard</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+</div>
+<div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "11px 16px", marginBottom: 20, fontSize: 13, color: "#92400e" }}>
+? <b>Sensor Integration Ready</b> - Connect IoT hardware to populate live data.
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 13 }}>
+{cards.map(c => {
+const alert = c.low > 0 && (c.val ?? 100) < c.low;
+return (
+<div key={c.label} style={{ background: "#fff", border: alert ? "1.5px solid #fca5a5" : "1px solid #e5e7eb", borderRadius: 12, padding: "18px 16px" }}>
+<div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+<span style={{ fontSize: 20 }}>{c.icon}</span>
+<span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", flex: 1 }}>{c.label}</span>
+{alert && <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, background: "#fee2e2", padding: "2px 7px", borderRadius: 99 }}>LOW</span>}
+</div>
+<div style={{ fontSize: 28, fontWeight: 800, color: alert ? "#ef4444" : c.color, lineHeight: 1 }}>{c.val ?? "-"}<span style={{ fontSize: 14, fontWeight: 400, color: "#9ca3af" }}>{c.unit}</span></div>
+{c.unit === "%" && c.val != null && <div style={{ marginTop: 10 }}><Bar value={c.val} color={c.color} /></div>}
+</div>
+);
+})}
+</div>
+</div>
+);
+}
+
+// TIME CLOCK VIEW
+function TimeClock({ locId, locationName, allLocations }) {
+const { user } = useAuth();
+const [clockState, setClockState] = useState(null); // loaded from Firestore
+const [locClocks, setLocClocks] = useState({});
+const [loading, setLoading] = useState(true);
+const [history, setHistory] = useState([]);
+
+const today = new Date().toISOString().split("T")[0];
+const clockDocId = user?.uid + "_" + today;
+
+useEffect(() => {
+if (!user) return;
+const unsub = onSnapshot(doc(db, "timeclock", clockDocId), snap => {
+if (snap.exists()) {
+setClockState(snap.data());
+setLocClocks(snap.data().locationTimes || {});
+} else {
+setClockState(null);
+setLocClocks({});
+}
+setLoading(false);
+});
+return unsub;
+}, [user?.uid, today]);
+
+useEffect(() => {
+if (!user) return;
+const unsub = onSnapshot(collection(db, "timeclock"), snap => {
+const entries = snap.docs
+.filter(d => d.id.startsWith(user.uid + "_"))
+.map(d => ({ id: d.id, ...d.data() }))
+.sort((a, b) => b.date > a.date ? 1 : -1)
+.slice(0, 7);
+setHistory(entries);
+});
+return unsub;
+}, [user?.uid]);
+
+const now = () => new Date().toISOString();
+const fmt = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
+const elapsed = (start, end) => {
+if (!start) return "0h 0m";
+const ms = (end ? new Date(end) : new Date()) - new Date(start);
+const h = Math.floor(ms / 3600000);
+const m = Math.floor((ms % 3600000) / 60000);
+return h + "h " + m + "m";
+};
+
+const handleMainClock = async () => {
+if (!clockState || !clockState.mainClockIn) {
+await setDoc(doc(db, "timeclock", clockDocId), {
+uid: user.uid, name: user.name, date: today,
+mainClockIn: now(), mainClockOut: null, locationTimes: locClocks,
+});
+} else if (!clockState.mainClockOut) {
+await updateDoc(doc(db, "timeclock", clockDocId), { mainClockOut: now() });
+} else {
+await updateDoc(doc(db, "timeclock", clockDocId), { mainClockIn: now(), mainClockOut: null });
+}
+};
+
+const handleLocClock = async (lId) => {
+const current = locClocks[lId] || {};
+const updated = { ...locClocks };
+if (!current.in) {
+updated[lId] = { in: now(), out: null };
+} else if (!current.out) {
+updated[lId] = { ...current, out: now() };
+} else {
+updated[lId] = { in: now(), out: null };
+}
+setLocClocks(updated);
+if (clockState) {
+await updateDoc(doc(db, "timeclock", clockDocId), { locationTimes: updated });
+} else {
+await setDoc(doc(db, "timeclock", clockDocId), {
+uid: user.uid, name: user.name, date: today,
+mainClockIn: null, mainClockOut: null, locationTimes: updated,
+});
+}
+};
+
+const isClockedIn = clockState?.mainClockIn && !clockState?.mainClockOut;
+const isClockedOut = clockState?.mainClockIn && clockState?.mainClockOut;
+
+if (loading) return <Spinner />;
+
+return (
+<div>
+<div style={{ marginBottom: 22 }}>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Time Clock</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+</div>
+
+```
+  {/* Main clock in/out */}
+  <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 18, textAlign: "center" }}>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Today's Shift</div>
+    <div style={{ fontSize: 32, fontWeight: 800, color: isClockedIn ? "#059669" : "#111827", marginBottom: 4 }}>
+      {isClockedIn ? "Clocked In" : isClockedOut ? "Shift Complete" : "Not Clocked In"}
+    </div>
+    {clockState?.mainClockIn && (
+      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}>
+        In: {fmt(clockState.mainClockIn)}
+        {clockState.mainClockOut && <span> &nbsp;|&nbsp; Out: {fmt(clockState.mainClockOut)}</span>}
+      </div>
+    )}
+    {isClockedIn && (
+      <div style={{ fontSize: 22, fontWeight: 700, color: "#0ea5e9", marginBottom: 12 }}>
+        {elapsed(clockState.mainClockIn, null)} elapsed
+      </div>
+    )}
+    {isClockedOut && (
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#374151", marginBottom: 12 }}>
+        Total: {elapsed(clockState.mainClockIn, clockState.mainClockOut)}
+      </div>
+    )}
+    <button onClick={handleMainClock} style={{
+      background: isClockedIn ? "#ef4444" : "#059669",
+      color: "#fff", border: "none", borderRadius: 10, padding: "14px 40px",
+      fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8,
+    }}>
+      {isClockedIn ? "Clock Out" : isClockedOut ? "Start New Shift" : "Clock In"}
+    </button>
+  </div>
+
+  {/* Location billing clocks */}
+  <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 6 }}>Location Billing</div>
+    <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Track time at each location separately for accurate billing. Independent from your main shift clock.</div>
+    {allLocations.map(loc => {
+      const lc = locClocks[loc.id] || {};
+      const active = lc.in && !lc.out;
+      const done = lc.in && lc.out;
+      return (
+        <div key={loc.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, background: active ? "#f0fdf4" : "#fafafa" }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "#10b981" : done ? "#9ca3af" : "#e5e7eb", flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{loc.name}</div>
+            <div style={{ fontSize: 12, color: "#9ca3af" }}>
+              {lc.in ? "In: " + fmt(lc.in) : "Not started"}
+              {lc.out ? " | Out: " + fmt(lc.out) + " | " + elapsed(lc.in, lc.out) : active ? " | " + elapsed(lc.in, null) + " elapsed" : ""}
+            </div>
+          </div>
+          <button onClick={() => handleLocClock(loc.id)} style={{
+            background: active ? "#ef4444" : "#1a3352",
+            color: "#fff", border: "none", borderRadius: 7, padding: "6px 14px",
+            fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>
+            {active ? "Stop" : done ? "Restart" : "Start"}
+          </button>
+        </div>
+      );
+    })}
+  </div>
+
+  {/* History */}
+  {history.length > 0 && (
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>Recent Shifts</div>
+      {history.map(entry => (
+        <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f3f4f6", fontSize: 13 }}>
+          <span style={{ color: "#374151", fontWeight: 500 }}>{entry.date}</span>
+          <span style={{ color: "#6b7280" }}>
+            {fmt(entry.mainClockIn)} - {entry.mainClockOut ? fmt(entry.mainClockOut) : "In progress"}
+          </span>
+          <span style={{ fontWeight: 600, color: "#111827" }}>{elapsed(entry.mainClockIn, entry.mainClockOut)}</span>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+```
+
+);
+}
+
+// ADD TASK MODAL
+function AddTaskModal({ locId, onClose, onAdd }) {
+const [title, setTitle] = useState("");
+const [category, setCategory] = useState("cleaning");
+const [priority, setPriority] = useState("medium");
+const [shift, setShift] = useState("opening");
+const [due, setDue] = useState("09:00 AM");
+const [saving, setSaving] = useState(false);
+
+const handleSubmit = async (e) => {
+e.preventDefault();
+if (!title.trim()) return;
+setSaving(true);
+const id = "t" + Date.now();
+const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+await setDoc(doc(db, "locations", locId, "tasks", id), task);
+setSaving(false);
+onClose();
+};
+
+const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fafafa", marginTop: 4 };
+const sel = { ...inp, cursor: "pointer" };
+
+return (
+<div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+<div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+<div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Add New Task</div>
+<button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+</div>
+<form onSubmit={handleSubmit}>
+<div style={{ marginBottom: 14 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Task Title</label>
+<input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Restock soap dispensers" required style={inp} />
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+<div>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
+<select value={category} onChange={e => setCategory(e.target.value)} style={sel}>
+<option value="cleaning">Cleaning</option>
+<option value="equipment">Equipment</option>
+<option value="chemicals">Chemicals</option>
+<option value="supplies">Supplies</option>
+</select>
+</div>
+<div>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Priority</label>
+<select value={priority} onChange={e => setPriority(e.target.value)} style={sel}>
+<option value="high">High</option>
+<option value="medium">Medium</option>
+<option value="low">Low</option>
+</select>
+</div>
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+<div>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Shift</label>
+<select value={shift} onChange={e => setShift(e.target.value)} style={sel}>
+<option value="opening">Opening</option>
+<option value="midday">Midday</option>
+<option value="afternoon">Afternoon</option>
+</select>
+</div>
+<div>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Due Time</label>
+<input value={due} onChange={e => setDue(e.target.value)} placeholder="09:00 AM" style={inp} />
+</div>
+</div>
+<div style={{ display: "flex", gap: 10 }}>
+<button type="submit" disabled={saving} style={{ flex: 1, background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+{saving ? "Adding..." : "Add Task"}
+</button>
+<button type="button" onClick={onClose} style={{ flex: 1, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+</div>
+</form>
+</div>
+</div>
+);
+}
+
+function Settings({ locations, onUpdateLocation }) {
+const [editing, setEditing] = useState(null);
+const [name, setName] = useState("");
+const [address, setAddress] = useState("");
+const [saved, setSaved] = useState(false);
+
+const startEdit = (loc) => {
+setEditing(loc.id);
+setName(loc.name);
+setAddress(loc.address || "");
+setSaved(false);
+};
+
+const handleSave = async (locId) => {
+if (locId === "**new**") {
+const newId = "loc" + Date.now();
+await setDoc(doc(db, "locations", newId), { id: newId, name, address });
+} else {
+await onUpdateLocation(locId, { name, address });
+}
+setEditing(null);
+setSaved(true);
+setTimeout(() => setSaved(false), 2000);
+};
+
+const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" };
+
+return (
+<div>
+<div style={{ marginBottom: 22 }}>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Settings</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>Manage locations and preferences</div>
+</div>
+{saved && (
+<div style={{ background: "#d1fae5", color: "#065f46", padding: "10px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
+Changes saved!
+</div>
+)}
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+<div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Locations</div>
+<button onClick={() => setEditing("**new**")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Location</button>
+</div>
+{locations.map(loc => (
+<div key={loc.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+{editing === loc.id ? (
+<div>
+<div style={{ marginBottom: 12 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Location Name</label>
+<input value={name} onChange={e => setName(e.target.value)} style={inp} placeholder="e.g. North Station" />
+</div>
+<div style={{ marginBottom: 14 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Address</label>
+<input value={address} onChange={e => setAddress(e.target.value)} style={inp} placeholder="e.g. 1240 N. Highway Blvd" />
+</div>
+<div style={{ display: "flex", gap: 8 }}>
+<button onClick={() => handleSave(loc.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+<button onClick={() => setEditing(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+</div>
+</div>
+) : (
+<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+<div style={{ flex: 1 }}>
+<div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{loc.name}</div>
+<div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{loc.address || "No address set"}</div>
+</div>
+<button onClick={() => startEdit(loc)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+</div>
+)}
+</div>
+))}
+{editing === "**new**" && (
+<div style={{ border: "1.5px dashed #6366f1", borderRadius: 10, padding: 16, marginBottom: 12, background: "#f5f3ff" }}>
+<div style={{ fontWeight: 600, fontSize: 13, color: "#6366f1", marginBottom: 12 }}>New Location</div>
+<div style={{ marginBottom: 12 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Location Name</label>
+<input value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. East Side Wash" />
+</div>
+<div style={{ marginBottom: 14 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Address</label>
+<input value={address} onChange={e => setAddress(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. 999 Main St" />
+</div>
+<div style={{ display: "flex", gap: 8 }}>
+<button onClick={() => handleSave("**new**")} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
+<button onClick={() => setEditing(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+</div>
+</div>
+)}
+</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+<div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 8 }}>Coming Soon</div>
+<div style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.7 }}>
+User management, task templates, and notification preferences will be available in the full production version.
+</div>
+</div>
+</div>
+);
+}
+
+function Dashboard() {
+const { user } = useAuth();
+const [locations, setLocations] = useState([]);
+const [tasks, setTasks] = useState({});
+const [sensors, setSensors] = useState({});
+const [equipment, setEquipment] = useState({});
+const [view, setView] = useState("overview");
+const [locId, setLocId] = useState(null);
+const [ready, setReady] = useState(false);
+const [showAddTask, setShowAddTask] = useState(false);
+
+useEffect(() => {
+if (!user) return;
+seedDatabase().then(() => {
+const unsub = onSnapshot(collection(db, "locations"), snap => {
+const locs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+setLocations(locs);
+setLocId(id => id || user.locationId || locs[0]?.id);
+setReady(true);
+});
+return unsub;
+});
+}, [user?.uid]);
+
+useEffect(() => {
+if (!locations.length) return;
+const unsubs = [
+...locations.map(loc => onSnapshot(collection(db, "locations", loc.id, "tasks"), snap => setTasks(p => ({ ...p, [loc.id]: snap.docs.map(d => ({ id: d.id, ...d.data() })) })))),
+...locations.map(loc => onSnapshot(collection(db, "locations", loc.id, "equipment"), snap => setEquipment(p => ({ ...p, [loc.id]: snap.docs.map(d => ({ id: d.id, ...d.data() })) })))),
+...locations.map(loc => onSnapshot(doc(db, "sensors", loc.id), snap => snap.exists() && setSensors(p => ({ ...p, [loc.id]: snap.data() })))),
+];
+return () => unsubs.forEach(u => u());
+}, [locations.length]);
+
+const handleUpdateLocation = async (locId, updates) => {
+await updateDoc(doc(db, "locations", locId), updates);
+};
+
+const handleStatus = async (taskId, newStatus) => {
+if (!locId) return;
+await updateDoc(doc(db, "locations", locId, "tasks", taskId), { status: newStatus, updatedAt: new Date().toISOString() });
+};
+
+if (!ready || !locId) return <Spinner />;
+
+const curLoc = locations.find(l => l.id === locId);
+const curTasks = tasks[locId] || [];
+const curSens = sensors[locId] || null;
+const curEquip = equipment[locId] || [];
+
+return (
+<div style={{ display: "flex", height: "100vh", background: "#f8fafc", overflow: "hidden" }}>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} />
+<main style={{ flex: 1, overflowY: "auto", padding: "28px 32px" }}>
+{view === "overview"  && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} />}
+{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} />}
+{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} />}
+{view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
+{view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} />}
+{view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} />}
+</main>
+{showAddTask && <AddTaskModal locId={locId} onClose={() => setShowAddTask(false)} onAdd={() => {}} />}
+</div>
+);
+}
+
+function AppInner() {
+const { user, loading } = useAuth();
+if (loading) return <Spinner />;
+return user ? <Dashboard /> : <Login />;
+}
+
+export default function App() {
+return <AuthProvider><AppInner /></AuthProvider>;
+}
