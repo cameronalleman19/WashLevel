@@ -1594,29 +1594,36 @@ return unsub;
 }, [locId]);
 
 const fetchWeather = async (dateStr) => {
-    // no cache - always fetch fresh
-const zip = location?.zipCode;
-if (!zip) return;
-try {
-// Step 1: zip to lat/lon via Open-Meteo geocoding
-const geoRes = await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" + zip + "&count=1&language=en&format=json");
-const geoData = await geoRes.json();
-if (!geoData.results?.length) return;
-const { latitude, longitude } = geoData.results[0];
-// Step 2: get weather
-const endpoint = "https://archive-api.open-meteo.com/v1/archive?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr;
-const res = await fetch(endpoint);
-      setWeather(p => ({ ...p, ["_url"]: endpoint.slice(0,150) }));
-const data = await res.json();
-if (data.daily) {
-const code = data.daily.weathercode[0];
-const max = Math.round(data.daily.temperature_2m_max[0] * 9/5 + 32);
-const min = Math.round(data.daily.temperature_2m_min[0] * 9/5 + 32);
-const desc = code <= 1 ? "Sunny" : code <= 3 ? "Partly Cloudy" : code <= 48 ? "Foggy" : code <= 67 ? "Rainy" : code <= 77 ? "Snowy" : "Stormy";
-setWeather(p => ({ ...p, [dateStr]: { max, min, desc } }));
-}
-} catch(e) { console.log("Weather fetch error:", e); }
-};
+    const zip = location?.zipCode;
+    if (!zip) return;
+    try {
+      const geoRes = await fetch("https://api.zippopotam.us/us/" + zip);
+      if (!geoRes.ok) return;
+      const geoData = await geoRes.json();
+      if (!geoData.places?.length) return;
+      const latitude = parseFloat(geoData.places[0].latitude);
+      const longitude = parseFloat(geoData.places[0].longitude);
+      const today = new Date().toISOString().split("T")[0];
+      const isPast = dateStr < today;
+      const endpoint = isPast
+        ? "https://archive-api.open-meteo.com/v1/archive?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr
+        : "https://api.open-meteo.com/v1/forecast?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr;
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      if (data.daily) {
+        const code = data.daily.weathercode?.[0] ?? 0;
+        const max = Math.round((data.daily.temperature_2m_max?.[0] ?? 0) * 9/5 + 32);
+        const min = Math.round((data.daily.temperature_2m_min?.[0] ?? 0) * 9/5 + 32);
+        const desc = code <= 1 ? "Sunny" : code <= 3 ? "Partly Cloudy" : code <= 48 ? "Foggy" : code <= 67 ? "Rainy" : code <= 77 ? "Snowy" : "Stormy";
+        const precipMM = data.daily.precipitation_sum?.[0] ?? 0;
+        const rainMM = data.daily.rain_sum?.[0] ?? 0;
+        const snowMM = data.daily.snowfall_sum?.[0] ?? 0;
+        const precipIn = Math.round(precipMM * 0.03937 * 100) / 100;
+        const precipType = snowMM > 0 ? "Snow" : rainMM > 0 ? "Rain" : precipMM > 0 ? "Mixed" : "None";
+        setWeather(p => ({ ...p, [dateStr]: { max, min, desc, precip: precipIn, precipType } }));
+      }
+    } catch(e) { console.log("Weather fetch error:", e.message, e); }
+  };
 
 const handleSelectDate = async (dateStr) => {
 setSelectedDate(dateStr);
@@ -1727,7 +1734,6 @@ return (
           {selWeather && (
             <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
               <div style={{ fontWeight: 600, color: "#0369a1" }}>{selWeather.desc}</div>
-                  {weather["_url"] && <div style={{ fontSize: 9, color: "#999", wordBreak: "break-all" }}>{weather["_url"]}</div>}
                   {weather["debug"] && <div style={{ fontSize: 10, color: "#999", wordBreak: "break-all" }}>{weather["debug"]}</div>}
               <div style={{ color: "#0284c7" }}>High {selWeather.max}F / Low {selWeather.min}F</div>
                   <div style={{ color: "#0369a1", marginTop: 4, fontSize: 12 }}>
