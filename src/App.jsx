@@ -1,6 +1,6 @@
 // Paste into App.tsx, then in Dependencies panel add: firebase (10.8.0)
 
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext, Component } from "react";
 import { initializeApp, getApps } from "firebase/app";
 import {
 getAuth,
@@ -127,8 +127,19 @@ seeding = false;
 
 const CAT = { supplies: { bg: "#fef3c7", color: "#b45309" }, equipment: { bg: "#dbeafe", color: "#1d4ed8" }, cleaning: { bg: "#d1fae5", color: "#065f46" }, chemicals: { bg: "#ede9fe", color: "#5b21b6" } };
 const PRI = { high: { bg: "#fee2e2", color: "#991b1b" }, medium: { bg: "#fef3c7", color: "#92400e" }, low: { bg: "#f3f4f6", color: "#6b7280" } };
-const STS = { pending: { bg: "#f3f4f6", color: "#6b7280", dot: "#9ca3af", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
+const STS = { pending: { bg: "#f3f4f6", color: "#6b7280", dot: "#9ca3af", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, "on-hold": { bg: "#fce7f3", color: "#be185d", dot: "#ec4899", label: "On Hold" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
 const EQS = { ok: { bg: "#d1fae5", color: "#059669", icon: "?", label: "OK" }, warning: { bg: "#fef3c7", color: "#d97706", icon: "!", label: "Warning" }, error: { bg: "#fee2e2", color: "#dc2626", icon: "?", label: "Alert" } };
+
+//  RESPONSIVE HOOK
+function useIsMobile() {
+const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+useEffect(() => {
+const handler = () => setIsMobile(window.innerWidth < 768);
+window.addEventListener("resize", handler);
+return () => window.removeEventListener("resize", handler);
+}, []);
+return isMobile;
+}
 
 const AuthCtx = createContext(null);
 
@@ -225,7 +236,7 @@ const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb"
 return (
 <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<div style={{ width: "100%", maxWidth: 420, padding: "0 20px" }}>
+<div style={{ width: "100%", maxWidth: 420, padding: "0 16px" }}>
 <div style={{ textAlign: "center", marginBottom: 32 }}>
 <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#1a3352", borderRadius: 14, padding: "10px 22px" }}>
 <span style={{ fontSize: 22 }}>?</span>
@@ -265,12 +276,14 @@ return (
 );
 }
 
-function Sidebar({ locations, view, setView, locId, setLocId }) {
+function Sidebar({ locations, view, setView, locId, setLocId, open, onClose }) {
 const { user, logout } = useAuth();
+const isMobile = useIsMobile();
 const isManager = user?.role === "manager";
 const locs = isManager ? locations : locations.filter(l => l.id === user?.locationId);
 const nav = [
 { id: "overview",   label: "Overview"   },
+    ...(isManager ? [{ id: "alerts", label: "Alerts" }] : []),
 { id: "calendar",   label: "Calendar"   },
 { id: "timeclock",  label: "Time Clock" },
 { id: "tasks",      label: "Tasks"      },
@@ -282,7 +295,20 @@ const nav = [
 const RC = { manager: "#6366f1", attendant: "#0ea5e9", technician: "#f59e0b" };
 
 return (
-<aside style={{ width: 220, flexShrink: 0, background: "#1a3352", display: "flex", flexDirection: "column", height: "100vh", overflowY: "auto" }}>
+<>
+{isMobile && open && (
+<div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
+)}
+<aside style={{
+width: 220, flexShrink: 0, background: "#1a3352", display: "flex", flexDirection: "column",
+height: "100vh", overflowY: "auto",
+...(isMobile ? {
+position: "fixed", left: 0, top: 0, zIndex: 50,
+transform: open ? "translateX(0)" : "translateX(-100%)",
+transition: "transform 0.25s ease",
+boxShadow: "4px 0 24px rgba(0,0,0,0.25)",
+} : {})
+}}>
 <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 <span style={{ fontSize: 20 }}>?</span>
@@ -301,7 +327,7 @@ return (
 <div style={{ padding: "6px 12px", flex: 1, borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 4 }}>
 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, marginTop: 10 }}>Menu</div>
 {nav.map(item => (
-<button key={item.id} onClick={() => setView(item.id)} style={{ width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 7, border: "none", background: view === item.id ? "#0ea5e9" : "transparent", color: view === item.id ? "#fff" : "rgba(255,255,255,0.55)", cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 600 : 400, marginBottom: 2 }}>
+<button key={item.id} onClick={() => { setView(item.id); if(isMobile) onClose(); }} style={{ width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 7, border: "none", background: view === item.id ? "#0ea5e9" : "transparent", color: view === item.id ? "#fff" : "rgba(255,255,255,0.55)", cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 600 : 400, marginBottom: 2 }}>
 {item.label}
 </button>
 ))}
@@ -317,6 +343,7 @@ return (
 <button onClick={logout} style={{ width: "100%", background: "rgba(255,255,255,0.07)", border: "none", color: "rgba(255,255,255,0.6)", borderRadius: 7, padding: "8px 0", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
 </div>
 </aside>
+</>
 );
 }
 
@@ -330,7 +357,7 @@ return (
 <div>
 <div style={{ marginBottom: 22 }}>
 <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{location?.name} - Overview</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
 <div style={{ cursor: "default" }}><StatCard icon="?" label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" /></div>
@@ -338,7 +365,7 @@ return (
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard icon="?" label="In Progress" value={inprog} accent="#f59e0b" /></div>
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard icon="?" label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>
 </div>
-<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
+<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
 <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
 <span>?</span> Live Sensors
@@ -389,6 +416,153 @@ return (
 </div>
 </div>
 );
+}
+
+function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
+  const [partsUsed, setPartsUsed] = useState({});
+  const [inventory, setInventory] = useState({});
+  const [searchTerm, setSearchTerm] = useState("");
+  const [photos, setPhotos] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!locId) return;
+    getDocs(collection(db, "locations", locId, "inventory")).then(snap => {
+      setInventory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, [locId]);
+
+  const handlePhoto = async (e) => {
+    const files = Array.from(e.target.files);
+    const urls = [];
+    for (const file of files) {
+      const reader = new FileReader();
+      await new Promise(r => { reader.onload = () => { urls.push(reader.result); r(); }; reader.readAsDataURL(file); });
+    }
+    setPhotos(p => [...p, ...urls]);
+  };
+
+  const handleComplete = async () => {
+    setSaving(true);
+    const duration = task.startedAt ? Math.round((Date.now() - new Date(task.startedAt).getTime()) / 60000) : null;
+    const histId = "h" + Date.now();
+
+    // Deduct parts from inventory
+    const usedItems = [];
+    for (const [itemId, qty] of Object.entries(partsUsed)) {
+      if (!qty || qty <= 0) continue;
+      const item = inventory.find(i => i.id === itemId);
+      if (!item) continue;
+      const newQty = Math.max(0, item.quantity - qty);
+      await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: newQty, updatedAt: new Date().toISOString() });
+      usedItems.push({ name: item.name, partNumber: item.partNumber || "", qty, unit: item.unit, costPerUnit: item.costPerUnit || 0 });
+    }
+
+    // Save history
+    await setDoc(doc(db, "locations", locId, "tasks", task.id, "history", histId), {
+      completedAt: new Date().toISOString(),
+      completedBy: user?.name || user?.email || "Unknown",
+      completedById: user?.uid,
+      note,
+      duration,
+      date: new Date().toLocaleDateString(),
+      partsUsed: usedItems,
+      photos,
+    });
+
+    // Update task
+    await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
+      status: "done",
+      completedAt: new Date().toISOString(),
+      completedBy: user?.name || user?.email,
+      duration,
+      updatedAt: new Date().toISOString(),
+      note,
+      mediaUrls: photos.length ? photos : (task.mediaUrls || []),
+    });
+
+    setSaving(false);
+    onDone();
+  };
+
+  const filtered = inventory.filter(i => 
+    i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (i.partNumber && i.partNumber.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const inp = { width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fff" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Complete Task</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+        </div>
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16, padding: "8px 12px", background: "#f0fdf4", borderRadius: 8 }}>
+          Completing: <b style={{ color: "#059669" }}>{task.title}</b>
+        </div>
+
+        {/* Photo upload */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Completion Photos</label>
+          <input type="file" accept="image/*,video/*" multiple onChange={handlePhoto} style={{ fontSize: 12 }} />
+          {photos.length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              {photos.map((url, i) => <img key={i} src={url} alt="completion" style={{ width: 70, height: 70, borderRadius: 6, objectFit: "cover" }} />)}
+            </div>
+          )}
+        </div>
+
+        {/* Parts used */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Parts / Materials Used</label>
+          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search by name or part number..." style={{ ...inp, marginBottom: 8 }} />
+          <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 12, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>No inventory items found</div>
+            ) : filtered.map(item => (
+              <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid #f3f4f6" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{item.name}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                    {item.partNumber && <span style={{ marginRight: 8 }}>#{item.partNumber}</span>}
+                    {item.costPerUnit ? <span>${item.costPerUnit}/{item.unit}</span> : null}
+                    <span style={{ marginLeft: 8 }}>Stock: {item.quantity} {item.unit}</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="number" min="0" max={item.quantity}
+                    value={partsUsed[item.id] || ""}
+                    onChange={e => setPartsUsed(p => ({ ...p, [item.id]: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0"
+                    style={{ width: 60, padding: "4px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none" }}
+                  />
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{item.unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {Object.values(partsUsed).some(v => v > 0) && (
+            <div style={{ marginTop: 8, padding: "8px 12px", background: "#f0fdf4", borderRadius: 8, fontSize: 12, color: "#059669" }}>
+              Total cost: ${ Object.entries(partsUsed).reduce((sum, [id, qty]) => {
+                const item = inventory.find(i => i.id === id);
+                return sum + (item?.costPerUnit || 0) * (qty || 0);
+              }, 0).toFixed(2)}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={handleComplete} disabled={saving} style={{ flex: 1, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            {saving ? "Saving..." : "Mark Complete"}
+          </button>
+          <button onClick={onClose} style={{ flex: 1, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials }) {
@@ -453,11 +627,22 @@ return (
 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
 <Pill label={task.category} bg={CAT[task.category]?.bg} color={CAT[task.category]?.color} />
 <Pill label={task.priority} bg={PRI[task.priority]?.bg} color={PRI[task.priority]?.color} />
-<span style={{ fontSize: 11, color: "#9ca3af" }}>{task.due}</span>
+<span style={{ fontSize: 11, color: "#9ca3af" }}>{task.due && task.due.includes("-") ? new Date(task.due + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : task.due}</span>
 {recurrenceLabel && <span style={{ fontSize: 11, color: "#6366f1", background: "#ede9fe", padding: "1px 7px", borderRadius: 99 }}>{recurrenceLabel}</span>}
+            {task.due && task.due.includes("-") && task.status !== "done" && new Date(task.due + "T23:59:59") < new Date() && (
+              <span style={{ fontSize: 11, color: "#dc2626", background: "#fee2e2", padding: "1px 7px", borderRadius: 99, fontWeight: 700 }}>Overdue</span>
+            )}
+            {task.due && task.due.includes("-") && task.status !== "done" && new Date(task.due + "T23:59:59") < new Date() && (
+              <span style={{ fontSize: 11, color: "#dc2626", background: "#fee2e2", padding: "1px 7px", borderRadius: 99, fontWeight: 700 }}>Overdue</span>
+            )}
 </div>
 </div>
-<button onClick={handleStatus} style={{ background: btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>{nextLabel}</button>
+<div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          <button onClick={handleStatus} style={{ background: btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{nextLabel}</button>
+          {task.status === "in-progress" && (
+            <button onClick={e => { e.stopPropagation(); onStatus(task.id, "on-hold"); }} style={{ background: "#fce7f3", color: "#be185d", border: "1px solid #fbcfe8", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>On Hold</button>
+          )}
+        </div>
 <span style={{ color: "#d1d5db", fontSize: 11 }}>{open ? "v" : ">"}</span>
 </div>
 {open && (
@@ -479,6 +664,27 @@ placeholder="Add notes about this task..."
 rows={2}
 style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 12, resize: "vertical", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
 />
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Photos / Videos</label>
+            <input type="file" accept="image/*,video/*" multiple onChange={async e => {
+              const files = Array.from(e.target.files);
+              if (!files.length || !locId) return;
+              const urls = [];
+              for (const file of files) {
+                const reader = new FileReader();
+                await new Promise(r => { reader.onload = () => { urls.push(reader.result); r(); }; reader.readAsDataURL(file); });
+              }
+              const existing = task.mediaUrls || [];
+              await updateDoc(doc(db, "locations", locId, "tasks", task.id), { mediaUrls: [...existing, ...urls], updatedAt: new Date().toISOString() });
+            }} style={{ fontSize: 12, color: "#374151" }} />
+            {task.mediaUrls && task.mediaUrls.length > 0 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                {task.mediaUrls.map((url, i) => (
+                  <img key={i} src={url} alt="task media" style={{ width: 70, height: 70, borderRadius: 6, objectFit: "cover", cursor: "pointer" }} onClick={() => window.open(url, "_blank")} />
+                ))}
+              </div>
+            )}
 </div>
 <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
 <button onClick={loadHistory} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#6b7280", cursor: "pointer" }}>
@@ -518,7 +724,7 @@ const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
 
-const mine = showAll ? tasks : tasks.filter(t => t.assignedRole === user?.role);
+const mine = tasks; // All tasks are globally visible
 const filtered = mine.filter(t => {
 if (fStatus !== "all" && t.status !== fStatus) return false;
 if (fCat !== "all" && t.category !== fCat) return false;
@@ -535,7 +741,7 @@ return (
 <div>
 <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
 <div>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{showAll ? "All Tasks" : "My Tasks"}</div>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>"Tasks"</div>
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
 </div>
 <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>+ Add Task</button>
@@ -562,33 +768,238 @@ return (
 );
 }
 
-function Equipment({ equipment, locationName }) {
-return (
-<div>
-<div style={{ marginBottom: 22 }}>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Equipment Status</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
-</div>
-<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(270px,1fr))", gap: 16 }}>
-{equipment.map(eq => {
-const s = EQS[eq.status] || EQS.ok;
-return (
-<div key={eq.id} style={{ background: "#fff", border: `1.5px solid ${eq.status !== "ok" ? s.color + "60" : "#e5e7eb"}`, borderRadius: 12, padding: 20 }}>
-<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-<div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{eq.name}</div>
-<Pill label={s.label} bg={s.bg} color={s.color} />
-</div>
-<div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13, color: "#6b7280" }}>
-<div style={{ display: "flex", justifyContent: "space-between" }}><span>Last Service</span><span style={{ fontWeight: 600, color: "#374151" }}>{eq.lastService}</span></div>
-<div style={{ display: "flex", justifyContent: "space-between" }}><span>Next Service</span><span style={{ fontWeight: 600, color: eq.nextService === "Overdue" ? "#ef4444" : "#374151" }}>{eq.nextService}</span></div>
-</div>
-{eq.status !== "ok" && <div style={{ marginTop: 12, padding: "8px 12px", background: s.bg, borderRadius: 8, fontSize: 12, color: s.color, fontWeight: 500 }}>{eq.status === "warning" ? "? Service approaching" : "? Requires immediate attention"}</div>}
-</div>
-);
-})}
-</div>
-</div>
-);
+function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [newEq, setNewEq] = useState({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0 });
+  const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState({});
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [histories, setHistories] = useState({});
+
+  const inp = { width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" };
+
+  const toggleExpand = async (eqId) => {
+    const next = { ...expanded, [eqId]: !expanded[eqId] };
+    setExpanded(next);
+    if (next[eqId] && !histories[eqId]) {
+      const snap = await getDocs(collection(db, "locations", locId, "equipment", eqId, "history"));
+      const entries = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date > a.date ? 1 : -1);
+      setHistories(p => ({ ...p, [eqId]: entries }));
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!newEq.name.trim()) return;
+    setSaving(true);
+    const id = "e" + Date.now();
+    await setDoc(doc(db, "locations", locId, "equipment", id), { ...newEq, id, note: "", manuals: [], createdAt: new Date().toISOString() });
+    setNewEq({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0 });
+    setShowAdd(false);
+    setSaving(false);
+  };
+
+  const handleSaveEdit = async (eqId) => {
+    const eq = equipment.find(e => e.id === eqId);
+    const updates = { ...editData, updatedAt: new Date().toISOString() };
+    await updateDoc(doc(db, "locations", locId, "equipment", eqId), updates);
+    // Log to history if car count or service date changed
+    const changed = [];
+    if (editData.carsCount !== eq.carsCount) changed.push("Car count updated to " + Number(editData.carsCount).toLocaleString());
+    if (editData.lastService !== eq.lastService) changed.push("Last service: " + editData.lastService + " at " + Number(editData.lastServiceCars||0).toLocaleString() + " cars");
+    if (changed.length) {
+      const histId = "h" + Date.now();
+      await setDoc(doc(db, "locations", locId, "equipment", eqId, "history", histId), {
+        date: new Date().toISOString().split("T")[0],
+        note: changed.join(" | "),
+        type: "edit",
+        createdAt: new Date().toISOString(),
+      });
+      setHistories(p => ({ ...p, [eqId]: null }));
+    }
+    setEditingId(null);
+  };
+
+  const handleDelete = async (eqId) => {
+    if (!window.confirm("Delete this equipment?")) return;
+    const { deleteDoc } = await import("firebase/firestore");
+    await deleteDoc(doc(db, "locations", locId, "equipment", eqId));
+  };
+
+  const handleManualUpload = async (e, eqId, eq) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const manuals = eq.manuals || [];
+      await updateDoc(doc(db, "locations", locId, "equipment", eqId), {
+        manuals: [...manuals, { name: file.name, url: reader.result, uploadedAt: new Date().toISOString() }]
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Equipment</div>
+          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+        </div>
+        <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Equipment</button>
+      </div>
+
+      {showAdd && (
+        <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 14 }}>New Equipment</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 14 }}>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Name</label><input value={newEq.name} onChange={e => setNewEq(p => ({...p, name: e.target.value}))} placeholder="e.g. Conveyor Belt" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Status</label>
+              <select value={newEq.status} onChange={e => setNewEq(p => ({...p, status: e.target.value}))} style={inp}>
+                <option value="ok">OK</option><option value="warning">Warning</option><option value="error">Alert</option>
+              </select>
+            </div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Last Service Date</label><input value={newEq.lastService} onChange={e => setNewEq(p => ({...p, lastService: e.target.value}))} placeholder="e.g. Mar 15, 2026" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Car Count at Last Service</label><input type="number" value={newEq.lastServiceCars} onChange={e => setNewEq(p => ({...p, lastServiceCars: parseInt(e.target.value)||0}))} placeholder="0" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Next Service Date</label><input value={newEq.nextService} onChange={e => setNewEq(p => ({...p, nextService: e.target.value}))} placeholder="e.g. Apr 15, 2026" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Next Service at Cars</label><input type="number" value={newEq.nextServiceCars} onChange={e => setNewEq(p => ({...p, nextServiceCars: parseInt(e.target.value)||0}))} placeholder="e.g. 50000" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Current Car Count</label><input type="number" value={newEq.carsCount} onChange={e => setNewEq(p => ({...p, carsCount: parseInt(e.target.value)||0}))} placeholder="0" style={inp} /></div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleAdd} disabled={saving} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add"}</button>
+            <button onClick={() => setShowAdd(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {equipment.map(eq => {
+          const s = EQS[eq.status] || EQS.ok;
+          const isExpanded = expanded[eq.id];
+          const isEditing = editingId === eq.id;
+          const linkedTasks = (allTasks || []).filter(t => t.equipmentId === eq.id);
+          const eqHistory = histories[eq.id] || [];
+          const carsSinceService = eq.carsCount && eq.lastServiceCars ? (eq.carsCount - eq.lastServiceCars).toLocaleString() : null;
+          const carsUntilService = eq.nextServiceCars && eq.carsCount ? Math.max(0, eq.nextServiceCars - eq.carsCount).toLocaleString() : null;
+
+          return (
+            <div key={eq.id} style={{ background: "#fff", border: `1.5px solid ${eq.status !== "ok" ? s.color + "60" : "#e5e7eb"}`, borderRadius: 12, overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => toggleExpand(eq.id)}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{eq.name}</div>
+                    <Pill label={s.label} bg={s.bg} color={s.color} />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6, fontSize: 12, color: "#6b7280" }}>
+                    <div style={{ background: "#f8fafc", borderRadius: 6, padding: "6px 10px" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Last Service</div>
+                      <div style={{ fontWeight: 600, color: "#374151" }}>{eq.lastService || "-"}</div>
+                      {eq.lastServiceCars ? <div style={{ color: "#9ca3af" }}>at {Number(eq.lastServiceCars).toLocaleString()} cars</div> : null}
+                    </div>
+                    <div style={{ background: "#f8fafc", borderRadius: 6, padding: "6px 10px" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Next Service</div>
+                      <div style={{ fontWeight: 600, color: eq.nextService === "Overdue" ? "#ef4444" : "#374151" }}>{eq.nextService || "-"}</div>
+                      {eq.nextServiceCars ? <div style={{ color: "#9ca3af" }}>or at {Number(eq.nextServiceCars).toLocaleString()} cars</div> : null}
+                    </div>
+                    <div style={{ background: "#f8fafc", borderRadius: 6, padding: "6px 10px" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Total Cars</div>
+                      <div style={{ fontWeight: 600, color: "#374151" }}>{(eq.carsCount || 0).toLocaleString()}</div>
+                      {carsSinceService && <div style={{ color: "#9ca3af" }}>{carsSinceService} since last service</div>}
+                    </div>
+                    {carsUntilService && (
+                      <div style={{ background: Number(carsUntilService.replace(/,/g,"")) < 1000 ? "#fee2e2" : "#f0fdf4", borderRadius: 6, padding: "6px 10px" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Cars Until Service</div>
+                        <div style={{ fontWeight: 700, color: Number(carsUntilService.replace(/,/g,"")) < 1000 ? "#ef4444" : "#059669" }}>{carsUntilService}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
+                  <button onClick={e => { e.stopPropagation(); setEditingId(isEditing ? null : eq.id); setEditData({ status: eq.status, lastService: eq.lastService||"", lastServiceCars: eq.lastServiceCars||0, nextService: eq.nextService||"", nextServiceCars: eq.nextServiceCars||0, carsCount: eq.carsCount||0, note: eq.note||"" }); }} style={{ background: "#f3f4f6", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#374151", fontWeight: 600 }}>Edit</button>
+                  <button onClick={e => { e.stopPropagation(); onCreateTask && onCreateTask(eq); }} style={{ background: "#ede9fe", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#6366f1", fontWeight: 600 }}>+ Task</button>
+                  <button onClick={e => { e.stopPropagation(); handleDelete(eq.id); }} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Delete</button>
+                </div>
+                <span style={{ color: "#9ca3af", fontSize: 12 }}>{isExpanded ? "v" : ">"}</span>
+              </div>
+
+              {/* Edit form */}
+              {isEditing && (
+                <div style={{ padding: "0 20px 16px", borderTop: "1px solid #f3f4f6", background: "#fafbfc" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, marginTop: 14, marginBottom: 12 }}>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Status</label>
+                      <select value={editData.status} onChange={e => setEditData(p => ({...p, status: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
+                        <option value="ok">OK</option><option value="warning">Warning</option><option value="error">Alert</option>
+                      </select>
+                    </div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Current Car Count</label><input type="number" value={editData.carsCount} onChange={e => setEditData(p => ({...p, carsCount: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Last Service Date</label><input value={editData.lastService} onChange={e => setEditData(p => ({...p, lastService: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Car Count at Last Service</label><input type="number" value={editData.lastServiceCars} onChange={e => setEditData(p => ({...p, lastServiceCars: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Next Service Date</label><input value={editData.nextService} onChange={e => setEditData(p => ({...p, nextService: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Next Service at Cars</label><input type="number" value={editData.nextServiceCars} onChange={e => setEditData(p => ({...p, nextServiceCars: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Notes</label>
+                    <textarea value={editData.note} onChange={e => setEditData(p => ({...p, note: e.target.value}))} rows={2} style={{ ...inp, resize: "vertical", fontFamily: "inherit", fontSize: 12, padding: "6px 8px" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => handleSaveEdit(eq.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                    <button onClick={() => setEditingId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Expanded details */}
+              {isExpanded && !isEditing && (
+                <div style={{ padding: "0 20px 20px", borderTop: "1px solid #f3f4f6" }}>
+                  {eq.note && <div style={{ marginTop: 12, fontSize: 13, color: "#374151", fontStyle: "italic" }}>{eq.note}</div>}
+
+                  {/* Manuals */}
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Manuals & Documents</div>
+                    <input type="file" accept=".pdf,.doc,.docx,image/*" onChange={e => handleManualUpload(e, eq.id, eq)} style={{ fontSize: 12 }} />
+                    {eq.manuals && eq.manuals.length > 0 && eq.manuals.map((m, i) => (
+                      <a key={i} href={m.url} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 12, color: "#0ea5e9", marginTop: 4 }}>[File] {m.name}</a>
+                    ))}
+                  </div>
+
+                  {/* Linked tasks */}
+                  {linkedTasks.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Linked Tasks ({linkedTasks.length})</div>
+                      {linkedTasks.map(t => (
+                        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", fontSize: 12, borderBottom: "1px solid #f3f4f6" }}>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: STS[t.status]?.dot || "#9ca3af", flexShrink: 0 }} />
+                          <span style={{ flex: 1, color: "#374151" }}>{t.title}</span>
+                          <Pill label={STS[t.status]?.label || t.status} bg={STS[t.status]?.bg || "#f3f4f6"} color={STS[t.status]?.color || "#6b7280"} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* History */}
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Service History</div>
+                    {eqHistory.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "#9ca3af" }}>No history yet. History is recorded automatically when you update service dates or car counts.</div>
+                    ) : eqHistory.map(h => (
+                      <div key={h.id} style={{ padding: "8px 10px", background: "#f8fafc", borderRadius: 7, marginBottom: 6, fontSize: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>{h.date}</span>
+                        </div>
+                        <div style={{ color: "#6b7280" }}>{h.note}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {equipment.length === 0 && !showAdd && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No equipment yet. Tap + Add Equipment to get started.</div>}
+      </div>
+    </div>
+  );
 }
 
 function Sensors({ sensors, locationName }) {
@@ -723,7 +1134,7 @@ return (
 <div>
 <div style={{ marginBottom: 22 }}>
 <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Time Clock</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
 </div>
 
   {/* Main clock in/out */}
@@ -808,21 +1219,31 @@ return (
 }
 
 // ADD TASK MODAL
-function AddTaskModal({ locId, onClose, onAdd }) {
+function AddTaskModal({ locId, onClose, onAdd, preset }) {
 const [title, setTitle] = useState("");
 const [category, setCategory] = useState("cleaning");
 const [priority, setPriority] = useState("medium");
-const [shift, setShift] = useState("opening");
-const [due, setDue] = useState("09:00 AM");
+const [shift, setShift] = useState("everyone");
+const [due, setDue] = useState(new Date().toISOString().split("T")[0]);
 const [saving, setSaving] = useState(false);
-const [recurrence, setRecurrence] = useState("");
+  const [equipmentId, setEquipmentId] = useState(preset?.id || "");
+  const [equipmentList, setEquipmentList] = useState([]);
+
+  useEffect(() => {
+    if (!locId) return;
+    getDocs(collection(db, "locations", locId, "equipment")).then(snap => {
+      setEquipmentList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, [locId]);
+
+  const [recurrence, setRecurrence] = useState("");
 
 const handleSubmit = async (e) => {
 e.preventDefault();
 if (!title.trim()) return;
 setSaving(true);
 const id = "t" + Date.now();
-const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
 setSaving(false);
 onClose();
@@ -843,14 +1264,14 @@ return (
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Task Title</label>
 <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Restock soap dispensers" required style={inp} />
 </div>
-<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 14 }}>
 <div>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
 <select value={category} onChange={e => setCategory(e.target.value)} style={sel}>
 <option value="cleaning">Cleaning</option>
 <option value="equipment">Equipment</option>
 <option value="chemicals">Chemicals</option>
-<option value="supplies">Supplies</option>
+<option value="parts">Parts</option>
 </select>
 </div>
 <div>
@@ -862,23 +1283,30 @@ return (
 </select>
 </div>
 </div>
-<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
 <div>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Shift</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Assigned To</label>
 <select value={shift} onChange={e => setShift(e.target.value)} style={sel}>
-<option value="opening">Opening</option>
-<option value="midday">Midday</option>
-<option value="afternoon">Afternoon</option>
+<option value="everyone">Everyone</option>
+                <option value="attendant">Attendants</option>
+                <option value="technician">Technicians</option>
+                <option value="manager">Managers</option>
 </select>
 </div>
 <div>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Due Time</label>
-<input value={due} onChange={e => setDue(e.target.value)} placeholder="09:00 AM" style={inp} />
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Due Date</label>
+<input type="date" value={due} onChange={e => setDue(e.target.value)} style={inp} />
 </div>
 </div>
 <div style={{ marginBottom: 14 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Recurrence</label>
-<select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={sel}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Link to Equipment (optional)</label>
+            <select value={equipmentId} onChange={e => setEquipmentId(e.target.value)} style={sel}>
+              <option value="">None</option>
+              {equipmentList.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
+            </select>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+              <select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={sel}>
 <option value="">No recurrence</option>
 <option value="daily">Daily</option>
 <option value="weekly">Weekly</option>
@@ -903,144 +1331,181 @@ return (
 
 //  INVENTORY
 function Inventory({ locId, locationName }) {
-const [items, setItems] = useState([]);
-const [showAdd, setShowAdd] = useState(false);
-const [newItem, setNewItem] = useState({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5 });
-const [saving, setSaving] = useState(false);
+  const [items, setItems] = useState([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [newItem, setNewItem] = useState({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0 });
+  const [saving, setSaving] = useState(false);
 
-useEffect(() => {
-if (!locId) return;
-const unsub = onSnapshot(collection(db, "locations", locId, "inventory"), snap => {
-setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name)));
-});
-return unsub;
-}, [locId]);
+  useEffect(() => {
+    if (!locId) return;
+    const unsub = onSnapshot(collection(db, "locations", locId, "inventory"), snap => {
+      setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name)));
+    });
+    return unsub;
+  }, [locId]);
 
-const handleAdd = async () => {
-if (!newItem.name.trim()) return;
-setSaving(true);
-const id = "inv" + Date.now();
-await setDoc(doc(db, "locations", locId, "inventory", id), { ...newItem, id, createdAt: new Date().toISOString() });
-setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5 });
-setShowAdd(false);
-setSaving(false);
-};
+  const handleAdd = async () => {
+    if (!newItem.name.trim()) return;
+    setSaving(true);
+    const id = "inv" + Date.now();
+    await setDoc(doc(db, "locations", locId, "inventory", id), { ...newItem, id, createdAt: new Date().toISOString() });
+    setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0 });
+    setShowAdd(false);
+    setSaving(false);
+  };
 
-const handleUpdate = async (itemId, qty) => {
-const val = parseFloat(qty);
-if (isNaN(val)) return;
-await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: val, updatedAt: new Date().toISOString() });
-};
+  const handleUpdate = async (itemId, qty) => {
+    const val = parseFloat(qty);
+    if (isNaN(val)) return;
+    await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: val, updatedAt: new Date().toISOString() });
+  };
 
-const handleDelete = async (itemId) => {
-if (!window.confirm("Delete this item?")) return;
-const { deleteDoc } = await import("firebase/firestore");
-await deleteDoc(doc(db, "locations", locId, "inventory", itemId));
-};
+  const handleSaveEdit = async (itemId) => {
+    await updateDoc(doc(db, "locations", locId, "inventory", itemId), { ...editData, updatedAt: new Date().toISOString() });
+    setEditingId(null);
+  };
 
-const CAT_GROUPS = ["chemicals", "supplies", "equipment parts"];
-const CAT_COLORS2 = { chemicals: "#8b5cf6", supplies: "#f59e0b", "equipment parts": "#3b82f6" };
+  const handleDelete = async (itemId) => {
+    if (!window.confirm("Delete this item?")) return;
+    const { deleteDoc } = await import("firebase/firestore");
+    await deleteDoc(doc(db, "locations", locId, "inventory", itemId));
+  };
 
-const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fafafa" };
+  const handleReorder = (item) => {
+    alert("Reorder flagged: " + item.name + (item.partNumber ? " (Part #: " + item.partNumber + ")" : ""));
+  };
 
-return (
-<div>
-<div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-<div>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Inventory</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
-</div>
-<button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>
-</div>
+  const CAT_GROUPS = ["chemicals", "parts", "vending supplies"];
+  const CAT_COLORS2 = { chemicals: "#8b5cf6", parts: "#3b82f6", "vending supplies": "#f59e0b" };
+  const UNITS = ["gal", "L", "oz", "lbs", "units", "rolls", "boxes"];
+  const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, background: "#fafafa", outline: "none", width: "100%", boxSizing: "border-box", marginTop: 4 };
 
-  {showAdd && (
-    <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 18 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 14 }}>New Inventory Item</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+  return (
+    <div>
+      <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Item Name</label>
-          <input value={newItem.name} onChange={e => setNewItem(p => ({...p, name: e.target.value}))} placeholder="e.g. Tire Shine" style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Inventory</div>
+          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
         </div>
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
-          <select value={newItem.category} onChange={e => setNewItem(p => ({...p, category: e.target.value}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }}>
-            <option value="chemicals">Chemicals</option>
-            <option value="supplies">Supplies</option>
-            <option value="equipment parts">Equipment Parts</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Quantity</label>
-          <input type="number" value={newItem.quantity} onChange={e => setNewItem(p => ({...p, quantity: parseFloat(e.target.value) || 0}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Unit</label>
-          <select value={newItem.unit} onChange={e => setNewItem(p => ({...p, unit: e.target.value}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }}>
-            <option value="gal">Gallons</option>
-            <option value="L">Liters</option>
-            <option value="oz">Oz</option>
-            <option value="lbs">Lbs</option>
-            <option value="units">Units</option>
-            <option value="rolls">Rolls</option>
-            <option value="boxes">Boxes</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label>
-          <input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value) || 0}))} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
-        </div>
+        <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={handleAdd} disabled={saving} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add Item"}</button>
-        <button onClick={() => setShowAdd(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-      </div>
-    </div>
-  )}
 
-  {items.filter(i => i.quantity <= i.lowThreshold).length > 0 && (
-    <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#991b1b", fontWeight: 500 }}>
-      Low stock: {items.filter(i => i.quantity <= i.lowThreshold).map(i => i.name).join(", ")}
-    </div>
-  )}
-
-  {CAT_GROUPS.map(cat => {
-    const group = items.filter(i => i.category === cat);
-    if (!group.length) return null;
-    return (
-      <div key={cat} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: CAT_COLORS2[cat] || "#374151", marginBottom: 14, textTransform: "capitalize" }}>{cat}</div>
-        {group.map(item => {
-          const low = item.quantity <= item.lowThreshold;
-          return (
-            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{item.name}</div>
-                {low && <div style={{ fontSize: 11, color: "#ef4444", fontWeight: 600 }}>LOW STOCK</div>}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button onClick={() => handleUpdate(item.id, Math.max(0, item.quantity - 1))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
-                <div style={{ textAlign: "center", minWidth: 70 }}>
-                  <span style={{ fontWeight: 700, fontSize: 16, color: low ? "#ef4444" : "#111827" }}>{item.quantity}</span>
-                  <span style={{ fontSize: 12, color: "#9ca3af" }}> {item.unit}</span>
-                </div>
-                <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-              </div>
-              <button onClick={() => handleDelete(item.id)} style={{ background: "none", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: 16, padding: "0 4px" }}>x</button>
+      {showAdd && (
+        <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 14 }}>New Inventory Item</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 14 }}>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Item Name</label><input value={newItem.name} onChange={e => setNewItem(p => ({...p, name: e.target.value}))} placeholder="e.g. Tire Shine" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Part Number</label><input value={newItem.partNumber} onChange={e => setNewItem(p => ({...p, partNumber: e.target.value}))} placeholder="e.g. SHP-4421" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
+              <select value={newItem.category} onChange={e => setNewItem(p => ({...p, category: e.target.value}))} style={inp}>
+                <option value="chemicals">Chemicals</option>
+                <option value="parts">Parts</option>
+                <option value="vending supplies">Vending Supplies</option>
+              </select>
             </div>
-          );
-        })}
-      </div>
-    );
-  })}
-  {items.length === 0 && !showAdd && (
-    <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No inventory items yet. Tap + Add Item to get started.</div>
-  )}
-</div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Quantity</label><input type="number" value={newItem.quantity} onChange={e => setNewItem(p => ({...p, quantity: parseFloat(e.target.value)||0}))} style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Unit</label>
+              <select value={newItem.unit} onChange={e => setNewItem(p => ({...p, unit: e.target.value}))} style={inp}>
+                {UNITS.map(u => <option key={u} value={u}>{u.charAt(0).toUpperCase()+u.slice(1)}</option>)}
+              </select>
+            </div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Cost Per Unit ($)</label><input type="number" step="0.01" value={newItem.costPerUnit || ""} onChange={e => setNewItem(p => ({...p, costPerUnit: parseFloat(e.target.value)||0}))} placeholder="0.00" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label><input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Reorder At (qty)</label><input type="number" value={newItem.reorderAt || ""} onChange={e => setNewItem(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} placeholder="e.g. 5" style={inp} /></div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleAdd} disabled={saving} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add Item"}</button>
+            <button onClick={() => setShowAdd(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
 
-);
+      {items.filter(i => i.quantity <= i.lowThreshold).length > 0 && (
+        <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#991b1b", fontWeight: 500 }}>
+          Low stock: {items.filter(i => i.quantity <= i.lowThreshold).map(i => i.name).join(", ")}
+        </div>
+      )}
+
+      {CAT_GROUPS.map(cat => {
+        const group = items.filter(i => i.category === cat);
+        if (!group.length) return null;
+        return (
+          <div key={cat} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: CAT_COLORS2[cat] || "#374151", marginBottom: 14, textTransform: "capitalize" }}>{cat}</div>
+            {group.map(item => {
+              const low = item.quantity <= item.lowThreshold;
+              const isEditing = editingId === item.id;
+              return (
+                <div key={item.id} style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: 12, marginBottom: 12 }}>
+                  {isEditing ? (
+                    <div style={{ background: "#f8fafc", borderRadius: 8, padding: 14 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>Editing: {item.name}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Category</label>
+                          <select value={editData.category || "chemicals"} onChange={e => setEditData(p => ({...p, category: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
+                            <option value="chemicals">Chemicals</option>
+                            <option value="parts">Parts</option>
+                            <option value="vending supplies">Vending Supplies</option>
+                          </select>
+                        </div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Quantity</label><input type="number" value={editData.quantity || 0} onChange={e => setEditData(p => ({...p, quantity: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Unit</label>
+                          <select value={editData.unit || "gal"} onChange={e => setEditData(p => ({...p, unit: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
+                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Cost Per Unit ($)</label><input type="number" step="0.01" value={editData.costPerUnit || ""} onChange={e => setEditData(p => ({...p, costPerUnit: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => handleSaveEdit(item.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                        <button onClick={() => setEditingId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{item.name}</div>
+                        {item.partNumber && <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, marginTop: 1 }}>Part #: {item.partNumber}</div>}
+                        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
+                          {item.costPerUnit ? <span>${item.costPerUnit}/{item.unit} </span> : null}
+                          {item.reorderAt ? <span> Reorder at: {item.reorderAt}</span> : null}
+                        </div>
+                        {low && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                            <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700 }}>LOW STOCK</span>
+                            <button onClick={() => handleReorder(item)} style={{ fontSize: 10, background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 4, padding: "1px 7px", cursor: "pointer", fontWeight: 600 }}>Flag Reorder</button>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button onClick={() => handleUpdate(item.id, Math.max(0, item.quantity - 1))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
+                        <div style={{ textAlign: "center", minWidth: 65 }}>
+                          <span style={{ fontWeight: 700, fontSize: 16, color: low ? "#ef4444" : "#111827" }}>{item.quantity}</span>
+                          <span style={{ fontSize: 12, color: "#9ca3af" }}> {item.unit}</span>
+                        </div>
+                        <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                        <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0 }); }} style={{ background: "#1a3352", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>
+                        <button onClick={() => handleDelete(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Del</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+      {items.length === 0 && !showAdd && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No inventory items yet. Tap + Add Item to get started.</div>}
+    </div>
+  );
 }
 
-//  MATERIALS MODAL
 function MaterialsModal({ locId, task, onClose }) {
 const [items, setItems] = useState([]);
 const [selected, setSelected] = useState({});
@@ -1105,7 +1570,7 @@ return (
 }
 
 //  CALENDAR
-function Calendar({ locId, locationName, tasks, sensors }) {
+function Calendar({ locId, locationName, tasks, sensors, location }) {
 const [currentDate, setCurrentDate] = useState(new Date());
 const [selectedDate, setSelectedDate] = useState(null);
 const [daySummaries, setDaySummaries] = useState({});
@@ -1128,10 +1593,20 @@ setDaySummaries(summaries);
 return unsub;
 }, [locId]);
 
-const fetchWeather = async (dateStr, lat, lon) => {
-if (weather[dateStr]) return;
+const fetchWeather = async (dateStr) => {
+    // no cache - always fetch fresh
+const zip = location?.zipCode;
+if (!zip) return;
 try {
-const res = await fetch("https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr);
+// Step 1: zip to lat/lon via Open-Meteo geocoding
+const geoRes = await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" + zip + "&count=1&language=en&format=json");
+const geoData = await geoRes.json();
+if (!geoData.results?.length) return;
+const { latitude, longitude } = geoData.results[0];
+// Step 2: get weather
+const endpoint = "https://archive-api.open-meteo.com/v1/archive?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr;
+const res = await fetch(endpoint);
+      setWeather(p => ({ ...p, ["_url"]: endpoint.slice(0,150) }));
 const data = await res.json();
 if (data.daily) {
 const code = data.daily.weathercode[0];
@@ -1140,14 +1615,14 @@ const min = Math.round(data.daily.temperature_2m_min[0] * 9/5 + 32);
 const desc = code <= 1 ? "Sunny" : code <= 3 ? "Partly Cloudy" : code <= 48 ? "Foggy" : code <= 67 ? "Rainy" : code <= 77 ? "Snowy" : "Stormy";
 setWeather(p => ({ ...p, [dateStr]: { max, min, desc } }));
 }
-} catch(e) {}
+} catch(e) { console.log("Weather fetch error:", e); }
 };
 
 const handleSelectDate = async (dateStr) => {
 setSelectedDate(dateStr);
 setNoteText(daySummaries[dateStr]?.note || "");
 // Try to get weather - use default coords if no location coords
-fetchWeather(dateStr, 39.8283, -98.5795);
+fetchWeather(dateStr);
 // Auto-save day summary if today
 if (dateStr === today) {
 const doneTasks = tasks.filter(t => t.status === "done").length;
@@ -1193,7 +1668,7 @@ return (
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
 </div>
 
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
+  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
     {/* Calendar grid */}
     <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -1234,7 +1709,12 @@ return (
 
     {/* Day summary panel */}
     <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-      {!selectedDate ? (
+      {!location?.zipCode && (
+    <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
+      No zip code set for this location. Add one in Settings to enable weather data.
+    </div>
+  )}
+  {!selectedDate ? (
         <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>&#128197;</div>
           Select a date to view summary
@@ -1242,12 +1722,17 @@ return (
       ) : (
         <div>
           <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>
-            {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+            {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
           </div>
           {selWeather && (
             <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
               <div style={{ fontWeight: 600, color: "#0369a1" }}>{selWeather.desc}</div>
+                  {weather["_url"] && <div style={{ fontSize: 9, color: "#999", wordBreak: "break-all" }}>{weather["_url"]}</div>}
+                  {weather["debug"] && <div style={{ fontSize: 10, color: "#999", wordBreak: "break-all" }}>{weather["debug"]}</div>}
               <div style={{ color: "#0284c7" }}>High {selWeather.max}F / Low {selWeather.min}F</div>
+                  <div style={{ color: "#0369a1", marginTop: 4, fontSize: 12 }}>
+                    {selWeather.precipType === "Snow" ? "Snowfall" : "Precipitation"}: {selWeather.precip !== undefined ? (selWeather.precip > 0 ? selWeather.precip + '"' : "None") : selWeather.desc ? "0\"" : "Loading..."}
+                  </div>
             </div>
           )}
           {summary?.carsWashed != null && (
@@ -1276,25 +1761,108 @@ return (
 );
 }
 
+
+function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) {
+  const totalCars = locations.reduce((sum, loc) => sum + (sensors[loc.id]?.carsToday || 0), 0);
+  const totalDone = locations.reduce((sum, loc) => sum + (tasks[loc.id] || []).filter(t => t.status === "done").length, 0);
+  const totalTasks = locations.reduce((sum, loc) => sum + (tasks[loc.id] || []).length, 0);
+  const totalAlerts = locations.reduce((sum, loc) => sum + (equipment[loc.id] || []).filter(e => e.status !== "ok").length, 0);
+  const overdueTasks = locations.reduce((sum, loc) => sum + (tasks[loc.id] || []).filter(t => t.status !== "done" && t.due && t.due.includes("-") && new Date(t.due + "T23:59:59") < new Date()).length, 0);
+
+  return (
+    <div>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>All Locations Overview</div>
+        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+      </div>
+
+      {/* Total stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 13, marginBottom: 24 }}>
+        <StatCard icon="?" label="Total Cars Today" value={totalCars} accent="#0ea5e9" />
+        <StatCard icon="?" label="Tasks Complete" value={totalDone + "/" + totalTasks} sub={totalTasks ? Math.round(totalDone/totalTasks*100) + "%" : "0%"} accent="#10b981" />
+        <StatCard icon="?" label="Equip Alerts" value={totalAlerts} alert={totalAlerts > 0} accent="#ef4444" />
+        <StatCard icon="?" label="Overdue Tasks" value={overdueTasks} alert={overdueTasks > 0} accent="#f59e0b" />
+      </div>
+
+      {/* Per-location cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+        {locations.map(loc => {
+          const locTasks = tasks[loc.id] || [];
+          const locSensors = sensors[loc.id] || {};
+          const locEquip = equipment[loc.id] || [];
+          const done = locTasks.filter(t => t.status === "done").length;
+          const pct = locTasks.length ? Math.round(done/locTasks.length*100) : 0;
+          const alerts = locEquip.filter(e => e.status !== "ok").length;
+          const overdue = locTasks.filter(t => t.status !== "done" && t.due && t.due.includes("-") && new Date(t.due + "T23:59:59") < new Date()).length;
+
+          return (
+            <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{loc.name}</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {alerts > 0 && <span style={{ background: "#fee2e2", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{alerts} alert{alerts > 1 ? "s" : ""}</span>}
+                  {overdue > 0 && <span style={{ background: "#fef3c7", color: "#d97706", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{overdue} overdue</span>}
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#0369a1" }}>{locSensors.carsToday || 0}</div>
+                  <div style={{ fontSize: 11, color: "#6b7280" }}>Cars Today</div>
+                </div>
+                <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>{pct}%</div>
+                  <div style={{ fontSize: 11, color: "#6b7280" }}>Tasks Done</div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                  <span>Task Progress</span><span>{done}/{locTasks.length}</span>
+                </div>
+                <div style={{ height: 6, background: "#e5e7eb", borderRadius: 99 }}>
+                  <div style={{ height: "100%", width: pct + "%", background: pct === 100 ? "#10b981" : "#6366f1", borderRadius: 99 }} />
+                </div>
+              </div>
+              {[
+                { label: "Soap", val: locSensors.soapLevel, c: "#8b5cf6" },
+                { label: "Rinse Aid", val: locSensors.rinseAid, c: "#0ea5e9" },
+              ].map(s => s.val != null && (
+                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <span style={{ fontSize: 11, color: "#6b7280", width: 50 }}>{s.label}</span>
+                  <div style={{ flex: 1, height: 4, background: "#e5e7eb", borderRadius: 99 }}>
+                    <div style={{ height: "100%", width: s.val + "%", background: s.val < 30 ? "#ef4444" : s.c, borderRadius: 99 }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: s.val < 30 ? "#ef4444" : "#6b7280", fontWeight: 600, width: 28 }}>{s.val}%</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Settings({ locations, onUpdateLocation }) {
 const [editing, setEditing] = useState(null);
 const [name, setName] = useState("");
 const [address, setAddress] = useState("");
+const [zipCode, setZipCode] = useState("");
 const [saved, setSaved] = useState(false);
 
 const startEdit = (loc) => {
 setEditing(loc.id);
 setName(loc.name);
 setAddress(loc.address || "");
+setZipCode(loc.zipCode || "");
 setSaved(false);
 };
 
 const handleSave = async (locId) => {
 if (locId === "**new**") {
 const newId = "loc" + Date.now();
-await setDoc(doc(db, "locations", newId), { id: newId, name, address });
+await setDoc(doc(db, "locations", newId), { id: newId, name, address, zipCode });
 } else {
-await onUpdateLocation(locId, { name, address });
+await onUpdateLocation(locId, { name, address, zipCode });
 }
 setEditing(null);
 setSaved(true);
@@ -1327,9 +1895,13 @@ Changes saved!
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Location Name</label>
 <input value={name} onChange={e => setName(e.target.value)} style={inp} placeholder="e.g. North Station" />
 </div>
-<div style={{ marginBottom: 14 }}>
+<div style={{ marginBottom: 12 }}>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Address</label>
 <input value={address} onChange={e => setAddress(e.target.value)} style={inp} placeholder="e.g. 1240 N. Highway Blvd" />
+</div>
+<div style={{ marginBottom: 14 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Zip Code (for weather)</label>
+<input value={zipCode} onChange={e => setZipCode(e.target.value)} style={inp} placeholder="e.g. 90210" maxLength={5} />
 </div>
 <div style={{ display: "flex", gap: 8 }}>
 <button onClick={() => handleSave(loc.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
@@ -1354,9 +1926,13 @@ Changes saved!
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Location Name</label>
 <input value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. East Side Wash" />
 </div>
-<div style={{ marginBottom: 14 }}>
+<div style={{ marginBottom: 12 }}>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Address</label>
 <input value={address} onChange={e => setAddress(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. 999 Main St" />
+</div>
+<div style={{ marginBottom: 14 }}>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Zip Code (for weather)</label>
+<input value={zipCode} onChange={e => setZipCode(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. 90210" maxLength={5} />
 </div>
 <div style={{ display: "flex", gap: 8 }}>
 <button onClick={() => handleSave("**new**")} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
@@ -1386,6 +1962,18 @@ const [locId, setLocId] = useState(null);
 const [ready, setReady] = useState(false);
 const [showAddTask, setShowAddTask] = useState(false);
 const [materialsTask, setMaterialsTask] = useState(null);
+  const [taskPreset, setTaskPreset] = useState(null);
+  const [alertEmail, setAlertEmail] = useState("");
+  const [alertSaved, setAlertSaved] = useState(false);
+
+  const handleSaveAlertEmail = async () => {
+    if (!alertEmail.includes("@")) return;
+    await updateDoc(doc(db, "users", user.uid), { alertEmail, updatedAt: new Date().toISOString() });
+    setAlertSaved(true);
+    setTimeout(() => setAlertSaved(false), 3000);
+  };
+const [sidebarOpen, setSidebarOpen] = useState(false);
+const isMobile = useIsMobile();
 
 useEffect(() => {
 if (!user) return;
@@ -1405,7 +1993,8 @@ if (!locations.length) return;
 const unsubs = [
 ...locations.map(loc => onSnapshot(collection(db, "locations", loc.id, "tasks"), snap => setTasks(p => ({ ...p, [loc.id]: snap.docs.map(d => ({ id: d.id, ...d.data() })) })))),
 ...locations.map(loc => onSnapshot(collection(db, "locations", loc.id, "equipment"), snap => setEquipment(p => ({ ...p, [loc.id]: snap.docs.map(d => ({ id: d.id, ...d.data() })) })))),
-...locations.map(loc => onSnapshot(doc(db, "sensors", loc.id), snap => snap.exists() && setSensors(p => ({ ...p, [loc.id]: snap.data() })))),
+...locations.map(loc => onSnapshot(collection(db, "locations", loc.id, "inventory"), snap => setInventory(p => ({ ...p, [loc.id]: snap.docs.map(d => ({ id: d.id, ...d.data() })) })))),
+      ...locations.map(loc => onSnapshot(doc(db, "sensors", loc.id), snap => snap.exists() && setSensors(p => ({ ...p, [loc.id]: snap.data() })))),
 ];
 return () => unsubs.forEach(u => u());
 }, [locations.length]);
@@ -1434,19 +2023,77 @@ const curEquip = equipment[locId] || [];
 return (
 <div style={{ display: "flex", height: "100vh", background: "#f8fafc", overflow: "hidden" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} />
-<main style={{ flex: 1, overflowY: "auto", padding: "28px 32px" }}>
-{view === "overview"  && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} />}
+<Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+<main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px" : "28px 32px" }}>
+{view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} />}
 {view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
 {view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
 {view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} />}
-{view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} />}
-{view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} />}
+{view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} />}
+        {view === "alerts" && (
+          <div style={{ maxWidth: 600 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Alert Settings</div>
+            <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Configure how and when you receive notifications</div>
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Email Notifications</div>
+              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>Email delivery will be activated in a future update.</div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Email Address</label>
+              <input value={alertEmail} onChange={e => setAlertEmail(e.target.value)} placeholder="your@email.com" type="email" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#111827", background: "#fff", boxSizing: "border-box", marginBottom: 12 }} />
+              <button onClick={handleSaveAlertEmail} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{alertSaved ? "Saved!" : "Save Email"}</button>
+            </div>
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>Alert Frequency</div>
+              {["Immediately", "Daily Digest", "Weekly Summary"].map(opt => (
+                <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, cursor: "pointer" }}>
+                  <input type="checkbox" defaultChecked={opt === "Immediately"} style={{ width: 16, height: 16, accentColor: "#1a3352", cursor: "pointer" }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{opt}</div>
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{opt === "Immediately" ? "Notified as soon as triggered" : opt === "Daily Digest" ? "Summary every morning at 7am" : "Weekly summary every Monday"}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>Alert Preferences</div>
+              {[
+                { label: "Overdue Tasks", desc: "Task passes due date without completion" },
+                { label: "Low Inventory", desc: "Item falls below low stock threshold" },
+                { label: "Low Sensor Readings", desc: "Chemical or fluid levels drop too low" },
+                { label: "Equipment Alerts", desc: "Equipment status changes to warning or alert" },
+                { label: "New Task Created", desc: "New task added at your location" },
+              ].map(item => (
+                <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.label}</div>
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{item.desc}</div>
+                  </div>
+                  <input type="checkbox" defaultChecked style={{ width: 18, height: 18, accentColor: "#1a3352", cursor: "pointer" }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Quiet Hours</div>
+              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>No alerts during these hours</div>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>From</label>
+                  <input type="time" defaultValue="22:00" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ fontSize: 13, color: "#9ca3af", paddingTop: 20 }}>to</div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>To</label>
+                  <input type="time" defaultValue="07:00" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
 {view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} />}
 </main>
-{showAddTask && <AddTaskModal locId={locId} onClose={() => setShowAddTask(false)} onAdd={() => {}} />}
+{showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); }} onAdd={() => {}} preset={taskPreset} />}
 {materialsTask && <MaterialsModal locId={locId} task={materialsTask} onClose={() => setMaterialsTask(null)} />}
 </div>
 );
