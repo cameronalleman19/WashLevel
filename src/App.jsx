@@ -17,6 +17,8 @@ getDoc,
 getDocs,
 updateDoc,
 onSnapshot,
+query,
+where,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -165,11 +167,19 @@ setLoading(false);
 return unsub;
 }, []);
 
+const refreshUser = async () => {
+    if (!auth.currentUser) return;
+    const snap = await getDoc(doc(db, "users", auth.currentUser.uid));
+    if (snap.exists()) setUser(u => ({ ...u, ...snap.data() }));
+  };
+
 return (
 <AuthCtx.Provider value={{
 user, loading,
 login: (e, p) => signInWithEmailAndPassword(auth, e, p),
 logout: () => signOut(auth),
+signup: (e, p) => createUserWithEmailAndPassword(auth, e, p),
+refreshUser,
 }}>
 {!loading && children}
 </AuthCtx.Provider>
@@ -217,63 +227,145 @@ const Spinner = () => (
 );
 
 function Login() {
-const { login } = useAuth();
-const [email, setEmail] = useState("");
-const [password, setPassword] = useState("");
-const [error, setError] = useState("");
-const [loading, setLoading] = useState(false);
+  const { login, signup } = useAuth();
+  const [tab, setTab] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [name, setName] = useState("");
+  const [bizName, setBizName] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-const handleSubmit = async (e) => {
-e.preventDefault();
-setError(""); setLoading(true);
-try { await login(email, password); }
-catch { setError("Invalid email or password."); }
-setLoading(false);
-};
+  const handleLogin = async () => {
+    if (!email || !password) return;
+    setError(""); setLoading(true);
+    try {
+      await login(email, password);
+    } catch(e) {
+      setError("Invalid email or password.");
+    }
+    setLoading(false);
+  };
 
-const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" };
+  const handleSignup = async () => {
+    if (!name || !email || !password || !bizName) { setError("Please fill in all fields."); return; }
+    if (password !== confirm) { setError("Passwords do not match."); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    setError(""); setLoading(true);
+    try {
+      const cred = await signup(email, password);
+      const uid = cred.user.uid;
+      // Create first location
+      const locId = "loc_" + uid.slice(0, 8);
+      await setDoc(doc(db, "locations", locId), {
+        id: locId, name: bizName, address: "", zipCode: "", ownerId: uid,
+        createdAt: new Date().toISOString()
+      });
+      // Create user profile
+      await setDoc(doc(db, "users", uid), {
+        uid, email, name, role: "manager", locationId: locId,
+        bizName, color: "#6366f1", createdAt: new Date().toISOString()
+      });
+    } catch(e) {
+      setError(e.message?.includes("email-already-in-use") ? "An account with this email already exists." : "Signup failed. Please try again.");
+    }
+    setLoading(false);
+  };
 
-return (
-<div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<div style={{ width: "100%", maxWidth: 420, padding: "0 16px" }}>
-<div style={{ textAlign: "center", marginBottom: 32 }}>
-<div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#1a3352", borderRadius: 14, padding: "10px 22px" }}>
-<span style={{ fontSize: 22 }}>?</span>
-<span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
-<span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
-</div>
-<div style={{ color: "#94a3b8", fontSize: 13, marginTop: 8 }}>Operations & Task Management</div>
-</div>
-<div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
-<div style={{ fontWeight: 700, fontSize: 18, color: "#111827", marginBottom: 4 }}>Sign in</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Enter your credentials to continue</div>
-<form onSubmit={handleSubmit}>
-<div style={{ marginBottom: 16 }}>
-<label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Email</label>
-<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@washlevel.com" required style={inp} />
-</div>
-<div style={{ marginBottom: 20 }}>
-<label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Password</label>
-<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="????????" required style={inp} />
-</div>
-{error && <div style={{ background: "#fee2e2", color: "#991b1b", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>{error}</div>}
-<button type="submit" disabled={loading} style={{ width: "100%", background: loading ? "#9ca3af" : "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-{loading ? "Signing in..." : "Sign In"}
-</button>
-</form>
-<div style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 10, fontSize: 12, color: "#6b7280" }}>
-<div style={{ fontWeight: 700, color: "#374151", marginBottom: 6 }}>Demo accounts (password: washlevel123)</div>
-<div>manager@washlevel.com - All locations</div>
-<div>jordan@washlevel.com - North Station</div>
-<div>casey@washlevel.com - North Station</div>
-<div>sam@washlevel.com - Downtown Express</div>
-<div>morgan@washlevel.com - Southside Wash</div>
-</div>
-</div>
-</div>
-</div>
-);
+  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      <div style={{ width: "100%", maxWidth: 440, padding: "0 16px" }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#1a3352", borderRadius: 14, padding: "10px 22px" }}>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
+            <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 8 }}>Car Wash Operations Platform</div>
+        </div>
+
+        <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+          {/* Tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb" }}>
+            {["login","signup"].map(t => (
+              <button key={t} onClick={() => { setTab(t); setError(""); }}
+                style={{ flex: 1, padding: "14px 0", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
+                  background: tab === t ? "#fff" : "#f9fafb",
+                  color: tab === t ? "#1a3352" : "#9ca3af",
+                  borderBottom: tab === t ? "2px solid #1a3352" : "2px solid transparent" }}>
+                {t === "login" ? "Sign In" : "Create Account"}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ padding: 28 }}>
+            {tab === "login" ? (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Email</label>
+                  <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp}
+                    onKeyDown={e => e.key === "Enter" && handleLogin()} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Password</label>
+                  <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="password" style={inp}
+                    onKeyDown={e => e.key === "Enter" && handleLogin()} />
+                </div>
+                {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
+                <button onClick={handleLogin} disabled={loading}
+                  style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                  {loading ? "Signing in..." : "Sign In"}
+                </button>
+                <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: "#9ca3af" }}>
+                  No account?{" "}
+                  <span onClick={() => setTab("signup")} style={{ color: "#1a3352", fontWeight: 600, cursor: "pointer" }}>Create one free</span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Your Name</label>
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Alex Rivera" style={inp} />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Car Wash Name</label>
+                  <input value={bizName} onChange={e => setBizName(e.target.value)} placeholder="e.g. Sunny Car Wash" style={inp} />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Email</label>
+                  <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp} />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Password</label>
+                  <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="At least 6 characters" style={inp} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Confirm Password</label>
+                  <input value={confirm} onChange={e => setConfirm(e.target.value)} type="password" placeholder="Repeat password" style={inp}
+                    onKeyDown={e => e.key === "Enter" && handleSignup()} />
+                </div>
+                {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
+                <button onClick={handleSignup} disabled={loading}
+                  style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                  {loading ? "Creating account..." : "Create Account"}
+                </button>
+                <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#9ca3af" }}>
+                  By creating an account you agree to our terms of service.
+                </div>
+                <div style={{ textAlign: "center", marginTop: 8, fontSize: 13, color: "#9ca3af" }}>
+                  Already have an account?{" "}
+                  <span onClick={() => setTab("login")} style={{ color: "#1a3352", fontWeight: 600, cursor: "pointer" }}>Sign in</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Sidebar({ locations, view, setView, locId, setLocId, open, onClose }) {
@@ -333,7 +425,7 @@ boxShadow: "4px 0 24px rgba(0,0,0,0.25)",
 ))}
 </div>
 <div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-<div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+<div onClick={() => { setView("settings"); if (typeof onClose === "function") onClose(); }} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
 <Avatar name={user?.name || user?.email || ""} color={RC[user?.role] || "#6366f1"} size={34} />
 <div style={{ minWidth: 0 }}>
 <div style={{ color: "#fff", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user?.name || user?.email}</div>
@@ -347,7 +439,7 @@ boxShadow: "4px 0 24px rgba(0,0,0,0.25)",
 );
 }
 
-function Overview({ location, tasks, sensors, equipment, onNavigate }) {
+function Overview({ location, tasks, sensors, equipment, onNavigate, user }) {
 const done = tasks.filter(t => t.status === "done").length;
 const inprog = tasks.filter(t => t.status === "in-progress").length;
 const eqBad = equipment.filter(e => e.status !== "ok").length;
@@ -385,7 +477,7 @@ return (
 <Bar value={s.val ?? 0} color={s.c} />
 </div>
 ))}
-          <SpSensorMini sensors={sensors} onNavigate={onNavigate} locId={location?.id} />
+          <SpSensorMini sensors={sensors} onNavigate={onNavigate} locId={location?.id} uid={user?.uid} />
 {sensors && <div style={{ marginTop: 6, padding: "10px 12px", background: "#f0f9ff", borderRadius: 8, fontSize: 12, color: "#0369a1" }}>Temp: <b>{sensors.tempF}?F</b> Conveyor: <b>{sensors.conveyorRPM} RPM</b></div>}
 </div>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
@@ -1003,7 +1095,8 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
   );
 }
 
-function Sensors({ sensors, locationName, locId, onNavigate }) {
+function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
+  const user = { uid };
   const s = sensors || {};
   const [spSensors, setSpSensors] = useState([]);
   const [history, setHistory] = useState({});
@@ -1017,7 +1110,7 @@ function Sensors({ sensors, locationName, locId, onNavigate }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
         if (!snap.exists() || snap.data().disconnected) return;
         const { accessToken, assignments, sensors: sensorList } = snap.data();
         if (!sensorList) return;
@@ -1034,7 +1127,7 @@ function Sensors({ sensors, locationName, locId, onNavigate }) {
       spSensors.forEach(async sp => {
         // Fetch latest reading for tile display
         try {
-          const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+          const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
           const { accessToken } = snap.data();
           const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -1067,7 +1160,7 @@ function Sensors({ sensors, locationName, locId, onNavigate }) {
     setLoadingHistory(true);
     setHistory(p => ({ ...p, [sensorId]: undefined }));
     try {
-      const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+      const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
       const { accessToken } = snap.data();
       const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -1084,7 +1177,7 @@ function Sensors({ sensors, locationName, locId, onNavigate }) {
       });
       const sampData = await sampRes.json();
       const samples = sampData.sensors?.[sensorId] || [];
-      setHistory(p => ({ ...p, [sensorId]: samples }));
+      setHistory(p => ({ ...p, [sensorId]: samples.slice().reverse() }));
     } catch(e) { console.log("History error:", e); }
     setLoadingHistory(false);
   };
@@ -1179,8 +1272,8 @@ function Sensors({ sensors, locationName, locId, onNavigate }) {
                             </div>
                           )}
                         </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontSize: 9, color: "#9ca3af", width: 28, textAlign: "right", paddingBottom: 2 }}>
+                        <div style={{ display: "flex", gap: 6, overflowX: "hidden" }}>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontSize: 9, color: "#9ca3af", width: 28, textAlign: "right", paddingBottom: 2, flexShrink: 0 }}>
                             <span>{maxV}{unit}</span><span>{midV}{unit}</span><span>{minV}{unit}</span>
                           </div>
                           <div style={{ flex: 1 }}>
@@ -1193,6 +1286,7 @@ function Sensors({ sensors, locationName, locId, onNavigate }) {
                                 return (
                                   <div key={i}
                                     onMouseEnter={() => setTooltip({ chart: chartType, val, time, i })}
+                                    onPointerDown={() => setTooltip({ chart: chartType, val, time, i })}
                                     onMouseLeave={() => setTooltip(null)}
                                     onClick={() => setTooltip(isActive ? null : { chart: chartType, val, time, i })}
                                     style={{ flex: 1, height: h, background: isActive ? darkColor : color, borderRadius: "2px 2px 0 0", minWidth: 3, cursor: "pointer", transition: "background 0.1s" }} />
@@ -2039,6 +2133,7 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
 
 
 function SensorPushIntegration({ locations }) {
+  const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [connecting, setConnecting] = useState(false);
@@ -2053,7 +2148,7 @@ function SensorPushIntegration({ locations }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
         if (snap.exists()) {
           const data = snap.data();
           if (data.accessToken) {
@@ -2097,7 +2192,7 @@ function SensorPushIntegration({ locations }) {
       const sensorList = Object.entries(sensData).map(([id, s]) => ({
         id, name: s.name, active: s.active
       }));
-      await setDoc(doc(db, "integrations", "sensorpush"), {
+      await setDoc(doc(db, "users", user.uid, "integrations", "sensorpush"), {
         email,
         accessToken: tokenData.accesstoken,
         sensors: sensorList,
@@ -2113,7 +2208,7 @@ function SensorPushIntegration({ locations }) {
   };
 
   const handleDisconnect = async () => {
-    await setDoc(doc(db, "integrations", "sensorpush"), { disconnected: true }, { merge: false });
+    await setDoc(doc(db, "users", user.uid, "integrations", "sensorpush"), { disconnected: true }, { merge: false });
     setConnected(false);
     setSensors([]);
     setAssignments({});
@@ -2123,7 +2218,7 @@ function SensorPushIntegration({ locations }) {
 
   const handleSaveAssignments = async () => {
     setSaving(true);
-    await updateDoc(doc(db, "integrations", "sensorpush"), { assignments });
+    await updateDoc(doc(db, "users", user.uid, "integrations", "sensorpush"), { assignments });
     setSaving(false);
     setSavedMsg(true);
     setTimeout(() => setSavedMsg(false), 2000);
@@ -2186,14 +2281,15 @@ function SensorPushIntegration({ locations }) {
   );
 }
 
-function SpSensorMini({ sensors, onNavigate, locId }) {
+function SpSensorMini({ sensors, onNavigate, locId, uid }) {
+  const user = { uid };
   const s = sensors || {};
   const [spSensors, setSpSensors] = useState([]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
         if (!snap.exists() || snap.data().disconnected) return;
         const { sensors: sensorList, assignments } = snap.data();
         if (!sensorList) return;
@@ -2227,11 +2323,22 @@ function SpSensorMini({ sensors, onNavigate, locId }) {
   );
 }
 function Settings({ locations, onUpdateLocation }) {
+const { user, refreshUser } = useAuth();
 const [editing, setEditing] = useState(null);
 const [name, setName] = useState("");
 const [address, setAddress] = useState("");
 const [zipCode, setZipCode] = useState("");
 const [saved, setSaved] = useState(false);
+const [profileName, setProfileName] = useState(user?.name || user?.email?.split("@")[0] || "");
+const [profileSaved, setProfileSaved] = useState(false);
+
+const handleSaveProfile = async () => {
+  if (!profileName.trim()) return;
+  await updateDoc(doc(db, "users", user.uid), { name: profileName, updatedAt: new Date().toISOString() });
+  await refreshUser();
+  setProfileSaved(true);
+  setTimeout(() => setProfileSaved(false), 2000);
+};
 
 const startEdit = (loc) => {
 setEditing(loc.id);
@@ -2260,6 +2367,22 @@ return (
 <div style={{ marginBottom: 22 }}>
 <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Settings</div>
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>Manage locations and preferences</div>
+</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+  <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Your Profile</div>
+  <div style={{ marginBottom: 12 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Display Name</label>
+    <input value={profileName} onChange={e => setProfileName(e.target.value)}
+      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" }}
+      placeholder="Your name" />
+  </div>
+  <div style={{ marginBottom: 16 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Email</label>
+    <div style={{ padding: "9px 12px", background: "#f3f4f6", borderRadius: 8, fontSize: 13, color: "#6b7280", marginTop: 6 }}>{user?.email}</div>
+  </div>
+  <button onClick={handleSaveProfile} style={{ background: profileSaved ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+    {profileSaved ? "Saved!" : "Save Profile"}
+  </button>
 </div>
 {saved && (
 <div style={{ background: "#d1fae5", color: "#065f46", padding: "10px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
@@ -2365,15 +2488,13 @@ const isMobile = useIsMobile();
 
 useEffect(() => {
 if (!user) return;
-seedDatabase().then(() => {
-const unsub = onSnapshot(collection(db, "locations"), snap => {
+const unsub = onSnapshot(query(collection(db, "locations"), where("ownerId", "==", user.uid)), snap => {
 const locs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 setLocations(locs);
 setLocId(id => id || user.locationId || locs[0]?.id);
 setReady(true);
 });
 return unsub;
-});
 }, [user?.uid]);
 
 useEffect(() => {
@@ -2392,7 +2513,7 @@ return () => unsubs.forEach(u => u());
   useEffect(() => {
     const pollSensorPush = async () => {
       try {
-        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
         if (!snap.exists() || snap.data().disconnected) return;
         const { accessToken, assignments, sensors: sensorList } = snap.data();
         if (!accessToken || !assignments) return;
@@ -2423,7 +2544,7 @@ return () => unsubs.forEach(u => u());
           setDoc(doc(db, "sensors", locId), { ...data, spUpdatedAt: new Date().toISOString() }, { merge: true })
         ));
         if (tokenData.accesstoken) {
-          await updateDoc(doc(db, "integrations", "sensorpush"), { accessToken: tokenData.accesstoken });
+          await updateDoc(doc(db, "users", user.uid, "integrations", "sensorpush"), { accessToken: tokenData.accesstoken });
         }
       } catch(e) { console.log("SensorPush poll error:", e.message); }
     };
@@ -2446,7 +2567,30 @@ if (!locId) return;
 await updateDoc(doc(db, "locations", locId, "tasks", taskId), { note, updatedAt: new Date().toISOString() });
 };
 
-if (!ready || !locId) return <Spinner />;
+if (!ready) return <Spinner />;
+if (!locId || !locations.length) if (user?.role === "manager" && !locations.length) return <Spinner />; else return (
+  <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ textAlign: "center", maxWidth: 400, padding: 32 }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>🚗</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Welcome to WashLevel!</div>
+      <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>Let's set up your first car wash location to get started.</div>
+      <button onClick={async () => {
+        const locId = "loc_" + Date.now();
+        await setDoc(doc(db, "locations", locId), {
+          id: locId, name: "My Car Wash", address: "", zipCode: "",
+          ownerId: user.uid, createdAt: new Date().toISOString()
+        });
+        await updateDoc(doc(db, "users", user.uid), { locationId: locId });
+      }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "14px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+        Create My First Location
+      </button>
+      <div style={{ marginTop: 16, fontSize: 13, color: "#6b7280" }}>Signed in as <b>{user.email}</b></div>
+      <div style={{ marginTop: 10 }}>
+        <button onClick={() => logout()} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>Sign out and use a different account</button>
+      </div>
+    </div>
+  </div>
+);
 
 const curLoc = locations.find(l => l.id === locId);
 const curTasks = tasks[locId] || [];
@@ -2457,8 +2601,19 @@ return (
 <div style={{ display: "flex", height: "100vh", background: "#f8fafc", overflow: "hidden" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-<main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px" : "28px 32px" }}>
-{view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} />}
+<main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px" : "28px 32px", paddingTop: isMobile ? "56px" : undefined }}>
+      {isMobile && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 48, background: "#1a3352", display: "flex", alignItems: "center", paddingLeft: 12, zIndex: 30 }}>
+          <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", padding: 8, display: "flex", flexDirection: "column", gap: 5 }}>
+            <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
+            <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
+            <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
+          </button>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: 16, marginLeft: 8 }}>WashLevel</span>
+          <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px", marginLeft: 6 }}>PRO</span>
+        </div>
+      )}
+{view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} />}
 {view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
 {view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
@@ -2523,7 +2678,7 @@ return (
           </div>
         )}
         {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
-{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); }} onAdd={() => {}} preset={taskPreset} />}
