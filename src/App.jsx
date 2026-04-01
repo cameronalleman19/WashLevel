@@ -360,10 +360,10 @@ return (
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
-<div style={{ cursor: "default" }}><StatCard icon="?" label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" /></div>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard icon="?" label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard icon="?" label="In Progress" value={inprog} accent="#f59e0b" /></div>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard icon="?" label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>
+<div style={{ cursor: "default" }}><StatCard label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
@@ -385,10 +385,11 @@ return (
 <Bar value={s.val ?? 0} color={s.c} />
 </div>
 ))}
-{sensors && <div style={{ marginTop: 6, padding: "10px 12px", background: "#f0f9ff", borderRadius: 8, fontSize: 12, color: "#0369a1" }}>? Temp: <b>{sensors.tempF}?F</b> ? Conveyor: <b>{sensors.conveyorRPM} RPM</b></div>}
+          <SpSensorMini sensors={sensors} onNavigate={onNavigate} locId={location?.id} />
+{sensors && <div style={{ marginTop: 6, padding: "10px 12px", background: "#f0f9ff", borderRadius: 8, fontSize: 12, color: "#0369a1" }}>Temp: <b>{sensors.tempF}?F</b> Conveyor: <b>{sensors.conveyorRPM} RPM</b></div>}
 </div>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>? Equipment Status</div>
+<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>Equipment Status</div>
 {equipment.map(eq => {
 const s = EQS[eq.status] || EQS.ok;
 return (
@@ -1002,47 +1003,235 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
   );
 }
 
-function Sensors({ sensors, locationName }) {
-const s = sensors || {};
-const cards = [
-{ label: "Soap Level", val: s.soapLevel, unit: "%", icon: "?", color: "#8b5cf6", low: 30 },
-{ label: "Rinse Aid", val: s.rinseAid, unit: "%", icon: "?", color: "#0ea5e9", low: 25 },
-{ label: "Wax Level", val: s.waxLevel, unit: "%", icon: "?", color: "#f59e0b", low: 20 },
-{ label: "Water Pressure", val: s.waterPressure, unit: "%", icon: "?", color: "#10b981", low: 60 },
-{ label: "Water Temp", val: s.tempF, unit: "?F", icon: "?", color: "#3b82f6", low: 0 },
-{ label: "Conveyor Speed", val: s.conveyorRPM, unit: " RPM", icon: "?", color: "#6366f1", low: 0 },
-{ label: "Cars Today", val: s.carsToday, unit: "", icon: "?", color: "#059669", low: 0 },
-];
-return (
-<div>
-<div style={{ marginBottom: 22 }}>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Sensor Dashboard</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
-</div>
-<div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "11px 16px", marginBottom: 20, fontSize: 13, color: "#92400e" }}>
-? <b>Sensor Integration Ready</b> - Connect IoT hardware to populate live data.
-</div>
-<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 13 }}>
-{cards.map(c => {
-const alert = c.low > 0 && (c.val ?? 100) < c.low;
-return (
-<div key={c.label} style={{ background: "#fff", border: alert ? "1.5px solid #fca5a5" : "1px solid #e5e7eb", borderRadius: 12, padding: "18px 16px" }}>
-<div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-<span style={{ fontSize: 20 }}>{c.icon}</span>
-<span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", flex: 1 }}>{c.label}</span>
-{alert && <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, background: "#fee2e2", padding: "2px 7px", borderRadius: 99 }}>LOW</span>}
-</div>
-<div style={{ fontSize: 28, fontWeight: 800, color: alert ? "#ef4444" : c.color, lineHeight: 1 }}>{c.val ?? "-"}<span style={{ fontSize: 14, fontWeight: 400, color: "#9ca3af" }}>{c.unit}</span></div>
-{c.unit === "%" && c.val != null && <div style={{ marginTop: 10 }}><Bar value={c.val} color={c.color} /></div>}
-</div>
-);
-})}
-</div>
-</div>
-);
+function Sensors({ sensors, locationName, locId, onNavigate }) {
+  const s = sensors || {};
+  const [spSensors, setSpSensors] = useState([]);
+  const [history, setHistory] = useState({});
+  const [selectedSensor, setSelectedSensor] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [tooltip, setTooltip] = useState(null);
+  const [timeRange, setTimeRange] = useState("6h");
+  const [latestReadings, setLatestReadings] = useState({});
+  const rangeMs = { "1h": 1, "6h": 6, "24h": 24, "7d": 168 };
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        if (!snap.exists() || snap.data().disconnected) return;
+        const { accessToken, assignments, sensors: sensorList } = snap.data();
+        if (!sensorList) return;
+        const assigned = sensorList.filter(s => assignments[s.id] === locId);
+        setSpSensors(assigned);
+      } catch(e) {}
+    };
+    if (locId) load().then(() => {});
+  }, [locId]);
+
+  // Auto-load history for all sensors on mount
+  useEffect(() => {
+    if (spSensors.length > 0) {
+      spSensors.forEach(async sp => {
+        // Fetch latest reading for tile display
+        try {
+          const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+          const { accessToken } = snap.data();
+          const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ authorization: accessToken })
+          });
+          const tokenData = await tokenRes.json();
+          const token = tokenData.accesstoken || accessToken;
+          const sampRes = await fetch("https://api.sensorpush.com/api/v1/samples", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": token },
+            body: JSON.stringify({ sensors: [sp.id], limit: 1 })
+          });
+          const sampData = await sampRes.json();
+          const latest = sampData.sensors?.[sp.id]?.[0];
+          if (latest) {
+            setLatestReadings(p => ({ ...p, [sp.id]: {
+              temperature: latest.temperature != null ? Math.round(latest.temperature * 10) / 10 : null,
+              humidity: latest.humidity != null ? Math.round(latest.humidity * 10) / 10 : null
+            }}));
+          }
+        } catch(e) {}
+        loadHistory(sp.id, timeRange);
+      });
+    }
+  }, [spSensors.length]);
+
+  const loadHistory = async (sensorId, range) => {
+    const r = range || timeRange;
+    setSelectedSensor(sensorId);
+    setLoadingHistory(true);
+    setHistory(p => ({ ...p, [sensorId]: undefined }));
+    try {
+      const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+      const { accessToken } = snap.data();
+      const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorization: accessToken })
+      });
+      const tokenData = await tokenRes.json();
+      const token = tokenData.accesstoken || accessToken;
+      const stop = new Date().toISOString();
+      const start = new Date(Date.now() - (rangeMs[r] || 6) * 60 * 60 * 1000).toISOString();
+      const sampRes = await fetch("https://api.sensorpush.com/api/v1/samples", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": token },
+        body: JSON.stringify({ sensors: [sensorId], limit: r === "7d" ? 10080 : r === "24h" ? 1440 : r === "6h" ? 360 : 60, startTime: start, stopTime: stop })
+      });
+      const sampData = await sampRes.json();
+      const samples = sampData.sensors?.[sensorId] || [];
+      setHistory(p => ({ ...p, [sensorId]: samples }));
+    } catch(e) { console.log("History error:", e); }
+    setLoadingHistory(false);
+  };
+
+  const cards = [
+    { label: "Soap Level", val: s.soapLevel, unit: "%", color: "#8b5cf6", low: 30 },
+    { label: "Rinse Aid", val: s.rinseAid, unit: "%", color: "#0ea5e9", low: 25 },
+    { label: "Wax Level", val: s.waxLevel, unit: "%", color: "#f59e0b", low: 20 },
+    { label: "Water Pressure", val: s.waterPressure, unit: "%", color: "#10b981", low: 60 },
+    { label: "Water Temp", val: s.tempF, unit: "F", color: "#3b82f6", low: 0 },
+    { label: "Conveyor Speed", val: s.conveyorRPM, unit: " RPM", color: "#6366f1", low: 0 },
+    { label: "Cars Today", val: s.carsToday, unit: "", color: "#059669", low: 0 },
+  ];
+
+  const selHistory = selectedSensor ? (history[selectedSensor] || []) : [];
+  const selSensor = spSensors.find(s => s.id === selectedSensor);
+
+  return (
+    <div>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Sensor Dashboard</div>
+        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+      </div>
+
+      {spSensors.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>SensorPush Sensors</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 13, marginBottom: 16 }}>
+            {spSensors.map(sp => {
+              const lr = latestReadings[sp.id];
+              const temp = lr?.temperature ?? s.spTempF;
+              const hum = lr?.humidity ?? s.spHumidity;
+              return (
+                <div key={sp.id} onClick={() => loadHistory(sp.id, timeRange)}
+                  style={{ background: selectedSensor === sp.id ? "#eff6ff" : "#fff", border: selectedSensor === sp.id ? "2px solid #3b82f6" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, cursor: "pointer" }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 10 }}>{sp.name}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div style={{ background: "#eff6ff", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#3b82f6" }}>{temp != null ? temp + "F" : "--"}</div>
+                      <div style={{ fontSize: 10, color: "#6b7280" }}>Temperature</div>
+                    </div>
+                    <div style={{ background: "#ecfeff", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0891b2" }}>{hum != null ? hum + "%" : "--"}</div>
+                      <div style={{ fontSize: 10, color: "#6b7280" }}>Humidity</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 8, textAlign: "center" }}>Tap for history</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {selectedSensor && (
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{selSensor?.name}</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["1h","6h","24h","7d"].map(r => (
+                    <button key={r} onClick={() => { setTimeRange(r); loadHistory(selectedSensor, r); }}
+                      style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, border: "none", borderRadius: 6,
+                        background: timeRange === r ? "#1a3352" : "#f3f4f6",
+                        color: timeRange === r ? "#fff" : "#6b7280", cursor: "pointer" }}>
+                      {r === "7d" ? "1W" : r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {loadingHistory ? (
+                <div style={{ textAlign: "center", padding: "30px 0", color: "#9ca3af", fontSize: 13 }}>Loading history...</div>
+              ) : selHistory.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px 0", color: "#9ca3af", fontSize: 13 }}>No data available</div>
+              ) : (
+                <div>
+                  {["temp","hum"].map(chartType => {
+                    const isTemp = chartType === "temp";
+                    const vals = selHistory.map(p => isTemp ? p.temperature : p.humidity).filter(v => v != null);
+                    const minV = Math.min(...vals); const maxV = Math.max(...vals);
+                    const midV = Math.round((minV + maxV) / 2);
+                    const unit = isTemp ? "F" : "%";
+                    const color = isTemp ? "#3b82f6" : "#0891b2";
+                    const darkColor = isTemp ? "#1e40af" : "#0e7490";
+                    const label = isTemp ? "Temperature (F)" : "Humidity (%)";
+                    const targetBars = timeRange === "7d" ? 168 : timeRange === "24h" ? 96 : 60;
+                    const filtered = selHistory.filter((_, i) => i % Math.max(1, Math.floor(selHistory.length / targetBars)) === 0);
+                    return (
+                      <div key={chartType} style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color, marginBottom: 4 }}>{label}</div>
+                        <div style={{ height: 24, marginBottom: 4 }}>
+                          {tooltip?.chart === chartType && (
+                            <div style={{ background: darkColor, color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, display: "inline-block", pointerEvents: "none" }}>
+                              {tooltip.val}{unit} — {tooltip.time}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontSize: 9, color: "#9ca3af", width: 28, textAlign: "right", paddingBottom: 2 }}>
+                            <span>{maxV}{unit}</span><span>{midV}{unit}</span><span>{minV}{unit}</span>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 80 }}>
+                              {filtered.map((pt, i) => {
+                                const val = isTemp ? pt.temperature : pt.humidity;
+                                const h = maxV === minV ? 50 : Math.round(((val - minV) / (maxV - minV)) * 70) + 10;
+                                const time = new Date(pt.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                                const isActive = tooltip?.chart === chartType && tooltip?.i === i;
+                                return (
+                                  <div key={i}
+                                    onMouseEnter={() => setTooltip({ chart: chartType, val, time, i })}
+                                    onMouseLeave={() => setTooltip(null)}
+                                    onClick={() => setTooltip(isActive ? null : { chart: chartType, val, time, i })}
+                                    style={{ flex: 1, height: h, background: isActive ? darkColor : color, borderRadius: "2px 2px 0 0", minWidth: 3, cursor: "pointer", transition: "background 0.1s" }} />
+                                );
+                              })}
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#9ca3af", marginTop: 3 }}>
+                              <span>{new Date(selHistory[0]?.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              <span style={{ fontWeight: 600 }}>Time</span>
+                              <span>Now</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "11px 16px", marginBottom: 20, fontSize: 13, color: "#92400e" }}>
+        <b>Sensor Integration Ready</b> - Connect IoT hardware to populate live data.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 13 }}>
+        {cards.filter(c => c.val != null).map(c => (
+          <div key={c.label} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{c.label}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: c.val < c.low ? "#ef4444" : c.color }}>{c.val}{c.unit}</div>
+            {c.unit === "%" && <Bar value={c.val} color={c.val < c.low ? "#ef4444" : c.color} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-// TIME CLOCK VIEW
 function TimeClock({ locId, locationName, allLocations }) {
 const { user } = useAuth();
 const [clockState, setClockState] = useState(null); // loaded from Firestore
@@ -1784,10 +1973,10 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
 
       {/* Total stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 13, marginBottom: 24 }}>
-        <StatCard icon="?" label="Total Cars Today" value={totalCars} accent="#0ea5e9" />
-        <StatCard icon="?" label="Tasks Complete" value={totalDone + "/" + totalTasks} sub={totalTasks ? Math.round(totalDone/totalTasks*100) + "%" : "0%"} accent="#10b981" />
-        <StatCard icon="?" label="Equip Alerts" value={totalAlerts} alert={totalAlerts > 0} accent="#ef4444" />
-        <StatCard icon="?" label="Overdue Tasks" value={overdueTasks} alert={overdueTasks > 0} accent="#f59e0b" />
+        <StatCard label="Total Cars Today" value={totalCars} accent="#0ea5e9" />
+        <StatCard label="Tasks Complete" value={totalDone + "/" + totalTasks} sub={totalTasks ? Math.round(totalDone/totalTasks*100) + "%" : "0%"} accent="#10b981" />
+        <StatCard label="Equip Alerts" value={totalAlerts} alert={totalAlerts > 0} accent="#ef4444" />
+        <StatCard label="Overdue Tasks" value={overdueTasks} alert={overdueTasks > 0} accent="#f59e0b" />
       </div>
 
       {/* Per-location cards */}
@@ -1848,6 +2037,195 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
   );
 }
 
+
+function SensorPushIntegration({ locations }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState("");
+  const [sensors, setSensors] = useState([]);
+  const [assignments, setAssignments] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.accessToken) {
+            setConnected(true);
+            setEmail(data.email || "");
+            if (data.sensors) setSensors(data.sensors);
+            if (data.assignments) setAssignments(data.assignments);
+          }
+        }
+      } catch(e) {}
+      setLoadingConfig(false);
+    };
+    load();
+  }, []);
+
+  const handleConnect = async () => {
+    if (!email || !password) return;
+    setConnecting(true);
+    setError("");
+    try {
+      const authRes = await fetch("https://api.sensorpush.com/api/v1/oauth/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const authData = await authRes.json();
+      if (!authData.authorization) throw new Error(authData.message || "Invalid credentials");
+      const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorization: authData.authorization })
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenData.accesstoken) throw new Error("Could not get access token");
+      const sensRes = await fetch("https://api.sensorpush.com/api/v1/devices/sensors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": tokenData.accesstoken },
+        body: JSON.stringify({})
+      });
+      const sensData = await sensRes.json();
+      const sensorList = Object.entries(sensData).map(([id, s]) => ({
+        id, name: s.name, active: s.active
+      }));
+      await setDoc(doc(db, "integrations", "sensorpush"), {
+        email,
+        accessToken: tokenData.accesstoken,
+        sensors: sensorList,
+        assignments: assignments,
+        updatedAt: new Date().toISOString()
+      });
+      setSensors(sensorList);
+      setConnected(true);
+    } catch(e) {
+      setError(e.message || "Connection failed. Check credentials.");
+    }
+    setConnecting(false);
+  };
+
+  const handleDisconnect = async () => {
+    await setDoc(doc(db, "integrations", "sensorpush"), { disconnected: true }, { merge: false });
+    setConnected(false);
+    setSensors([]);
+    setAssignments({});
+    setEmail("");
+    setPassword("");
+  };
+
+  const handleSaveAssignments = async () => {
+    setSaving(true);
+    await updateDoc(doc(db, "integrations", "sensorpush"), { assignments });
+    setSaving(false);
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2000);
+  };
+
+  const inp = { width: "100%", padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#111827", background: "#fff", boxSizing: "border-box", marginTop: 6 };
+
+  if (loadingConfig) return <div style={{ padding: 20, color: "#9ca3af", fontSize: 13 }}>Loading...</div>;
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>SensorPush</div>
+        {connected && <span style={{ background: "#d1fae5", color: "#065f46", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99 }}>Connected</span>}
+      </div>
+      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Temperature and humidity sensors</div>
+      {!connected ? (
+        <div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>SensorPush Email</label>
+            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Password</label>
+            <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="password" style={inp} />
+          </div>
+          {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+          <button onClick={handleConnect} disabled={connecting} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" }}>
+            {connecting ? "Connecting..." : "Connect SensorPush"}
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>
+            Connected as <strong>{email}</strong>. Assign sensors to locations below.
+          </div>
+          {sensors.length === 0 && <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 12 }}>No sensors found on your account.</div>}
+          {sensors.map(s => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "10px 12px", background: "#f9fafb", borderRadius: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{s.name}</div>
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>{s.id}</div>
+              </div>
+              <select value={assignments[s.id] || ""} onChange={e => setAssignments(p => ({ ...p, [s.id]: e.target.value }))}
+                style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 12, outline: "none", color: "#374151", background: "#fff" }}>
+                <option value="">Unassigned</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          ))}
+          {sensors.length > 0 && (
+            <button onClick={handleSaveAssignments} disabled={saving} style={{ background: savedMsg ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%", marginTop: 8 }}>
+              {saving ? "Saving..." : savedMsg ? "Saved!" : "Save Assignments"}
+            </button>
+          )}
+          <button onClick={handleDisconnect} style={{ background: "none", color: "#ef4444", border: "none", fontSize: 12, cursor: "pointer", marginTop: 12, padding: 0 }}>Disconnect SensorPush</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpSensorMini({ sensors, onNavigate, locId }) {
+  const s = sensors || {};
+  const [spSensors, setSpSensors] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        if (!snap.exists() || snap.data().disconnected) return;
+        const { sensors: sensorList, assignments } = snap.data();
+        if (!sensorList) return;
+        setSpSensors(sensorList.filter(s => assignments?.[s.id] === locId));
+      } catch(e) {}
+    };
+    load();
+  }, [locId]);
+
+  if (!spSensors.length) return null;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>SensorPush</div>
+      {spSensors.map(sp => {
+        const reading = s["sp_" + sp.id] || {};
+        const temp = reading.tempF ?? s.spTempF;
+        const hum = reading.humidity ?? s.spHumidity;
+        return (
+          <div key={sp.id} onClick={() => onNavigate("sensors")}
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", background: "#f0f9ff", borderRadius: 8, marginBottom: 6, cursor: "pointer" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#1e40af" }}>{sp.name}</span>
+            <div style={{ display: "flex", gap: 10 }}>
+              <span style={{ fontSize: 12, color: "#3b82f6", fontWeight: 700 }}>{temp != null ? temp + "F" : "--"}</span>
+              <span style={{ fontSize: 12, color: "#0891b2", fontWeight: 700 }}>{hum != null ? hum + "%" : "--"}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 function Settings({ locations, onUpdateLocation }) {
 const [editing, setEditing] = useState(null);
 const [name, setName] = useState("");
@@ -1947,6 +2325,10 @@ Changes saved!
 </div>
 )}
 </div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+<div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Integrations</div>
+<SensorPushIntegration locations={locations} />
+</div>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 8 }}>Coming Soon</div>
 <div style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.7 }}>
@@ -2005,7 +2387,52 @@ const unsubs = [
 return () => unsubs.forEach(u => u());
 }, [locations.length]);
 
-const handleUpdateLocation = async (locId, updates) => {
+
+  // SensorPush background polling
+  useEffect(() => {
+    const pollSensorPush = async () => {
+      try {
+        const snap = await getDoc(doc(db, "integrations", "sensorpush"));
+        if (!snap.exists() || snap.data().disconnected) return;
+        const { accessToken, assignments, sensors: sensorList } = snap.data();
+        if (!accessToken || !assignments) return;
+        const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ authorization: accessToken })
+        });
+        const tokenData = await tokenRes.json();
+        const token = tokenData.accesstoken || accessToken;
+        const sampRes = await fetch("https://api.sensorpush.com/api/v1/samples", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": token },
+          body: JSON.stringify({ limit: 1 })
+        });
+        const sampData = await sampRes.json();
+        const locUpdates = {};
+        Object.entries(assignments).forEach(([sensorId, locId]) => {
+          if (!locId) return;
+          const samples = sampData.sensors?.[sensorId];
+          if (!samples?.length) return;
+          const latest = samples[0];
+          if (!locUpdates[locId]) locUpdates[locId] = {};
+          locUpdates[locId].spTempF = latest.temperature != null ? Math.round(latest.temperature * 10) / 10 : null;
+          locUpdates[locId].spHumidity = latest.humidity != null ? Math.round(latest.humidity * 10) / 10 : null;
+        });
+        await Promise.all(Object.entries(locUpdates).map(([locId, data]) =>
+          setDoc(doc(db, "sensors", locId), { ...data, spUpdatedAt: new Date().toISOString() }, { merge: true })
+        ));
+        if (tokenData.accesstoken) {
+          await updateDoc(doc(db, "integrations", "sensorpush"), { accessToken: tokenData.accesstoken });
+        }
+      } catch(e) { console.log("SensorPush poll error:", e.message); }
+    };
+    pollSensorPush();
+    const interval = setInterval(pollSensorPush, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleUpdateLocation = async (locId, updates) => {
 await updateDoc(doc(db, "locations", locId), updates);
 };
 
@@ -2096,7 +2523,7 @@ return (
           </div>
         )}
         {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
-{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); }} onAdd={() => {}} preset={taskPreset} />}
