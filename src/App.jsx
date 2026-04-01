@@ -1348,178 +1348,371 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
 }
 
 function TimeClock({ locId, locationName, allLocations }) {
-const { user } = useAuth();
-const [clockState, setClockState] = useState(null); // loaded from Firestore
-const [locClocks, setLocClocks] = useState({});
-const [loading, setLoading] = useState(true);
-const [history, setHistory] = useState([]);
+  const { user } = useAuth();
+  const [clockState, setClockState] = useState(null);
+  const [locClocks, setLocClocks] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [teamHistory, setTeamHistory] = useState([]);
+  const [activeTab, setActiveTab] = useState("clock");
+  const [payrollSettings, setPayrollSettings] = useState({ period: "biweekly", startDay: "monday" });
+  const [editEntry, setEditEntry] = useState(null);
+  const [editIn, setEditIn] = useState("");
+  const [editOut, setEditOut] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [payrollPeriodStart, setPayrollPeriodStart] = useState("");
 
-const today = new Date().toISOString().split("T")[0];
-const clockDocId = user?.uid + "_" + today;
+  const isManager = user?.role === "manager" || !user?.isTeamMember;
+  const today = new Date().toISOString().split("T")[0];
+  const clockDocId = user?.uid + "_" + today;
 
-useEffect(() => {
-if (!user) return;
-const unsub = onSnapshot(doc(db, "timeclock", clockDocId), snap => {
-if (snap.exists()) {
-setClockState(snap.data());
-setLocClocks(snap.data().locationTimes || {});
-} else {
-setClockState(null);
-setLocClocks({});
-}
-setLoading(false);
-});
-return unsub;
-}, [user?.uid, today]);
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, "timeclock", clockDocId), snap => {
+      if (snap.exists()) { setClockState(snap.data()); setLocClocks(snap.data().locationTimes || {}); }
+      else { setClockState(null); setLocClocks({}); }
+      setLoading(false);
+    });
+    return unsub;
+  }, [user?.uid, today]);
 
-useEffect(() => {
-if (!user) return;
-const unsub = onSnapshot(collection(db, "timeclock"), snap => {
-const entries = snap.docs
-.filter(d => d.id.startsWith(user.uid + "_"))
-.map(d => ({ id: d.id, ...d.data() }))
-.sort((a, b) => b.date > a.date ? 1 : -1)
-.slice(0, 7);
-setHistory(entries);
-});
-return unsub;
-}, [user?.uid]);
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(collection(db, "timeclock"), snap => {
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const mine = all.filter(d => d.uid === user.uid).sort((a, b) => b.date > a.date ? 1 : -1);
+      setHistory(mine);
+      if (isManager) setTeamHistory(all.sort((a, b) => b.date > a.date ? 1 : -1));
+    });
+    return unsub;
+  }, [user?.uid]);
 
-const now = () => new Date().toISOString();
-const fmt = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
-const elapsed = (start, end) => {
-if (!start) return "0h 0m";
-const ms = (end ? new Date(end) : new Date()) - new Date(start);
-const h = Math.floor(ms / 3600000);
-const m = Math.floor((ms % 3600000) / 60000);
-return h + "h " + m + "m";
-};
+  useEffect(() => {
+    if (!user || !isManager) return;
+    const loadPayroll = async () => {
+      const snap = await getDoc(doc(db, "users", user.uid));
+      if (snap.exists() && snap.data().payrollSettings) setPayrollSettings(snap.data().payrollSettings);
+    };
+    loadPayroll();
+  }, [user?.uid]);
 
-const handleMainClock = async () => {
-if (!clockState || !clockState.mainClockIn) {
-await setDoc(doc(db, "timeclock", clockDocId), {
-uid: user.uid, name: user.name, date: today,
-mainClockIn: now(), mainClockOut: null, locationTimes: locClocks,
-});
-} else if (!clockState.mainClockOut) {
-await updateDoc(doc(db, "timeclock", clockDocId), { mainClockOut: now() });
-} else {
-await updateDoc(doc(db, "timeclock", clockDocId), { mainClockIn: now(), mainClockOut: null });
-}
-};
+  const now = () => new Date().toISOString();
+  const fmt = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
+  const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const elapsed = (start, end) => {
+    if (!start) return "0h 0m";
+    const ms = (end ? new Date(end) : new Date()) - new Date(start);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return h + "h " + m + "m";
+  };
+  const elapsedHrs = (start, end) => {
+    if (!start || !end) return 0;
+    return (new Date(end) - new Date(start)) / 3600000;
+  };
+  const totalHours = (entries) => {
+    const ms = entries.reduce((sum, e) => {
+      if (!e.mainClockIn || !e.mainClockOut) return sum;
+      return sum + (new Date(e.mainClockOut) - new Date(e.mainClockIn));
+    }, 0);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return h + "h " + m + "m";
+  };
+  const totalHrsNum = (entries) => entries.reduce((sum, e) => sum + elapsedHrs(e.mainClockIn, e.mainClockOut), 0);
 
-const handleLocClock = async (lId) => {
-const current = locClocks[lId] || {};
-const updated = { ...locClocks };
-if (!current.in) {
-updated[lId] = { in: now(), out: null };
-} else if (!current.out) {
-updated[lId] = { ...current, out: now() };
-} else {
-updated[lId] = { in: now(), out: null };
-}
-setLocClocks(updated);
-if (clockState) {
-await updateDoc(doc(db, "timeclock", clockDocId), { locationTimes: updated });
-} else {
-await setDoc(doc(db, "timeclock", clockDocId), {
-uid: user.uid, name: user.name, date: today,
-mainClockIn: null, mainClockOut: null, locationTimes: updated,
-});
-}
-};
+  const isClockedIn = clockState?.mainClockIn && !clockState?.mainClockOut;
+  const isClockedOut = clockState?.mainClockIn && clockState?.mainClockOut;
 
-const isClockedIn = clockState?.mainClockIn && !clockState?.mainClockOut;
-const isClockedOut = clockState?.mainClockIn && clockState?.mainClockOut;
+  const handleMainClock = async () => {
+    if (!clockState || !clockState.mainClockIn) {
+      await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, name: user.name || user.email, date: today, mainClockIn: now(), mainClockOut: null, locationTimes: locClocks });
+    } else if (!clockState.mainClockOut) {
+      await updateDoc(doc(db, "timeclock", clockDocId), { mainClockOut: now() });
+    } else {
+      await updateDoc(doc(db, "timeclock", clockDocId), { mainClockIn: now(), mainClockOut: null });
+    }
+  };
 
-if (loading) return <Spinner />;
+  const handleLocClock = async (lId) => {
+    const current = locClocks[lId] || {};
+    const updated = { ...locClocks };
+    if (!current.in) updated[lId] = { in: now(), out: null };
+    else if (!current.out) updated[lId] = { ...current, out: now() };
+    else updated[lId] = { in: now(), out: null };
+    setLocClocks(updated);
+    if (clockState) await updateDoc(doc(db, "timeclock", clockDocId), { locationTimes: updated });
+    else await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, name: user.name || user.email, date: today, mainClockIn: null, mainClockOut: null, locationTimes: updated });
+  };
 
-return (
-<div>
-<div style={{ marginBottom: 22 }}>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Time Clock</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
-</div>
+  const handleSaveEdit = async () => {
+    if (!editEntry) return;
+    setSavingEdit(true);
+    const inIso = new Date(editEntry.date + "T" + editIn).toISOString();
+    const outIso = editOut ? new Date(editEntry.date + "T" + editOut).toISOString() : null;
+    await updateDoc(doc(db, "timeclock", editEntry.id), { mainClockIn: inIso, mainClockOut: outIso, editedBy: user.uid, editedAt: now() });
+    setSavingEdit(false);
+    setEditEntry(null);
+  };
 
-  {/* Main clock in/out */}
-  <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 18, textAlign: "center" }}>
-    <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Today's Shift</div>
-    <div style={{ fontSize: 32, fontWeight: 800, color: isClockedIn ? "#059669" : "#111827", marginBottom: 4 }}>
-      {isClockedIn ? "Clocked In" : isClockedOut ? "Shift Complete" : "Not Clocked In"}
-    </div>
-    {clockState?.mainClockIn && (
-      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}>
-        In: {fmt(clockState.mainClockIn)}
-        {clockState.mainClockOut && <span> &nbsp;|&nbsp; Out: {fmt(clockState.mainClockOut)}</span>}
+  const savePayrollSettings = async (settings) => {
+    setPayrollSettings(settings);
+    await updateDoc(doc(db, "users", user.uid), { payrollSettings: settings });
+  };
+
+  const historyByMonth = history.reduce((acc, e) => {
+    const month = e.date?.slice(0, 7);
+    if (!month) return acc;
+    if (!acc[month]) acc[month] = [];
+    acc[month].push(e);
+    return acc;
+  }, {});
+
+  const getPayrollEntries = (startDate) => {
+    if (!startDate) return [];
+    const start = new Date(startDate + "T00:00:00");
+    let end;
+    if (payrollSettings.period === "weekly") end = new Date(start.getTime() + 7 * 86400000);
+    else if (payrollSettings.period === "biweekly") end = new Date(start.getTime() + 14 * 86400000);
+    else if (payrollSettings.period === "semimonthly") {
+      const d = start.getDate();
+      end = d <= 15 ? new Date(start.getFullYear(), start.getMonth(), 16) : new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    } else {
+      end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    }
+    return teamHistory.filter(e => {
+      const d = new Date(e.date + "T12:00:00");
+      return d >= start && d < end;
+    });
+  };
+
+  const payrollEntries = getPayrollEntries(payrollPeriodStart);
+  const payrollByEmployee = payrollEntries.reduce((acc, e) => {
+    const key = e.uid;
+    if (!acc[key]) acc[key] = { name: e.name || e.uid?.slice(0,8), entries: [] };
+    acc[key].entries.push(e);
+    return acc;
+  }, {});
+
+  const tabStyle = (t) => ({
+    flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
+    background: activeTab === t ? "#fff" : "#f9fafb",
+    color: activeTab === t ? "#1a3352" : "#9ca3af",
+    borderBottom: activeTab === t ? "2px solid #1a3352" : "2px solid transparent"
+  });
+
+  if (loading) return <Spinner />;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Time Clock</div>
+        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
       </div>
-    )}
-    {isClockedIn && (
-      <div style={{ fontSize: 22, fontWeight: 700, color: "#0ea5e9", marginBottom: 12 }}>
-        {elapsed(clockState.mainClockIn, null)} elapsed
-      </div>
-    )}
-    {isClockedOut && (
-      <div style={{ fontSize: 18, fontWeight: 700, color: "#374151", marginBottom: 12 }}>
-        Total: {elapsed(clockState.mainClockIn, clockState.mainClockOut)}
-      </div>
-    )}
-    <button onClick={handleMainClock} style={{
-      background: isClockedIn ? "#ef4444" : "#059669",
-      color: "#fff", border: "none", borderRadius: 10, padding: "14px 40px",
-      fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8,
-    }}>
-      {isClockedIn ? "Clock Out" : isClockedOut ? "Start New Shift" : "Clock In"}
-    </button>
-  </div>
 
-  {/* Location billing clocks */}
-  <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
-    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 6 }}>Location Billing</div>
-    <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Track time at each location separately for accurate billing. Independent from your main shift clock.</div>
-    {allLocations.map(loc => {
-      const lc = locClocks[loc.id] || {};
-      const active = lc.in && !lc.out;
-      const done = lc.in && lc.out;
-      return (
-        <div key={loc.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, background: active ? "#f0fdf4" : "#fafafa" }}>
-          <div style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "#10b981" : done ? "#9ca3af" : "#e5e7eb", flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{loc.name}</div>
-            <div style={{ fontSize: 12, color: "#9ca3af" }}>
-              {lc.in ? "In: " + fmt(lc.in) : "Not started"}
-              {lc.out ? " | Out: " + fmt(lc.out) + " | " + elapsed(lc.in, lc.out) : active ? " | " + elapsed(lc.in, null) + " elapsed" : ""}
+      <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb", marginBottom: 20, background: "#f9fafb", borderRadius: "10px 10px 0 0", overflow: "hidden" }}>
+        <button style={tabStyle("clock")} onClick={() => setActiveTab("clock")}>My Clock</button>
+        <button style={tabStyle("history")} onClick={() => setActiveTab("history")}>My History</button>
+        {isManager && <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>Team</button>}
+        {isManager && <button style={tabStyle("payroll")} onClick={() => setActiveTab("payroll")}>Payroll</button>}
+      </div>
+
+      {activeTab === "clock" && (
+        <div>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 18, textAlign: "center" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Today's Shift</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: isClockedIn ? "#059669" : isClockedOut ? "#374151" : "#111827", marginBottom: 4 }}>
+              {isClockedIn ? "Clocked In" : isClockedOut ? "Shift Complete" : "Not Clocked In"}
+            </div>
+            {clockState?.mainClockIn && (
+              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}>
+                In: {fmt(clockState.mainClockIn)}{clockState.mainClockOut && <span> | Out: {fmt(clockState.mainClockOut)}</span>}
+              </div>
+            )}
+            {isClockedIn && <div style={{ fontSize: 22, fontWeight: 700, color: "#0ea5e9", marginBottom: 12 }}>{elapsed(clockState.mainClockIn, null)} elapsed</div>}
+            {isClockedOut && <div style={{ fontSize: 18, fontWeight: 700, color: "#374151", marginBottom: 12 }}>Total: {elapsed(clockState.mainClockIn, clockState.mainClockOut)}</div>}
+            <button onClick={handleMainClock} style={{ background: isClockedIn ? "#ef4444" : "#059669", color: "#fff", border: "none", borderRadius: 10, padding: "14px 40px", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+              {isClockedIn ? "Clock Out" : isClockedOut ? "Start New Shift" : "Clock In"}
+            </button>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 6 }}>Location Billing</div>
+            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Track time at each location separately.</div>
+            {allLocations.map(loc => {
+              const lc = locClocks[loc.id] || {};
+              const active = lc.in && !lc.out;
+              const done = lc.in && lc.out;
+              return (
+                <div key={loc.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, background: active ? "#f0fdf4" : "#fafafa" }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "#10b981" : done ? "#9ca3af" : "#e5e7eb", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{loc.name}</div>
+                    {lc.in && <div style={{ fontSize: 11, color: "#6b7280" }}>In: {fmt(lc.in)}{lc.out ? " | Out: " + fmt(lc.out) + " | " + elapsed(lc.in, lc.out) : " | " + elapsed(lc.in, null) + " elapsed"}</div>}
+                  </div>
+                  <button onClick={() => handleLocClock(loc.id)} style={{ background: active ? "#fee2e2" : "#f0fdf4", color: active ? "#dc2626" : "#059669", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    {active ? "Stop" : done ? "Restart" : "Start"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "history" && (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>My Hours</div>
+          <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>All time: <b>{totalHours(history)}</b></div>
+          {Object.keys(historyByMonth).length === 0 && <div style={{ color: "#9ca3af", fontSize: 13 }}>No history yet.</div>}
+          {Object.entries(historyByMonth).map(([month, entries]) => {
+            const monthLabel = new Date(month + "-01T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+            return (
+              <div key={month} style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a3352" }}>{monthLabel}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>{totalHours(entries)}</div>
+                </div>
+                {entries.map(e => (
+                  <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{fmtDate(e.date)}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "In progress"}</div>
+                      {e.editedBy && <div style={{ fontSize: 10, color: "#f59e0b" }}>Edited by manager</div>}
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3352" }}>
+                      {e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : elapsed(e.mainClockIn, null)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === "team" && isManager && (
+        <div>
+          {editEntry && (
+            <div style={{ background: "#fff", border: "2px solid #1a3352", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 12 }}>Edit Entry — {editEntry.name} — {fmtDate(editEntry.date)}</div>
+              <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Clock In</label>
+                  <input type="time" value={editIn} onChange={e => setEditIn(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Clock Out</label>
+                  <input type="time" value={editOut} onChange={e => setEditOut(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={handleSaveEdit} disabled={savingEdit} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : "Save Changes"}</button>
+                <button onClick={() => setEditEntry(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Team Hours</div>
+            {(() => {
+              const byDate = teamHistory.reduce((acc, e) => { if (!acc[e.date]) acc[e.date] = []; acc[e.date].push(e); return acc; }, {});
+              return Object.entries(byDate).map(([date, entries]) => (
+                <div key={date} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", marginBottom: 8 }}>{fmtDate(date)}</div>
+                  {entries.map(e => (
+                    <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f9fafb", borderRadius: 8, marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{e.name || e.uid?.slice(0,8)}</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "Still clocked in"}</div>
+                        {e.editedBy && <div style={{ fontSize: 10, color: "#f59e0b" }}>Edited</div>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: e.mainClockOut ? "#1a3352" : "#059669" }}>
+                          {e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : elapsed(e.mainClockIn, null)}
+                        </div>
+                        <button onClick={() => {
+                          setEditEntry(e);
+                          setEditIn(e.mainClockIn ? new Date(e.mainClockIn).toTimeString().slice(0,5) : "");
+                          setEditOut(e.mainClockOut ? new Date(e.mainClockOut).toTimeString().slice(0,5) : "");
+                        }} style={{ background: "#f3f4f6", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Edit</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "payroll" && isManager && (
+        <div>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Payroll Settings</div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Pay Period</label>
+              <select value={payrollSettings.period} onChange={e => savePayrollSettings({ ...payrollSettings, period: e.target.value })}
+                style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff" }}>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Bi-Weekly</option>
+                <option value="semimonthly">Semi-Monthly (1st and 15th)</option>
+                <option value="monthly">Monthly</option>
+              </select>
             </div>
           </div>
-          <button onClick={() => handleLocClock(loc.id)} style={{
-            background: active ? "#ef4444" : "#1a3352",
-            color: "#fff", border: "none", borderRadius: 7, padding: "6px 14px",
-            fontSize: 12, fontWeight: 600, cursor: "pointer",
-          }}>
-            {active ? "Stop" : done ? "Restart" : "Start"}
-          </button>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Payroll Report</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Period Start Date</label>
+                <input type="date" value={payrollPeriodStart} onChange={e => setPayrollPeriodStart(e.target.value)}
+                  style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <button onClick={() => {
+                const text = Object.entries(payrollByEmployee).map(([uid, emp]) => {
+                  const hrs = totalHrsNum(emp.entries);
+                  const lines = emp.entries.map(e => fmtDate(e.date) + ": " + elapsed(e.mainClockIn, e.mainClockOut)).join("\n");
+                  return emp.name + "\nTotal: " + hrs.toFixed(2) + " hrs\n" + lines;
+                }).join("\n\n");
+                const blob = new Blob([text], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = "payroll_" + payrollPeriodStart + ".txt"; a.click();
+              }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                Download
+              </button>
+            </div>
+            {payrollPeriodStart && Object.keys(payrollByEmployee).length === 0 && (
+              <div style={{ color: "#9ca3af", fontSize: 13 }}>No entries found for this period.</div>
+            )}
+            {Object.entries(payrollByEmployee).map(([uid, emp]) => {
+              const hrs = totalHrsNum(emp.entries);
+              const isOT = hrs > 40;
+              return (
+                <div key={uid} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{emp.name}</div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: isOT ? "#f59e0b" : "#1a3352" }}>{hrs.toFixed(2)} hrs</div>
+                      {isOT && <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>Overtime: {(hrs - 40).toFixed(2)} hrs over 40</div>}
+                    </div>
+                  </div>
+                  {emp.entries.map(e => (
+                    <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f3f4f6", fontSize: 13 }}>
+                      <span style={{ color: "#6b7280" }}>{fmtDate(e.date)}</span>
+                      <span style={{ color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "—"}</span>
+                      <span style={{ fontWeight: 600, color: "#111827" }}>{e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      );
-    })}
-  </div>
-
-  {/* History */}
-  {history.length > 0 && (
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>Recent Shifts</div>
-      {history.map(entry => (
-        <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f3f4f6", fontSize: 13 }}>
-          <span style={{ color: "#374151", fontWeight: 500 }}>{entry.date}</span>
-          <span style={{ color: "#6b7280" }}>
-            {fmt(entry.mainClockIn)} - {entry.mainClockOut ? fmt(entry.mainClockOut) : "In progress"}
-          </span>
-          <span style={{ fontWeight: 600, color: "#111827" }}>{elapsed(entry.mainClockIn, entry.mainClockOut)}</span>
-        </div>
-      ))}
+      )}
     </div>
-  )}
-</div>
-
-);
+  );
 }
 
 // ADD TASK MODAL
