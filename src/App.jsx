@@ -236,6 +236,20 @@ function Login() {
   const [bizName, setBizName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!email) { setError("Enter your email address first."); return; }
+    setResetLoading(true); setError("");
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetSent(true);
+    } catch(e) {
+      setError("Could not send reset email. Check the address and try again.");
+    }
+    setResetLoading(false);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) return;
@@ -256,17 +270,27 @@ function Login() {
     try {
       const cred = await signup(email, password);
       const uid = cred.user.uid;
-      // Create first location
-      const locId = "loc_" + uid.slice(0, 8);
-      await setDoc(doc(db, "locations", locId), {
-        id: locId, name: bizName, address: "", zipCode: "", ownerId: uid,
-        createdAt: new Date().toISOString()
-      });
-      // Create user profile
-      await setDoc(doc(db, "users", uid), {
-        uid, email, name, role: "manager", locationId: locId,
-        bizName, color: "#6366f1", createdAt: new Date().toISOString()
-      });
+      const inviteSnap = await getDocs(query(collection(db, "invites"), where("email", "==", email.toLowerCase()), where("status", "==", "pending")));
+      if (!inviteSnap.empty) {
+        const invite = inviteSnap.docs[0].data();
+        await setDoc(doc(db, "users", uid), {
+          uid, email, name, role: invite.role || "attendant",
+          ownerId: invite.ownerId, locationId: invite.locationId || null,
+          allowedLocations: invite.allowedLocations || [],
+          color: "#0ea5e9", createdAt: new Date().toISOString(), isTeamMember: true
+        });
+        await updateDoc(inviteSnap.docs[0].ref, { status: "accepted", acceptedAt: new Date().toISOString() });
+      } else {
+        const locId = "loc_" + uid.slice(0, 8);
+        await setDoc(doc(db, "locations", locId), {
+          id: locId, name: bizName, address: "", zipCode: "", ownerId: uid,
+          createdAt: new Date().toISOString()
+        });
+        await setDoc(doc(db, "users", uid), {
+          uid, email, name, role: "manager", locationId: locId,
+          bizName, color: "#6366f1", createdAt: new Date().toISOString()
+        });
+      }
     } catch(e) {
       setError(e.message?.includes("email-already-in-use") ? "An account with this email already exists." : "Signup failed. Please try again.");
     }
@@ -286,9 +310,7 @@ function Login() {
           </div>
           <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 8 }}>Car Wash Operations Platform</div>
         </div>
-
         <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", overflow: "hidden" }}>
-          {/* Tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb" }}>
             {["login","signup"].map(t => (
               <button key={t} onClick={() => { setTab(t); setError(""); }}
@@ -300,26 +322,28 @@ function Login() {
               </button>
             ))}
           </div>
-
           <div style={{ padding: 28 }}>
             {tab === "login" ? (
               <div>
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Email</label>
-                  <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp}
-                    onKeyDown={e => e.key === "Enter" && handleLogin()} />
+                  <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Password</label>
-                  <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="password" style={inp}
-                    onKeyDown={e => e.key === "Enter" && handleLogin()} />
+                  <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="password" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} />
                 </div>
                 {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
-                <button onClick={handleLogin} disabled={loading}
-                  style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
                   {loading ? "Signing in..." : "Sign In"}
                 </button>
-                <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: "#9ca3af" }}>
+                {resetSent && <div style={{ background: "#d1fae5", color: "#065f46", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginTop: 12 }}>Password reset email sent! Check your inbox.</div>}
+                <div style={{ textAlign: "center", marginTop: 12 }}>
+                  <span onClick={handleForgotPassword} style={{ fontSize: 13, color: "#6b7280", cursor: "pointer", textDecoration: "underline" }}>
+                    {resetLoading ? "Sending..." : "Forgot password?"}
+                  </span>
+                </div>
+                <div style={{ textAlign: "center", marginTop: 10, fontSize: 13, color: "#9ca3af" }}>
                   No account?{" "}
                   <span onClick={() => setTab("signup")} style={{ color: "#1a3352", fontWeight: 600, cursor: "pointer" }}>Create one free</span>
                 </div>
@@ -344,17 +368,13 @@ function Login() {
                 </div>
                 <div style={{ marginBottom: 20 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Confirm Password</label>
-                  <input value={confirm} onChange={e => setConfirm(e.target.value)} type="password" placeholder="Repeat password" style={inp}
-                    onKeyDown={e => e.key === "Enter" && handleSignup()} />
+                  <input value={confirm} onChange={e => setConfirm(e.target.value)} type="password" placeholder="Repeat password" style={inp} onKeyDown={e => e.key === "Enter" && handleSignup()} />
                 </div>
                 {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
-                <button onClick={handleSignup} disabled={loading}
-                  style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                <button onClick={handleSignup} disabled={loading} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
                   {loading ? "Creating account..." : "Create Account"}
                 </button>
-                <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#9ca3af" }}>
-                  By creating an account you agree to our terms of service.
-                </div>
+                <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#9ca3af" }}>By creating an account you agree to our terms of service.</div>
                 <div style={{ textAlign: "center", marginTop: 8, fontSize: 13, color: "#9ca3af" }}>
                   Already have an account?{" "}
                   <span onClick={() => setTab("login")} style={{ color: "#1a3352", fontWeight: 600, cursor: "pointer" }}>Sign in</span>
@@ -377,6 +397,7 @@ const nav = [
 { id: "overview",   label: "Overview"   },
     ...(isManager ? [{ id: "alerts", label: "Alerts" }] : []),
 { id: "calendar",   label: "Calendar"   },
+    { id: "carcounts",  label: "Car Counts" },
 { id: "timeclock",  label: "Time Clock" },
 { id: "tasks",      label: "Tasks"      },
 { id: "inventory",  label: "Inventory"  },
@@ -452,7 +473,7 @@ return (
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
-<div style={{ cursor: "default" }}><StatCard label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" /></div>
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>
@@ -2322,8 +2343,8 @@ function SpSensorMini({ sensors, onNavigate, locId, uid }) {
     </div>
   );
 }
-function Settings({ locations, onUpdateLocation }) {
-const { user, refreshUser } = useAuth();
+function Settings({ locations, onUpdateLocation, user }) {
+const { refreshUser } = useAuth();
 const [editing, setEditing] = useState(null);
 const [name, setName] = useState("");
 const [address, setAddress] = useState("");
@@ -2368,6 +2389,23 @@ return (
 <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Settings</div>
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>Manage locations and preferences</div>
 </div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+  <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Your Profile</div>
+  <div style={{ marginBottom: 12 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Display Name</label>
+    <input value={profileName} onChange={e => setProfileName(e.target.value)}
+      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" }}
+      placeholder="Your name" />
+  </div>
+  <div style={{ marginBottom: 16 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Email</label>
+    <div style={{ padding: "9px 12px", background: "#f3f4f6", borderRadius: 8, fontSize: 13, color: "#6b7280", marginTop: 6 }}>{user?.email}</div>
+  </div>
+  <button onClick={handleSaveProfile} style={{ background: profileSaved ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+    {profileSaved ? "Saved!" : "Save Profile"}
+  </button>
+</div>
+{!user?.isTeamMember && <TeamMembers user={user} locations={locations} />}
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
   <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Your Profile</div>
   <div style={{ marginBottom: 12 }}>
@@ -2462,6 +2500,203 @@ User management, task templates, and notification preferences will be available 
 );
 }
 
+
+function CarCounts({ locations }) {
+  const today = new Date().toISOString().split("T")[0];
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [counts, setCounts] = useState({});
+  const [saved, setSaved] = useState({});
+  const [saving, setSaving] = useState({});
+  const [loaded, setLoaded] = useState({});
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    setLoaded({});
+    locations.forEach(async loc => {
+      const snap = await getDoc(doc(db, "locations", loc.id, "daySummaries", selectedDate));
+      const cars = snap.exists() ? (snap.data().carsWashed ?? "") : "";
+      setCounts(p => ({ ...p, [loc.id]: cars === 0 ? "0" : cars || "" }));
+      setLoaded(p => ({ ...p, [loc.id]: true }));
+    });
+  }, [selectedDate, locations.length]);
+
+  const handleSave = async (locId) => {
+    const val = parseInt(counts[locId]) || 0;
+    setSaving(p => ({ ...p, [locId]: true }));
+    await setDoc(doc(db, "locations", locId, "daySummaries", selectedDate), {
+      carsWashed: val, date: selectedDate, updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    setSaving(p => ({ ...p, [locId]: false }));
+    setSaved(p => ({ ...p, [locId]: true }));
+    setTimeout(() => setSaved(p => ({ ...p, [locId]: false })), 2000);
+  };
+
+  const totalCars = Object.values(counts).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
+  const goDay = (offset) => {
+    const d = new Date(selectedDate + "T12:00:00");
+    d.setDate(d.getDate() + offset);
+    setSelectedDate(d.toISOString().split("T")[0]);
+  };
+  const displayDate = new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const isToday = selectedDate === today;
+
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Car Counts</div>
+        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>Log daily car counts per location</div>
+      </div>
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => goDay(-1)} style={{ background: "#f3f4f6", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 16, cursor: "pointer", color: "#374151", fontWeight: 700 }}>{"<"}</button>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{displayDate}</div>
+          {isToday && <div style={{ fontSize: 11, color: "#10b981", fontWeight: 600, marginTop: 2 }}>Today</div>}
+        </div>
+        <button onClick={() => goDay(1)} disabled={isToday} style={{ background: isToday ? "#f9fafb" : "#f3f4f6", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 16, cursor: isToday ? "not-allowed" : "pointer", color: isToday ? "#d1d5db" : "#374151", fontWeight: 700 }}>{">"}</button>
+      </div>
+      <div style={{ marginBottom: 18, display: "flex", alignItems: "center", gap: 10 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Jump to date:</label>
+        <input type="date" value={selectedDate} max={today} onChange={e => e.target.value && setSelectedDate(e.target.value)}
+          style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#111827", background: "#fff" }} />
+        {!isToday && <button onClick={() => setSelectedDate(today)} style={{ background: "#f3f4f6", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Today</button>}
+      </div>
+      <div style={{ background: "linear-gradient(135deg, #1a3352, #0ea5e9)", borderRadius: 12, padding: "14px 20px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600 }}>Total Cars</div>
+        <div style={{ color: "#fff", fontSize: 28, fontWeight: 800 }}>{totalCars}</div>
+      </div>
+      {locations.map(loc => (
+        <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 18, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{loc.name}</div>
+            {saved[loc.id] && <span style={{ fontSize: 12, color: "#10b981", fontWeight: 600 }}>Saved!</span>}
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button onClick={() => setCounts(p => ({ ...p, [loc.id]: Math.max(0, (parseInt(p[loc.id]) || 0) - 1) }))}
+              style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>-</button>
+            <input type="number" min="0"
+              value={loaded[loc.id] ? (counts[loc.id] ?? "") : ""}
+              placeholder={loaded[loc.id] ? "0" : "..."}
+              onChange={e => setCounts(p => ({ ...p, [loc.id]: e.target.value }))}
+              style={{ flex: 1, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa" }} />
+            <button onClick={() => setCounts(p => ({ ...p, [loc.id]: (parseInt(p[loc.id]) || 0) + 1 }))}
+              style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>+</button>
+          </div>
+          <button onClick={() => handleSave(loc.id)} disabled={saving[loc.id]}
+            style={{ width: "100%", marginTop: 12, background: saved[loc.id] ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            {saving[loc.id] ? "Saving..." : saved[loc.id] ? "Saved!" : "Save Count"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TeamMembers({ user, locations }) {
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("attendant");
+  const [inviteLocs, setInviteLocs] = useState([]);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const [members, setMembers] = useState([]);
+  const [invites, setInvites] = useState([]);
+
+  useEffect(() => {
+    const loadTeam = async () => {
+      try {
+        const memSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", user.uid), where("isTeamMember", "==", true)));
+        setMembers(memSnap.docs.map(d => d.data()));
+        const invSnap = await getDocs(query(collection(db, "invites"), where("ownerId", "==", user.uid)));
+        setInvites(invSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch(e) {}
+    };
+    loadTeam();
+  }, [sent]);
+
+  const handleInvite = async () => {
+    if (!inviteEmail.includes("@")) { setError("Enter a valid email."); return; }
+    setSending(true); setError("");
+    try {
+      await setDoc(doc(db, "invites", inviteEmail.toLowerCase() + "_" + user.uid), {
+        email: inviteEmail.toLowerCase(), ownerId: user.uid, role: inviteRole,
+        allowedLocations: inviteLocs, status: "pending", createdAt: new Date().toISOString()
+      });
+      setSent(true); setInviteEmail(""); setInviteLocs([]);
+      setTimeout(() => setSent(false), 3000);
+    } catch(e) { setError("Failed to send invite."); }
+    setSending(false);
+  };
+
+  const handleRemove = async (uid) => {
+    await updateDoc(doc(db, "users", uid), { ownerId: null, isTeamMember: false });
+    setMembers(p => p.filter(m => m.uid !== uid));
+  };
+
+  const toggleLoc = (locId) => setInviteLocs(p => p.includes(locId) ? p.filter(l => l !== locId) : [...p, locId]);
+  const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" };
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Team Members</div>
+      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Invite staff to access your dashboard</div>
+      {members.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Active Members</div>
+          {members.map(m => (
+            <div key={m.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f9fafb", borderRadius: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{m.name || m.email}</div>
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>{m.email} — {m.role}</div>
+              </div>
+              <button onClick={() => handleRemove(m.uid)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {invites.filter(i => i.status === "pending").length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Pending Invites</div>
+          {invites.filter(i => i.status === "pending").map(inv => (
+            <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fffbeb", borderRadius: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{inv.email}</div>
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>{inv.role} — Pending</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Send Invite</div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Email Address</label>
+          <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} type="email" placeholder="staff@email.com" style={inp} />
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Role</label>
+          <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inp, marginTop: 6 }}>
+            <option value="attendant">Attendant - Limited access</option>
+            <option value="manager">Manager - Full access</option>
+          </select>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Location Access</label>
+          {locations.map(l => (
+            <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer" }}>
+              <input type="checkbox" checked={inviteLocs.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 15, height: 15, accentColor: "#1a3352" }} />
+              <span style={{ fontSize: 13, color: "#374151" }}>{l.name}</span>
+            </label>
+          ))}
+        </div>
+        {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+        {sent && <div style={{ background: "#d1fae5", color: "#065f46", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10 }}>Invite saved! Have them create an account at WashLevel.com with this email.</div>}
+        <button onClick={handleInvite} disabled={sending} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" }}>
+          {sending ? "Saving..." : "Send Invite"}
+        </button>
+      </div>
+    </div>
+  );
+}
 function Dashboard() {
 const { user } = useAuth();
 const [locations, setLocations] = useState([]);
@@ -2489,7 +2724,8 @@ const isMobile = useIsMobile();
 useEffect(() => {
 if (!user) return;
 const unsub = onSnapshot(query(collection(db, "locations"), where("ownerId", "==", user.uid)), snap => {
-const locs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+const allLocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+const locs = user.isTeamMember && allowedLocs.length ? allLocs.filter(l => allowedLocs.includes(l.id)) : allLocs;
 setLocations(locs);
 setLocId(id => id || user.locationId || locs[0]?.id);
 setReady(true);
@@ -2678,8 +2914,9 @@ return (
           </div>
         )}
         {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
+        {view === "carcounts" && <CarCounts locations={locations} />}
 {view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} />}
-{view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} />}
+{view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); }} onAdd={() => {}} preset={taskPreset} />}
 {materialsTask && <MaterialsModal locId={locId} task={materialsTask} onClose={() => setMaterialsTask(null)} />}
