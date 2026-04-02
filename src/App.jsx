@@ -506,7 +506,12 @@ return (
 </div>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
 <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>Equipment Status</div>
-{equipment.map(eq => {
+{equipment.length === 0 ? (
+  <div style={{ textAlign: "center", padding: "20px 10px" }}>
+    <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 10 }}>No equipment tracked yet.</div>
+    <button onClick={() => onNavigate("equipment")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add Equipment</button>
+  </div>
+) : equipment.map(eq => {
 const s = EQS[eq.status] || EQS.ok;
 return (
 <div key={eq.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e5e7eb"}`, marginBottom: 7 }}>
@@ -877,8 +882,15 @@ return (
 
   </div>
   <div>
-    {filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} />)}
-    {filtered.length === 0 && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
+    {filtered.length === 0 ? (
+      <div style={{ textAlign: "center", padding: "40px 20px" }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 6 }}>No tasks yet</div>
+        <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
+        <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
+      </div>
+    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} />)}
+    {false && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
   </div>
 </div>
 
@@ -990,7 +1002,14 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {equipment.map(eq => {
+        {equipment.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔧</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 6 }}>No equipment added yet</div>
+            <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>Track your car wash equipment, service schedules, and maintenance history.</div>
+            <button onClick={() => setShowAdd(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Equipment</button>
+          </div>
+        ) : equipment.map(eq => {
           const s = EQS[eq.status] || EQS.ok;
           const isExpanded = expanded[eq.id];
           const isEditing = editingId === eq.id;
