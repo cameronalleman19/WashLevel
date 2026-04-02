@@ -1361,6 +1361,7 @@ function TimeClock({ locId, locationName, allLocations }) {
   const [editOut, setEditOut] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [payrollPeriodStart, setPayrollPeriodStart] = useState("");
+  const [showReport, setShowReport] = useState(false);
 
   const isManager = user?.role === "manager" || !user?.isTeamMember;
   const today = new Date().toISOString().split("T")[0];
@@ -1577,7 +1578,11 @@ function TimeClock({ locId, locationName, allLocations }) {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{fmtDate(e.date)}</div>
                       <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "In progress"}</div>
-                      {e.editedBy && <div style={{ fontSize: 10, color: "#f59e0b" }}>Edited by manager</div>}
+                      {e.editedBy && (
+                        <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 2 }}>
+                          Edited by manager on {e.editedAt ? new Date(e.editedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " at " + new Date(e.editedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "unknown date"}
+                        </div>
+                      )}
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3352" }}>
                       {e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : elapsed(e.mainClockIn, null)}
@@ -1625,7 +1630,11 @@ function TimeClock({ locId, locationName, allLocations }) {
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{e.name || e.uid?.slice(0,8)}</div>
                         <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "Still clocked in"}</div>
-                        {e.editedBy && <div style={{ fontSize: 10, color: "#f59e0b" }}>Edited</div>}
+                        {e.editedBy && (
+                          <div style={{ fontSize: 10, color: "#f59e0b" }}>
+                            Edited {e.editedAt ? new Date(e.editedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(e.editedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: e.mainClockOut ? "#1a3352" : "#059669" }}>
@@ -1666,9 +1675,12 @@ function TimeClock({ locId, locationName, allLocations }) {
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 16 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Period Start Date</label>
-                <input type="date" value={payrollPeriodStart} onChange={e => setPayrollPeriodStart(e.target.value)}
+                <input type="date" value={payrollPeriodStart} onChange={e => { setPayrollPeriodStart(e.target.value); setShowReport(false); }}
                   style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
               </div>
+              <button onClick={() => setShowReport(true)} style={{ background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                Generate Report
+              </button>
               <button onClick={() => {
                 const text = Object.entries(payrollByEmployee).map(([uid, emp]) => {
                   const hrs = totalHrsNum(emp.entries);
@@ -1683,10 +1695,10 @@ function TimeClock({ locId, locationName, allLocations }) {
                 Download
               </button>
             </div>
-            {payrollPeriodStart && Object.keys(payrollByEmployee).length === 0 && (
+            {showReport && payrollPeriodStart && Object.keys(payrollByEmployee).length === 0 && (
               <div style={{ color: "#9ca3af", fontSize: 13 }}>No entries found for this period.</div>
             )}
-            {Object.entries(payrollByEmployee).map(([uid, emp]) => {
+            {showReport && Object.entries(payrollByEmployee).map(([uid, emp]) => {
               const hrs = totalHrsNum(emp.entries);
               const isOT = hrs > 40;
               return (
@@ -2497,21 +2509,44 @@ function SensorPushIntegration({ locations }) {
 
 function SpSensorMini({ sensors, onNavigate, locId, uid }) {
   const user = { uid };
-  const s = sensors || {};
   const [spSensors, setSpSensors] = useState([]);
+  const [latestReadings, setLatestReadings] = useState({});
 
   useEffect(() => {
     const load = async () => {
       try {
         const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
         if (!snap.exists() || snap.data().disconnected) return;
-        const { sensors: sensorList, assignments } = snap.data();
+        const { sensors: sensorList, assignments, accessToken } = snap.data();
         if (!sensorList) return;
-        setSpSensors(sensorList.filter(s => assignments?.[s.id] === locId));
+        const assigned = sensorList.filter(s => assignments?.[s.id] === locId);
+        setSpSensors(assigned);
+        if (!accessToken || !assigned.length) return;
+        const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ authorization: accessToken })
+        });
+        const tokenData = await tokenRes.json();
+        const token = tokenData.accesstoken || accessToken;
+        const sampRes = await fetch("https://api.sensorpush.com/api/v1/samples", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": token },
+          body: JSON.stringify({ sensors: assigned.map(s => s.id), limit: 1 })
+        });
+        const sampData = await sampRes.json();
+        const readings = {};
+        assigned.forEach(sp => {
+          const latest = sampData.sensors?.[sp.id]?.[0];
+          if (latest) readings[sp.id] = {
+            temp: latest.temperature != null ? Math.round(latest.temperature * 10) / 10 : null,
+            hum: latest.humidity != null ? Math.round(latest.humidity * 10) / 10 : null
+          };
+        });
+        setLatestReadings(readings);
       } catch(e) {}
     };
     load();
-  }, [locId]);
+  }, [locId, uid]);
 
   if (!spSensors.length) return null;
 
@@ -2519,9 +2554,9 @@ function SpSensorMini({ sensors, onNavigate, locId, uid }) {
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>SensorPush</div>
       {spSensors.map(sp => {
-        const reading = s["sp_" + sp.id] || {};
-        const temp = reading.tempF ?? s.spTempF;
-        const hum = reading.humidity ?? s.spHumidity;
+        const reading = latestReadings[sp.id] || {};
+        const temp = reading.temp;
+        const hum = reading.hum;
         return (
           <div key={sp.id} onClick={() => onNavigate("sensors")}
             style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", background: "#f0f9ff", borderRadius: 8, marginBottom: 6, cursor: "pointer" }}>
