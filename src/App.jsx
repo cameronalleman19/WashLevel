@@ -2943,7 +2943,15 @@ function TeamMembers({ user, locations }) {
       // Also send invite email automatically
       try {
         const sendInvite = httpsCallable(functions, "sendInviteEmail");
-        await sendInvite({ inviteEmail: inviteEmail.toLowerCase(), inviteRole, bizName: user.bizName || user.name, managerName: user.name });
+        const biz = user.bizName || user.name || "WashLevel";
+        const mgr = user.name || user.email || "Your Manager";
+        console.log("Sending invite with:", { biz, mgr, inviteEmail, inviteRole });
+        await sendInvite({ 
+          inviteEmail: inviteEmail.toLowerCase(), 
+          inviteRole: inviteRole || "attendant", 
+          bizName: biz, 
+          managerName: mgr 
+        });
       } catch(e) { console.log("Email send error:", e.message); }
       setSent(true); setInviteEmail(""); setInviteLocs([]);
       setTimeout(() => setSent(false), 3000);
