@@ -2,6 +2,7 @@
 
 import { useState, useEffect, createContext, useContext, Component } from "react";
 import { initializeApp, getApps } from "firebase/app";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
 getAuth,
 signInWithEmailAndPassword,
@@ -35,6 +36,7 @@ appId: "1:756159059921:web:9c9f2948e4bdd21945b2f0",
 const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
+const functions = getFunctions(firebaseApp);
 
 const LOCATIONS = [
 { id: "loc1", name: "North Station", address: "1240 N. Highway Blvd" },
@@ -228,10 +230,10 @@ const Spinner = () => (
   </div>
 );
 
-function Login() {
+function Login({ defaultTab = "login", defaultEmail = "" }) {
   const { login, signup } = useAuth();
-  const [tab, setTab] = useState("login");
-  const [email, setEmail] = useState("");
+  const [tab, setTab] = useState(defaultTab);
+  const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [name, setName] = useState("");
@@ -240,6 +242,24 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [inviteData, setInviteData] = useState(null);
+  const [checkingInvite, setCheckingInvite] = useState(false);
+
+  useEffect(() => {
+    if (defaultEmail && defaultEmail.includes("@")) {
+      setTab("signup");
+      // Auto check invite
+      getDocs(query(collection(db, "invites"), where("email", "==", defaultEmail.toLowerCase()), where("status", "==", "pending"))).then(snap => {
+        if (!snap.empty) {
+          const inv = snap.docs[0].data();
+          getDoc(doc(db, "users", inv.ownerId)).then(ownerSnap => {
+            const biz = ownerSnap.exists() ? ownerSnap.data().bizName || ownerSnap.data().name : "";
+            setInviteData({ ...inv, bizName: biz });
+          });
+        }
+      });
+    }
+  }, [defaultEmail]);
 
   const handleForgotPassword = async () => {
     if (!email) { setError("Enter your email address first."); return; }
@@ -265,23 +285,30 @@ function Login() {
   };
 
   const handleSignup = async () => {
-    if (!name || !email || !password || !bizName) { setError("Please fill in all fields."); return; }
+    if (!name || !email || !password || (!bizName && !inviteData)) { setError("Please fill in all fields."); return; }
     if (password !== confirm) { setError("Passwords do not match."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
     setError(""); setLoading(true);
     try {
       const cred = await signup(email, password);
       const uid = cred.user.uid;
-      const inviteSnap = await getDocs(query(collection(db, "invites"), where("email", "==", email.toLowerCase()), where("status", "==", "pending")));
-      if (!inviteSnap.empty) {
-        const invite = inviteSnap.docs[0].data();
+      // Check for invite by email regardless of status (in case already accepted from prev attempt)
+      const inviteSnap = await getDocs(query(collection(db, "invites"), where("email", "==", email.toLowerCase())));
+      const validInvite = inviteSnap.docs.find(d => d.data().ownerId);
+      if (validInvite) {
+        const inviteDoc = validInvite;
+        inviteSnap.docs[0] = inviteDoc;
+      }
+      if (validInvite) {
+        const invite = validInvite.data();
         await setDoc(doc(db, "users", uid), {
           uid, email, name, role: invite.role || "attendant",
           ownerId: invite.ownerId, locationId: invite.locationId || null,
           allowedLocations: invite.allowedLocations || [],
-          color: "#0ea5e9", createdAt: new Date().toISOString(), isTeamMember: true
+          color: "#0ea5e9", createdAt: new Date().toISOString(), isTeamMember: true,
+          setupComplete: true
         });
-        await updateDoc(inviteSnap.docs[0].ref, { status: "accepted", acceptedAt: new Date().toISOString() });
+        await updateDoc(validInvite.ref, { status: "accepted", acceptedAt: new Date().toISOString() });
       } else {
         const locId = "loc_" + uid.slice(0, 8);
         await setDoc(doc(db, "locations", locId), {
@@ -353,17 +380,43 @@ function Login() {
               </div>
             ) : (
               <div>
+                {inviteData && (
+                  <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#166534", marginBottom: 2 }}>You have been invited!</div>
+                    <div style={{ fontSize: 12, color: "#15803d" }}>You are joining <b>{inviteData.bizName || "a team"}</b> as {inviteData.role}. Create your password below to get started.</div>
+                  </div>
+                )}
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Your Name</label>
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Alex Rivera" style={inp} />
                 </div>
+                {!inviteData && (
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Car Wash Name</label>
                   <input value={bizName} onChange={e => setBizName(e.target.value)} placeholder="e.g. Sunny Car Wash" style={inp} />
                 </div>
+                )}
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Email</label>
-                  <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp} />
+                  <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp}
+                    onBlur={async () => {
+                      if (!email.includes("@")) return;
+                      setCheckingInvite(true);
+                      try {
+                        const invSnap = await getDocs(query(collection(db, "invites"), where("email", "==", email.toLowerCase()), where("status", "==", "pending")));
+                        if (!invSnap.empty) {
+                          const inv = invSnap.docs[0].data();
+                          const ownerSnap = await getDoc(doc(db, "users", inv.ownerId));
+                          const bizName = ownerSnap.exists() ? ownerSnap.data().bizName || ownerSnap.data().name : "";
+                          setInviteData({ ...inv, bizName });
+                        } else {
+                          setInviteData(null);
+                        }
+                      } catch(e) {}
+                      setCheckingInvite(false);
+                    }}
+                  />
+                  {checkingInvite && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Checking invite...</div>}
                 </div>
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Password</label>
@@ -2645,7 +2698,7 @@ setSaved(true);
 setTimeout(() => setSaved(false), 2000);
 };
 
-const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" };
+const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#111827" };
 
 return (
 <div>
@@ -2741,7 +2794,25 @@ Changes saved!
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 8 }}>Coming Soon</div>
 <div style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.7 }}>
-User management, task templates, and notification preferences will be available in the full production version.
+  The following features are currently in development and will be available in a future update:
+</div>
+<div style={{ marginTop: 14 }}>
+  {[
+    { title: "Camera Integration", desc: "View your Reolink, Hikvision, or any IP camera system directly in WashLevel." },
+    { title: "Email Alerts & Notifications", desc: "Get notified by email when tasks are overdue, inventory is low, or equipment needs attention." },
+    { title: "Car Count Auto-Import", desc: "Automatically import daily car counts from your equipment via email." },
+    { title: "Task Templates", desc: "Create recurring task templates for daily, weekly, and monthly checklists." },
+    { title: "Dark Mode", desc: "Switch between light, dark, and system appearance modes." },
+    { title: "PDF Document Storage", desc: "Upload and store equipment manuals, service records, and documents." },
+  ].map(item => (
+    <div key={item.title} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0ea5e9", marginTop: 4, flexShrink: 0 }} />
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.title}</div>
+        <div style={{ fontSize: 12, color: "#9ca3af" }}>{item.desc}</div>
+      </div>
+    </div>
+  ))}
 </div>
 </div>
 </div>
@@ -2869,6 +2940,11 @@ function TeamMembers({ user, locations }) {
         email: inviteEmail.toLowerCase(), ownerId: user.uid, role: inviteRole,
         allowedLocations: inviteLocs, status: "pending", createdAt: new Date().toISOString()
       });
+      // Also send invite email automatically
+      try {
+        const sendInvite = httpsCallable(functions, "sendInviteEmail");
+        await sendInvite({ inviteEmail: inviteEmail.toLowerCase(), inviteRole, bizName: user.bizName || user.name, managerName: user.name });
+      } catch(e) { console.log("Email send error:", e.message); }
       setSent(true); setInviteEmail(""); setInviteLocs([]);
       setTimeout(() => setSent(false), 3000);
     } catch(e) { setError("Failed to send invite."); }
@@ -2888,7 +2964,7 @@ function TeamMembers({ user, locations }) {
   };
 
   const toggleLoc = (locId) => setInviteLocs(p => p.includes(locId) ? p.filter(l => l !== locId) : [...p, locId]);
-  const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" };
+  const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#111827" };
 
   return (
     <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
@@ -2916,6 +2992,19 @@ function TeamMembers({ user, locations }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{inv.email}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>{inv.role} — Pending</div>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => {
+                  const msg = "You have been invited to join " + (user.bizName || "our team") + " on WashLevel. Create your account at https://washlevel.com using this email address: " + inv.email;
+                  navigator.clipboard.writeText(msg);
+                }} style={{ background: "#f0f9ff", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Copy</button>
+                <button onClick={async () => {
+                  try {
+                    const sendInvite = httpsCallable(functions, "sendInviteEmail");
+                    await sendInvite({ inviteEmail: inv.email, inviteRole: inv.role, bizName: user.bizName || user.name, managerName: user.name });
+                    alert("Invite email sent to " + inv.email);
+                  } catch(e) { alert("Could not send email: " + e.message); }
+                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Send Email</button>
               </div>
             </div>
           ))}
@@ -3102,7 +3191,9 @@ const isMobile = useIsMobile();
 
 useEffect(() => {
 if (!user) return;
-const unsub = onSnapshot(query(collection(db, "locations"), where("ownerId", "==", user.uid)), snap => {
+const ownerId = user.isTeamMember ? user.ownerId : user.uid;
+const allowedLocs = user.allowedLocations || [];
+const unsub = onSnapshot(query(collection(db, "locations"), where("ownerId", "==", ownerId)), snap => {
 const allLocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 const locs = user.isTeamMember && allowedLocs.length ? allLocs.filter(l => allowedLocs.includes(l.id)) : allLocs;
 setLocations(locs);
@@ -3283,7 +3374,10 @@ return (
 function AppInner() {
 const { user, loading } = useAuth();
 if (loading) return <Spinner />;
-return user ? <Dashboard /> : <Login />;
+if (user) return <Dashboard />;
+const params = new URLSearchParams(window.location.search);
+const inviteEmail = params.get("invite");
+return <Login defaultTab={inviteEmail ? "signup" : "login"} defaultEmail={inviteEmail || ""} />;
 }
 
 export default function App() {
