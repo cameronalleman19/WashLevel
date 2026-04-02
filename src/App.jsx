@@ -394,6 +394,20 @@ function Login() {
 function Sidebar({ locations, view, setView, locId, setLocId, open, onClose }) {
 const { user, logout } = useAuth();
 const isMobile = useIsMobile();
+
+  // Scroll input into view on mobile when focused
+  useEffect(() => {
+    if (!isMobile) return;
+    const handleFocus = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        setTimeout(() => {
+          e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
+    };
+    document.addEventListener('focusin', handleFocus);
+    return () => document.removeEventListener('focusin', handleFocus);
+  }, [isMobile]);
 const isManager = user?.role === "manager";
 const locs = isManager ? locations : locations.filter(l => l.id === user?.locationId);
 const nav = [
@@ -417,7 +431,7 @@ return (
 )}
 <aside style={{
 width: 220, flexShrink: 0, background: "#1a3352", display: "flex", flexDirection: "column",
-height: "100vh", overflowY: "auto",
+height: "100dvh", overflowY: "auto",
 ...(isMobile ? {
 position: "fixed", left: 0, top: 0, zIndex: 50,
 transform: open ? "translateX(0)" : "translateX(-100%)",
@@ -906,7 +920,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
   const [editData, setEditData] = useState({});
   const [histories, setHistories] = useState({});
 
-  const inp = { width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" };
+  const inp = { width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff", color: "#111827" };
 
   const toggleExpand = async (eqId) => {
     const next = { ...expanded, [eqId]: !expanded[eqId] };
@@ -2861,8 +2875,15 @@ function TeamMembers({ user, locations }) {
     setSending(false);
   };
 
-  const handleRemove = async (uid) => {
-    await updateDoc(doc(db, "users", uid), { ownerId: null, isTeamMember: false });
+  const handleRemove = async (uid, name) => {
+    if (!window.confirm("Remove " + name + " from your team? They will lose access immediately.")) return;
+    await updateDoc(doc(db, "users", uid), { 
+      ownerId: null, 
+      isTeamMember: false,
+      allowedLocations: [],
+      role: "attendant",
+      removedAt: new Date().toISOString()
+    });
     setMembers(p => p.filter(m => m.uid !== uid));
   };
 
@@ -2882,7 +2903,7 @@ function TeamMembers({ user, locations }) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{m.name || m.email}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>{m.email} — {m.role}</div>
               </div>
-              <button onClick={() => handleRemove(m.uid)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+              <button onClick={() => handleRemove(m.uid, m.name || m.email)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
             </div>
           ))}
         </div>
@@ -2955,7 +2976,7 @@ function SetupWizard({ user, logout }) {
   const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fff", color: "#111827", marginTop: 6 };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ minHeight: "100dvh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <div style={{ width: "100%", maxWidth: 480 }}>
         {/* Header */}
@@ -3169,7 +3190,7 @@ const curSens = sensors[locId] || null;
 const curEquip = equipment[locId] || [];
 
 return (
-<div style={{ display: "flex", height: "100vh", background: "#f8fafc", overflow: "hidden" }}>
+<div style={{ display: "flex", height: "100dvh", background: "#f8fafc", overflow: "hidden" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px" : "28px 32px", paddingTop: isMobile ? "56px" : undefined }}>
