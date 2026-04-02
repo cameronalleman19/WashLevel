@@ -7,6 +7,8 @@ getAuth,
 signInWithEmailAndPassword,
 signOut,
 onAuthStateChanged,
+createUserWithEmailAndPassword,
+sendPasswordResetEmail,
 } from "firebase/auth";
 import {
 getFirestore,
@@ -292,12 +294,13 @@ function Login() {
         });
       }
     } catch(e) {
-      setError(e.message?.includes("email-already-in-use") ? "An account with this email already exists." : "Signup failed. Please try again.");
+      console.log("Signup error:", e.code, e.message);
+      setError(e.message?.includes("email-already-in-use") ? "An account with this email already exists." : e.message || "Signup failed. Please try again.");
     }
     setLoading(false);
   };
 
-  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" };
+  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa", color: "#111827" };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2634,22 +2637,6 @@ return (
   </button>
 </div>
 {!user?.isTeamMember && <TeamMembers user={user} locations={locations} />}
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
-  <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Your Profile</div>
-  <div style={{ marginBottom: 12 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Display Name</label>
-    <input value={profileName} onChange={e => setProfileName(e.target.value)}
-      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" }}
-      placeholder="Your name" />
-  </div>
-  <div style={{ marginBottom: 16 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Email</label>
-    <div style={{ padding: "9px 12px", background: "#f3f4f6", borderRadius: 8, fontSize: 13, color: "#6b7280", marginTop: 6 }}>{user?.email}</div>
-  </div>
-  <button onClick={handleSaveProfile} style={{ background: profileSaved ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-    {profileSaved ? "Saved!" : "Save Profile"}
-  </button>
-</div>
 {saved && (
 <div style={{ background: "#d1fae5", color: "#065f46", padding: "10px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
 Changes saved!
@@ -2925,8 +2912,132 @@ function TeamMembers({ user, locations }) {
     </div>
   );
 }
+
+function SetupWizard({ user, logout }) {
+  const [step, setStep] = useState(1);
+  const [bizName, setBizName] = useState("");
+  const [address, setAddress] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleCreate = async () => {
+    if (!bizName.trim()) return;
+    setSaving(true);
+    const locId = "loc_" + Date.now();
+    await setDoc(doc(db, "locations", locId), {
+      id: locId, name: bizName, address, zipCode,
+      ownerId: user.uid, createdAt: new Date().toISOString()
+    });
+    await updateDoc(doc(db, "users", user.uid), { locationId: locId, setupComplete: true });
+    setSaving(false);
+    setStep(3);
+  };
+
+  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fff", color: "#111827", marginTop: 6 };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      <div style={{ width: "100%", maxWidth: 480 }}>
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#1a3352", borderRadius: 14, padding: "10px 22px", marginBottom: 12 }}>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
+            <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
+          </div>
+          {/* Step indicator */}
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 16 }}>
+            {[1,2,3].map(s => (
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: step >= s ? "#1a3352" : "#e5e7eb", color: step >= s ? "#fff" : "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{s}</div>
+                {s < 3 && <div style={{ width: 40, height: 2, background: step > s ? "#1a3352" : "#e5e7eb" }} />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: 32 }}>
+          {step === 1 && (
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Welcome, {user?.name?.split(" ")[0] || "there"}!</div>
+              <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>Let's get your car wash set up. It only takes a minute.</div>
+              <div style={{ background: "#f0f9ff", borderRadius: 10, padding: 16, marginBottom: 24 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#0369a1", marginBottom: 8 }}>What you'll set up:</div>
+                {["Your first wash location", "Dashboard overview", "Team & time clock"].map(item => (
+                  <div key={item} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#0ea5e9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>
+                    </div>
+                    <span style={{ fontSize: 13, color: "#374151" }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setStep(2)} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                Get Started
+              </button>
+              <div style={{ textAlign: "center", marginTop: 12 }}>
+                <span onClick={logout} style={{ fontSize: 12, color: "#9ca3af", cursor: "pointer", textDecoration: "underline" }}>Sign out</span>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Your First Location</div>
+              <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>You can add more locations later in Settings.</div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Car Wash Name *</label>
+                <input value={bizName} onChange={e => setBizName(e.target.value)} placeholder="e.g. Sunny Car Wash - Main St" style={inp} />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Address</label>
+                <input value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 123 Main Street" style={inp} />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Zip Code <span style={{ color: "#9ca3af", fontWeight: 400 }}>(for weather data)</span></label>
+                <input value={zipCode} onChange={e => setZipCode(e.target.value)} placeholder="e.g. 37201" maxLength={5} style={inp} />
+              </div>
+              <button onClick={handleCreate} disabled={!bizName.trim() || saving}
+                style={{ width: "100%", background: bizName.trim() ? "#1a3352" : "#e5e7eb", color: bizName.trim() ? "#fff" : "#9ca3af", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: bizName.trim() ? "pointer" : "not-allowed" }}>
+                {saving ? "Setting up..." : "Create Location"}
+              </button>
+              <button onClick={() => setStep(1)} style={{ width: "100%", background: "none", border: "none", color: "#9ca3af", fontSize: 13, cursor: "pointer", marginTop: 10 }}>Back</button>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 8 }}>You're all set!</div>
+              <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>Your dashboard is ready. Here are a few things to do next:</div>
+              <div style={{ textAlign: "left", marginBottom: 24 }}>
+                {[
+                  { title: "Add your team", desc: "Invite staff in Settings → Team Members" },
+                  { title: "Set up inventory", desc: "Track chemicals and supplies" },
+                  { title: "Log car counts", desc: "Track daily wash numbers" },
+                  { title: "Connect sensors", desc: "Link SensorPush in Settings → Integrations" },
+                ].map(item => (
+                  <div key={item.title} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0ea5e9", marginTop: 5, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.title}</div>
+                      <div style={{ fontSize: 12, color: "#9ca3af" }}>{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => window.location.reload()} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                Go to My Dashboard
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 function Dashboard() {
-const { user } = useAuth();
+const { user, logout } = useAuth();
 const [locations, setLocations] = useState([]);
 const [tasks, setTasks] = useState({});
 const [sensors, setSensors] = useState({});
@@ -3032,30 +3143,7 @@ await updateDoc(doc(db, "locations", locId, "tasks", taskId), { note, updatedAt:
 };
 
 if (!ready) return <Spinner />;
-if (!locId || !locations.length) if (user?.role === "manager" && !locations.length) return <Spinner />; else return (
-  <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-    <div style={{ textAlign: "center", maxWidth: 400, padding: 32 }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>🚗</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Welcome to WashLevel!</div>
-      <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>Let's set up your first car wash location to get started.</div>
-      <button onClick={async () => {
-        const locId = "loc_" + Date.now();
-        await setDoc(doc(db, "locations", locId), {
-          id: locId, name: "My Car Wash", address: "", zipCode: "",
-          ownerId: user.uid, createdAt: new Date().toISOString()
-        });
-        await updateDoc(doc(db, "users", user.uid), { locationId: locId });
-      }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "14px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-        Create My First Location
-      </button>
-      <div style={{ marginTop: 16, fontSize: 13, color: "#6b7280" }}>Signed in as <b>{user.email}</b></div>
-      <div style={{ marginTop: 10 }}>
-        <button onClick={() => logout()} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>Sign out and use a different account</button>
-      </div>
-    </div>
-  </div>
-);
-
+if (user?.setupComplete === false) return <SetupWizard user={user} logout={logout} />;
 const curLoc = locations.find(l => l.id === locId);
 const curTasks = tasks[locId] || [];
 const curSens = sensors[locId] || null;
