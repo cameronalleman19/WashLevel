@@ -2912,6 +2912,10 @@ function CarCounts({ locations }) {
 
 function TeamMembers({ user, locations }) {
   const [inviteEmail, setInviteEmail] = useState("");
+  const [editingMember, setEditingMember] = useState(null);
+  const [editLocs, setEditLocs] = useState([]);
+  const [editRole, setEditRole] = useState("attendant");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [inviteRole, setInviteRole] = useState("attendant");
   const [inviteLocs, setInviteLocs] = useState([]);
   const [sending, setSending] = useState(false);
@@ -2978,6 +2982,50 @@ function TeamMembers({ user, locations }) {
     <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
       <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Team Members</div>
       <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Invite staff to access your dashboard</div>
+      {editingMember && (
+        <div style={{ background: "#f0f9ff", border: "2px solid #0ea5e9", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#0369a1", marginBottom: 12 }}>Edit Access — {editingMember.name || editingMember.email}</div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Role</label>
+            <select value={editRole} onChange={e => setEditRole(e.target.value)}
+              style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827", marginTop: 6 }}>
+              <option value="attendant">Attendant — Limited access</option>
+              <option value="manager">Manager — Full access</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Location Access</label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button onClick={() => setEditLocs(locations.map(l => l.id))}
+                style={{ fontSize: 11, background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>All</button>
+              <button onClick={() => setEditLocs([])}
+                style={{ fontSize: 11, background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>None</button>
+            </div>
+            {locations.map(l => (
+              <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }}>
+                <input type="checkbox" checked={editLocs.includes(l.id)}
+                  onChange={() => setEditLocs(p => p.includes(l.id) ? p.filter(x => x !== l.id) : [...p, l.id])}
+                  style={{ width: 15, height: 15, accentColor: "#1a3352" }} />
+                <span style={{ fontSize: 13, color: "#374151" }}>{l.name}</span>
+              </label>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={async () => {
+              setSavingEdit(true);
+              await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, updatedAt: new Date().toISOString() });
+              setSavingEdit(false);
+              setEditingMember(null);
+              setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole } : m));
+            }} disabled={savingEdit}
+              style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              {savingEdit ? "Saving..." : "Save Changes"}
+            </button>
+            <button onClick={() => setEditingMember(null)}
+              style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
       {members.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Active Members</div>
@@ -2988,6 +3036,8 @@ function TeamMembers({ user, locations }) {
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>{m.email} — {m.role}</div>
               </div>
               <button onClick={() => handleRemove(m.uid, m.name || m.email)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+              <button onClick={() => { setEditingMember(m); setEditLocs(m.allowedLocations || []); setEditRole(m.role || "attendant"); }}
+                style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit Access</button>
             </div>
           ))}
         </div>

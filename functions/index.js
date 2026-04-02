@@ -78,3 +78,46 @@ exports.sendWelcomeEmail = onDocumentCreated({ document: "users/{uid}", secrets:
     `
   });
 });
+
+// Custom password reset email via Resend
+exports.sendPasswordResetEmail = onCall({ secrets: [RESEND_API_KEY] }, async (request) => {
+  const { email } = request.data;
+  if (!email) throw new HttpsError("invalid-argument", "Email required");
+
+  const resend = new Resend(RESEND_API_KEY.value());
+
+  try {
+    // Generate reset link using Firebase Admin
+    const link = await admin.auth().generatePasswordResetLink(email);
+
+    await resend.emails.send({
+      from: "WashLevel <noreply@washlevel.com>",
+      to: email,
+      subject: "Reset your WashLevel password",
+      html: `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f8fafc;">
+          <div style="background: #1a3352; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <h1 style="color: #fff; margin: 0; font-size: 24px; font-weight: 700;">WashLevel</h1>
+            <p style="color: #94a3b8; margin: 4px 0 0; font-size: 12px; letter-spacing: 2px;">CAR WASH OPERATIONS</p>
+          </div>
+          <div style="background: #fff; border-radius: 12px; padding: 28px; margin-bottom: 16px;">
+            <h2 style="color: #111827; font-size: 20px; margin: 0 0 8px;">Reset your password</h2>
+            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+              We received a request to reset your WashLevel password. Click the button below to choose a new password. This link expires in 1 hour.
+            </p>
+            <a href="${link}" style="display: block; background: #1a3352; color: #fff; text-decoration: none; text-align: center; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 15px; margin-bottom: 16px;">
+              Reset My Password
+            </a>
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              If you didn't request a password reset, you can safely ignore this email.
+            </p>
+          </div>
+        </div>
+      `
+    });
+
+    return { success: true };
+  } catch(e) {
+    throw new HttpsError("internal", e.message);
+  }
+});
