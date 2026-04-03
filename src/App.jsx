@@ -2690,7 +2690,15 @@ setSaved(false);
 const handleSave = async (locId) => {
 if (locId === "**new**") {
 const newId = "loc" + Date.now();
-await setDoc(doc(db, "locations", newId), { id: newId, name, address, zipCode });
+const ownerId = user.isTeamMember ? user.ownerId : user.uid;
+const washWords = ["wash", "clean", "rinse", "foam", "shine", "scrub", "spray", "buff", "gloss", "suds"];
+const washWord = washWords[Math.floor(Math.random() * washWords.length)];
+const emailCode = washWord + Math.floor(1000 + Math.random() * 9000);
+await setDoc(doc(db, "locations", newId), { id: newId, name, address, zipCode, ownerId, emailCode });
+if (user.isTeamMember) {
+  const newAllowed = [...(user.allowedLocations || []), newId];
+  await updateDoc(doc(db, "users", user.uid), { allowedLocations: newAllowed });
+}
 } else {
 await onUpdateLocation(locId, { name, address, zipCode });
 }

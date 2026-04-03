@@ -153,8 +153,13 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     const locationCode = match[1].toLowerCase();
     console.log("Location code:", locationCode);
     
-    // Parse TODAY = 30
-    const countMatch = body.match(/TODAY\s*=\s*(\d+)/i) || body.match(/TODAY\s*:\s*(\d+)/i);
+    // Parse car count - supports multiple equipment email formats
+    const countMatch = 
+      body.match(/TODAY\s*=\s*(\d+)/i) ||           // TOTAL = 16148: TODAY = 6
+      body.match(/Today'?s\s*Total\s+(\d+)/i) ||    // Today's Total    2
+      body.match(/TOTAL\s*=\s*(\d+)/i) ||            // TOTAL = 16
+      body.match(/total\s*washes?\s*[:\-=]?\s*(\d+)/i) || // Total Washes: 6
+      body.match(/washes?\s*today\s*[:\-=]?\s*(\d+)/i);   // Washes Today: 6
     const count = countMatch ? parseInt(countMatch[1]) : null;
     if (count === null) { console.log("No count in body:", body.slice(0,200)); res.status(200).send("No count found"); return; }
     
