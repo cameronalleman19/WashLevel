@@ -1,4 +1,4 @@
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -121,3 +121,61 @@ exports.sendPasswordResetEmail = onCall({ secrets: [RESEND_API_KEY] }, async (re
     throw new HttpsError("internal", e.message);
   }
 });
+
+// Receive equipment email and parse car counts
+exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req, res) => {
+  try {
+    if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
+    
+    const payload = req.body;
+    console.log("v2-receiveCountEmail Webhook payload:", JSON.stringify(payload).slice(0, 500));
+    
+    // Resend sends event data under data field
+    const emailData = payload.data || payload;
+    const emailId = emailData.email_id || emailData.id;
+    const toAddress = emailData.to?.[0] || emailData.to || "";
+    
+    console.log("Email ID:", emailId, "To:", toAddress);
+    
+    if (!emailId) { res.status(200).send("No email ID"); return; }
+    
+    // Fetch full email body using Resend receiving API
+    const resend = new Resend(RESEND_API_KEY.value());
+    const { data: emailFull, error: fetchError } = await resend.emails.receiving.get(emailId);
+    if (fetchError) { console.log("Fetch error:", JSON.stringify(fetchError)); res.status(200).send("Fetch error"); return; }
+    console.log("Email body:", (emailFull?.text || "").slice(0, 300));
+    const toFull = toAddress;
+    const body = emailFull?.text || emailFull?.html || "";
+    
+    // Extract location code from wash4821@washlevel.com
+    const match = toFull.match(/([a-z]+\d+)@washlevel\.com/i);
+    if (!match) { console.log("No location code in:", toFull); res.status(200).send("No location code"); return; }
+    const locationCode = match[1].toLowerCase();
+    console.log("Location code:", locationCode);
+    
+    // Parse TODAY = 30
+    const countMatch = body.match(/TODAY\s*=\s*(\d+)/i) || body.match(/TODAY\s*:\s*(\d+)/i);
+    const count = countMatch ? parseInt(countMatch[1]) : null;
+    if (count === null) { console.log("No count in body:", body.slice(0,200)); res.status(200).send("No count found"); return; }
+    
+    // Use yesterday's date
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const dateStr = yesterday.toISOString().split("T")[0];
+    
+    // Find location by emailCode
+    const locsSnap = await db.collection("locations").where("emailCode", "==", locationCode).get();
+    if (locsSnap.empty) { console.log("No location for code:", locationCode); res.status(200).send("Location not found"); return; }
+    
+    const locId = locsSnap.docs[0].id;
+    await db.collection("locations").doc(locId).collection("daySummaries").doc(dateStr).set({
+      carsWashed: count, date: dateStr, source: "email", updatedAt: new Date().toISOString()
+    }, { merge: true });
+    
+    console.log("Saved", count, "cars for location", locId, "on", dateStr);
+    res.status(200).send("OK");
+  } catch(e) {
+    console.error("Error:", e.message);
+    res.status(500).send("Error: " + e.message);
+  }
+});// updated Fri Apr  3 01:06:00 UTC 2026

@@ -265,7 +265,8 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
     if (!email) { setError("Enter your email address first."); return; }
     setResetLoading(true); setError("");
     try {
-      await sendPasswordResetEmail(auth, email);
+      const fn = httpsCallable(functions, "sendPasswordResetEmail");
+      await fn({ email });
       setResetSent(true);
     } catch(e) {
       setError("Could not send reset email. Check the address and try again.");
@@ -2759,6 +2760,13 @@ Changes saved!
 <div style={{ flex: 1 }}>
 <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{loc.name}</div>
 <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{loc.address || "No address set"}</div>
+{loc.emailCode && (
+  <div style={{ fontSize: 11, color: "#0369a1", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+    <span>Equipment email: <b>{loc.emailCode}@washlevel.com</b></span>
+    <button onClick={() => navigator.clipboard.writeText(loc.emailCode + "@washlevel.com")}
+      style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Copy</button>
+  </div>
+)}
 </div>
 <button onClick={() => startEdit(loc)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
 </div>
@@ -3332,7 +3340,7 @@ await updateDoc(doc(db, "locations", locId, "tasks", taskId), { note, updatedAt:
 };
 
 if (!ready) return <Spinner />;
-if (user?.setupComplete === false) return <SetupWizard user={user} logout={logout} />;
+if (user?.setupComplete === false && !locations.length) return <SetupWizard user={user} logout={logout} />;
 const curLoc = locations.find(l => l.id === locId);
 const curTasks = tasks[locId] || [];
 const curSens = sensors[locId] || null;
