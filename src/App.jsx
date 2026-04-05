@@ -545,6 +545,15 @@ const done = tasks.filter(t => t.status === "done").length;
 const inprog = tasks.filter(t => t.status === "in-progress").length;
 const eqBad = equipment.filter(e => e.status !== "ok").length;
 const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+const [todaySummary, setTodaySummary] = useState(null);
+const today = new Date().toISOString().split("T")[0];
+
+useEffect(() => {
+  if (!location?.id) return;
+  getDoc(doc(db, "locations", location.id, "daySummaries", today))
+    .then(snap => { if (snap.exists()) setTodaySummary(snap.data()); })
+    .catch(() => {});
+}, [location?.id, today]);
 
 return (
 <div>
@@ -553,7 +562,7 @@ return (
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={sensors?.carsToday ?? "-"} accent="#0ea5e9" /></div>
+<div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#0ea5e9" /></div>
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>
 <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>
