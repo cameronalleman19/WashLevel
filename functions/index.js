@@ -143,7 +143,7 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     const resend = new Resend(RESEND_API_KEY.value());
     const { data: emailFull, error: fetchError } = await resend.emails.receiving.get(emailId);
     if (fetchError) { console.log("Fetch error:", JSON.stringify(fetchError)); res.status(200).send("Fetch error"); return; }
-    console.log("Email body:", (emailFull?.text || "").slice(0, 300));
+    console.log("Full email object:", JSON.stringify(emailFull).slice(0, 2000));
     const toFull = toAddress;
     const body = emailFull?.text || emailFull?.html || "";
     
@@ -154,13 +154,41 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     console.log("Location code:", locationCode);
     
     // Parse car count - supports multiple equipment email formats
-    const countMatch = 
-      body.match(/TODAY\s*=\s*(\d+)/i) ||           // TOTAL = 16148: TODAY = 6
-      body.match(/Today'?s\s*Total\s+(\d+)/i) ||    // Today's Total    2
-      body.match(/TOTAL\s*=\s*(\d+)/i) ||            // TOTAL = 16
-      body.match(/total\s*washes?\s*[:\-=]?\s*(\d+)/i) || // Total Washes: 6
-      body.match(/washes?\s*today\s*[:\-=]?\s*(\d+)/i);   // Washes Today: 6
-    const count = countMatch ? parseInt(countMatch[1]) : null;
+    let count = null;
+
+    // Format 1: TOTAL = 16148: TODAY = 6 (Dencar)
+    const todayMatch = body.match(/TODAY\s*=\s*(\d+)/i);
+    if (todayMatch) { count = parseInt(todayMatch[1]); }
+
+    // Format 2: Today's Total    2 (Accutrac)
+    if (count === null) {
+      const todaysTotalMatch = body.match(/Today'?s\s*Total\s+(\d+)/i);
+      if (todaysTotalMatch) count = parseInt(todaysTotalMatch[1]);
+    }
+
+    // Format 3: Package rows - sum last column (FreeStyler)
+    // Handles "PACKAGE1  15364  9" and "1  15364  9" formats
+    if (count === null && /PACKAGE RUNNING TODAY/i.test(body)) {
+      const rows = body.match(/^\s*(?:PACKAGE)?\d+\s+\d+\s+(\d+)\s*$/gim);
+      if (rows && rows.length > 0) {
+        count = rows.reduce((sum, row) => {
+          const parts = row.trim().split(/\s+/);
+          return sum + (parseInt(parts[parts.length - 1]) || 0);
+        }, 0);
+      }
+    }
+
+    // Format 4: TOTAL = 16 fallback
+    if (count === null) {
+      const totalMatch = body.match(/TOTAL\s*=\s*(\d+)/i);
+      if (totalMatch) count = parseInt(totalMatch[1]);
+    }
+
+    // Format 5: Total Washes: 6
+    if (count === null) {
+      const washMatch = body.match(/total\s*washes?\s*[:\-=]?\s*(\d+)/i);
+      if (washMatch) count = parseInt(washMatch[1]);
+    }
     if (count === null) { console.log("No count in body:", body.slice(0,200)); res.status(200).send("No count found"); return; }
     
     // Use yesterday's date
@@ -173,8 +201,12 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     if (locsSnap.empty) { console.log("No location for code:", locationCode); res.status(200).send("Location not found"); return; }
     
     const locId = locsSnap.docs[0].id;
-    await db.collection("locations").doc(locId).collection("daySummaries").doc(dateStr).set({
-      carsWashed: count, date: dateStr, source: "email", updatedAt: new Date().toISOString()
+    const summaryRef = db.collection("locations").doc(locId).collection("daySummaries").doc(dateStr);
+    const existing = await summaryRef.get();
+    const existingCount = existing.exists ? (existing.data().carsWashed || 0) : 0;
+    const newCount = existingCount + count;
+    await summaryRef.set({
+      carsWashed: newCount, date: dateStr, source: "email", updatedAt: new Date().toISOString()
     }, { merge: true });
     
     console.log("Saved", count, "cars for location", locId, "on", dateStr);
