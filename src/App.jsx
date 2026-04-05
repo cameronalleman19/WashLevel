@@ -2418,7 +2418,25 @@ return (
               {equipmentList.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
             </select>
           </div>
-
+{category === "inspection" && (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Checklist Items</label>
+    {checklistItems.map(item => (
+      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f9fafb", borderRadius: 8, padding: "6px 10px" }}>
+        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{item.label}</span>
+        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}>×</button>
+      </div>
+    ))}
+    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+      <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCheckItem())}
+        placeholder="Add checklist item..." style={{ ...inp, flex: 1, marginTop: 0, color: "#111827" }} />
+      <button type="button" onClick={addCheckItem}
+        style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>+</button>
+    </div>
+    {checklistItems.length === 0 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>Add items to inspect</div>}
+  </div>
+)}
           <div style={{ marginBottom: 14 }}>
               <select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={sel}>
 <option value="">No recurrence</option>
