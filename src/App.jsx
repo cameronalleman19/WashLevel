@@ -322,7 +322,6 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
         });
       }
     } catch(e) {
-      console.log("Signup error:", e.code, e.message);
       setError(e.message?.includes("email-already-in-use") ? "An account with this email already exists." : e.message || "Signup failed. Please try again.");
     }
     setLoading(false);
@@ -2372,7 +2371,6 @@ return (
 );
 }
 
-
 function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) {
   const totalCars = locations.reduce((sum, loc) => sum + (sensors[loc.id]?.carsToday || 0), 0);
   const totalDone = locations.reduce((sum, loc) => sum + (tasks[loc.id] || []).filter(t => t.status === "done").length, 0);
@@ -2452,7 +2450,6 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
     </div>
   );
 }
-
 
 function SensorPushIntegration({ locations }) {
   const { user } = useAuth();
@@ -2841,7 +2838,6 @@ Changes saved!
 );
 }
 
-
 function CarCounts({ locations }) {
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
@@ -2971,7 +2967,6 @@ function TeamMembers({ user, locations }) {
         const sendInvite = httpsCallable(functions, "sendInviteEmail");
         const biz = user.bizName || user.name || "WashLevel";
         const mgr = user.name || user.email || "Your Manager";
-        console.log("Sending invite with:", { biz, mgr, inviteEmail, inviteRole });
         await sendInvite({ 
           inviteEmail: inviteEmail.toLowerCase(), 
           inviteRole: inviteRole || "attendant", 
@@ -3293,7 +3288,6 @@ const unsubs = [
 ];
 return () => unsubs.forEach(u => u());
 }, [locations.length]);
-
 
   // SensorPush background polling
   useEffect(() => {
