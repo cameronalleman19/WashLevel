@@ -19,6 +19,7 @@ setDoc,
 getDoc,
 getDocs,
 updateDoc,
+deleteDoc,
 onSnapshot,
 query,
 where,
@@ -774,11 +775,11 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
 }
 
 function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onStartInspection }) {
+const { user } = useAuth();
 const [open, setOpen] = useState(false);
 const [note, setNote] = useState(task.note || "");
 const [showHistory, setShowHistory] = useState(false);
 const [history, setHistory] = useState([]);
-const { user } = useAuth();
 const st = STS[task.status] || STS.pending;
 const next = task.status === "pending" ? "in-progress" : task.status === "in-progress" ? "done" : "pending";
 const nextLabel = task.status === "pending" ? "Start" : task.status === "in-progress" ? "Complete" : "Reopen";
@@ -813,12 +814,12 @@ duration: duration,
 updatedAt: new Date().toISOString(),
 note: note,
 });
-} else if (next === "in-progress" && locId) {
-await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
-status: "in-progress",
-startedAt: new Date().toISOString(),
-updatedAt: new Date().toISOString(),
-});
+} else if (locId) {
+const updates = { status: next, updatedAt: new Date().toISOString() };
+if (next === "in-progress") updates.startedAt = new Date().toISOString();
+if (next === "done") updates.completedAt = new Date().toISOString();
+if (next === "pending") { updates.completedAt = null; updates.archived = false; } console.log("Reopening task", task.id, "locId:", locId, "updates:", updates);
+await updateDoc(doc(db, "locations", locId, "tasks", task.id), updates);
 } else {
 onStatus(task.id, next);
 }
@@ -846,13 +847,27 @@ return (
 </div>
 </div>
 <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-          <button onClick={() => {
+          <button onClick={(e) => {
+  e.stopPropagation();
   if (task.type === "inspection" && task.status !== "done" && task.checklist?.length > 0 && onStartInspection) {
     onStartInspection(task);
-  } else { handleStatus(); }
+  } else { handleStatus(e); }
 }} style={{ background: task.type === "inspection" && task.status !== "done" ? "#15803d" : btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
   {task.type === "inspection" && task.status !== "done" ? "Inspect" : nextLabel}
 </button>
+{user?.role === "manager" && task.status === "done" && !task.archived && (
+  <button onClick={async (e) => {
+    e.stopPropagation();
+    await updateDoc(doc(db, "locations", locId, "tasks", task.id), { archived: true, archivedAt: new Date().toISOString() });
+  }} style={{ background: "#d1fae5", color: "#065f46", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Approve</button>
+)}
+{user?.role === "manager" && (
+  <button onClick={async (e) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this task?")) return;
+    await deleteDoc(doc(db, "locations", locId, "tasks", task.id));
+  }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Del</button>
+)}
           {task.status === "in-progress" && (
             <button onClick={e => { e.stopPropagation(); onStatus(task.id, "on-hold"); }} style={{ background: "#fce7f3", color: "#be185d", border: "1px solid #fbcfe8", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>On Hold</button>
           )}
@@ -938,9 +953,17 @@ const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
 const [inspectionTask, setInspectionTask] = useState(null);
+const [showArchived, setShowArchived] = useState(false);
+const [showHistory, setShowHistory] = useState(false);
+const isManager = user?.role === "manager";
+const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-const mine = tasks; // All tasks are globally visible
+const mine = tasks;
 const filtered = mine.filter(t => {
+// Hide archived tasks unless showArchived
+if (t.archived && !showArchived) return false;
+// Hide completed tasks older than 7 days unless showArchived
+if (t.status === "done" && !showArchived && t.completedAt && t.completedAt < sevenDaysAgo) return false;
 if (fStatus !== "all" && t.status !== fStatus) return false;
 if (fCat !== "all" && t.category !== fCat) return false;
 return true;
@@ -960,6 +983,7 @@ return (
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
 </div>
 <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>+ Add Task</button>
+<button onClick={() => setShowHistory(true)} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Task History</button>
 </div>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -971,7 +995,7 @@ return (
 <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 18 }}>
 {chip("all", fStatus, setFS, "All")} {chip("pending", fStatus, setFS, "Pending")} {chip("in-progress", fStatus, setFS, "In Progress")} {chip("done", fStatus, setFS, "Done")}
 <div style={{ width: 1, background: "#e5e7eb" }} />
-{["all", "cleaning", "equipment", "chemicals", "supplies"].map(c => chip(c, fCat, setFC, c === "all" ? "All Types" : c.charAt(0).toUpperCase() + c.slice(1)))}
+{["all", "cleaning", "equipment", "chemicals", "supplies", "inspection"].map(c => chip(c, fCat, setFC, c === "all" ? "All Types" : c.charAt(0).toUpperCase() + c.slice(1)))}
 
   </div>
   <div>
@@ -983,7 +1007,13 @@ return (
         <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
     ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} />)}
-    {inspectionTask && locId && (
+    {showHistory && (
+  <TaskHistoryModal
+    tasks={tasks}
+    onClose={() => setShowHistory(false)}
+  />
+)}
+{inspectionTask && locId && (
   <InspectionModal
     task={inspectionTask}
     locId={locId}
@@ -1872,6 +1902,69 @@ function TimeClock({ locId, locationName, allLocations }) {
 }
 
 // ADD TASK MODAL
+function TaskHistoryModal({ tasks, onClose }) {
+  const [sortBy, setSortBy] = useState("date");
+  const [filterUser, setFilterUser] = useState("all");
+
+  const doneTasks = tasks.filter(t => t.status === "done" || t.archived);
+  const users = ["all", ...new Set(doneTasks.map(t => t.completedBy).filter(Boolean))];
+
+  const filtered = doneTasks
+    .filter(t => filterUser === "all" || t.completedBy === filterUser)
+    .sort((a, b) => {
+      if (sortBy === "date") return (b.completedAt || b.updatedAt || "").localeCompare(a.completedAt || a.updatedAt || "");
+      if (sortBy === "user") return (a.completedBy || "").localeCompare(b.completedBy || "");
+      if (sortBy === "category") return (a.category || "").localeCompare(b.category || "");
+      return 0;
+    });
+
+  const CAT_COLORS = { inspection: "#15803d", equipment: "#1d4ed8", cleaning: "#065f46", supplies: "#b45309", chemicals: "#5b21b6" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 1000 }}>
+      <div style={{ background: "#fff", borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #e5e7eb" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Task History</div>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>×</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              <option value="date">Sort: Date</option>
+              <option value="user">Sort: User</option>
+              <option value="category">Sort: Category</option>
+            </select>
+            <select value={filterUser} onChange={e => setFilterUser(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              {users.map(u => <option key={u} value={u}>{u === "all" ? "All Users" : u}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ overflowY: "auto", padding: "12px 20px 24px" }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 14, padding: 40 }}>No completed tasks yet</div>
+          ) : filtered.map(t => (
+            <div key={t.id} style={{ padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: t.archived ? "#9ca3af" : "#111827", textDecoration: t.archived ? "line-through" : "none" }}>{t.title}</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: CAT_COLORS[t.category] || "#6b7280", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4 }}>{t.category}</span>
+                    {t.completedBy && <span style={{ fontSize: 11, color: "#6b7280" }}>by {t.completedBy}</span>}
+                    {t.completedAt && <span style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(t.completedAt).toLocaleDateString()}</span>}
+                    {t.archived && <span style={{ fontSize: 10, fontWeight: 600, color: "#059669", background: "#d1fae5", padding: "2px 6px", borderRadius: 4 }}>Approved</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InspectionModal({ task, locId, user, onClose, onComplete }) {
   const [items, setItems] = useState(
     (task.checklist || []).map(i => ({ ...i, result: null, note: "", photoUrl: null }))
