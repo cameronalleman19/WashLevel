@@ -1307,8 +1307,11 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
           // Re-authenticate with stored credentials to get fresh token
           const snap2 = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
           const creds = snap2.data();
+          // Always check if token needs refresh (older than 23 hours)
+          const tokenAge = creds?.tokenUpdatedAt ? (Date.now() - new Date(creds.tokenUpdatedAt).getTime()) : Infinity;
+          const needsRefresh = tokenAge > 2 * 60 * 60 * 1000;
           let token = accessToken;
-          if (creds?.email && creds?.password) {
+          if ((creds?.email && creds?.password) && needsRefresh) {
             try {
               const reAuthRes = await fetch("https://api.sensorpush.com/api/v1/oauth/authorize", {
                 method: "POST", headers: { "Content-Type": "application/json" },
