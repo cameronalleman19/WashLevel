@@ -170,6 +170,15 @@ seeding = false;
 }
 }
 
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+    <path d="M10 11v6M14 11v6"/>
+    <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+  </svg>
+);
+
 const CAT = { supplies: { bg: "#fef3c7", color: "#b45309" }, equipment: { bg: "#dbeafe", color: "#1d4ed8" }, cleaning: { bg: "#d1fae5", color: "#065f46" }, chemicals: { bg: "#ede9fe", color: "#5b21b6" }, inspection: { bg: "#f0fdf4", color: "#15803d" } };
 const PRI = { high: { bg: "#fee2e2", color: "#991b1b" }, medium: { bg: "#fef3c7", color: "#92400e" }, low: { bg: "#f3f4f6", color: "#6b7280" } };
 const STS = { pending: { bg: "#f3f4f6", color: "#6b7280", dot: "#9ca3af", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, "on-hold": { bg: "#fce7f3", color: "#be185d", dot: "#ec4899", label: "On Hold" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
@@ -639,7 +648,9 @@ return (
 ) : equipment.map(eq => {
 const s = EQS[eq.status] || EQS.ok;
 return (
-<div key={eq.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e5e7eb"}`, marginBottom: 7 }}>
+<div key={eq.id} onClick={() => onNavigate("equipment")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e5e7eb"}`, marginBottom: 7, cursor: "pointer" }}
+  onMouseEnter={e => e.currentTarget.style.background = "#e0f2fe"}
+  onMouseLeave={e => e.currentTarget.style.background = eq.status !== "ok" ? (EQS[eq.status] || EQS.ok).bg + "80" : "#fafafa"}>
 <span style={{ fontWeight: 700, color: s.color, fontSize: 13, width: 16, textAlign: "center" }}>{s.icon}</span>
 <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#374151" }}>{eq.name}</span>
 <span style={{ fontSize: 11, color: "#9ca3af" }}>{eq.nextService}</span>
@@ -812,7 +823,7 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
   );
 }
 
-function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onStartInspection }) {
+function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onStartInspection, equipment }) {
 const { user } = useAuth();
 const [open, setOpen] = useState(false);
 const [note, setNote] = useState(task.note || "");
@@ -907,7 +918,7 @@ return (
 <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
           <button onClick={(e) => {
   e.stopPropagation();
-  if (task.type === "inspection" && task.status !== "done" && task.checklist?.length > 0 && onStartInspection) {
+  if ((task.type === "inspection" || task.category === "inspection") && task.status !== "done" && task.checklist?.length > 0 && onStartInspection) {
     onStartInspection(task);
   } else { handleStatus(e); }
 }} style={{ background: task.type === "inspection" && task.status !== "done" ? "#15803d" : btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
@@ -924,7 +935,12 @@ return (
     e.stopPropagation();
     if (!window.confirm("Delete this task?")) return;
     await deleteDoc(doc(db, "locations", locId, "tasks", task.id));
-  }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Del</button>
+  }} style={{ background: "none", color: "#dc2626", border: "1.5px solid #dc2626", borderRadius: 6, padding: "5px 8px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <polyline points="3 6 5 6 21 6"/>
+  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+  <path d="M10 11v6M14 11v6"/>
+  <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+</svg></button>
 )}
           {task.status === "in-progress" && (
             <button onClick={e => { e.stopPropagation(); onStatus(task.id, "on-hold"); }} style={{ background: "#fce7f3", color: "#be185d", border: "1px solid #fbcfe8", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>On Hold</button>
@@ -937,6 +953,7 @@ return (
 <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
 <span><b>Shift:</b> {task.shift}</span>
 <span><b>Status:</b> <Pill label={st.label} bg={st.bg} color={st.color} /></span>
+{task.equipmentId && equipment && <span><b>Equipment:</b> {equipment.find(e => e.id === task.equipmentId)?.name || task.equipmentId}</span>}
 {task.completedBy && <span><b>Completed by:</b> {task.completedBy}</span>}
 {task.completedAt && <span><b>Completed:</b> {new Date(task.completedAt).toLocaleDateString()}</span>}
 {task.duration != null && <span><b>Duration:</b> {task.duration} min</span>}
@@ -1026,7 +1043,7 @@ View History
 );
 }
 
-function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, locId, onSelectMaterials }) {
+function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, locId, onSelectMaterials, equipment }) {
 const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
@@ -1042,7 +1059,10 @@ const filtered = mine.filter(t => {
 if (t.archived && !showArchived) return false;
 // Hide completed tasks older than 7 days unless showArchived
 if (t.status === "done" && !showArchived && t.completedAt && t.completedAt < sevenDaysAgo) return false;
-if (fStatus !== "all" && t.status !== fStatus) return false;
+if (fStatus === "monitor") {
+  const hasMonitor = t.checklist?.some(i => i.result === "monitor");
+  if (!hasMonitor) return false;
+} else if (fStatus !== "all" && t.status !== fStatus) return false;
 if (fCat !== "all" && t.category !== fCat) return false;
 return true;
 });
@@ -1084,7 +1104,7 @@ return (
         <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
         <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
-    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} />)}
+    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} />)}
     {showHistory && (
   <TaskHistoryModal
     tasks={tasks}
@@ -1107,7 +1127,7 @@ return (
 );
 }
 
-function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
+function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onNavigate }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newEq, setNewEq] = useState({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0 });
   const [saving, setSaving] = useState(false);
@@ -1245,7 +1265,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
           const s = EQS[eq.status] || EQS.ok;
           const isExpanded = expanded[eq.id];
           const isEditing = editingId === eq.id;
-          const linkedTasks = (allTasks || []).filter(t => t.equipmentId === eq.id);
+          const linkedTasks = (allTasks || []).filter(t => t.equipmentId === eq.id && t.status !== "done" && !t.archived);
           const eqHistory = histories[eq.id] || [];
           const files = eqFiles[eq.id] || eq.files || [];
           const carsSinceService = eq.carsCount && eq.lastServiceCars ? (eq.carsCount - eq.lastServiceCars).toLocaleString() : null;
@@ -1330,7 +1350,9 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
                     <div style={{ marginTop: 14 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Linked Tasks ({linkedTasks.length})</div>
                       {linkedTasks.map(t => (
-                        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", fontSize: 12, borderBottom: "1px solid #f3f4f6" }}>
+                        <div key={t.id} onClick={() => onNavigate && onNavigate("tasks")} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", fontSize: 12, borderBottom: "1px solid #f3f4f6", cursor: "pointer" }}
+  onMouseEnter={e => e.currentTarget.style.background="#f0f9ff"}
+  onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: STS[t.status]?.dot || "#9ca3af", flexShrink: 0 }} />
                           <span style={{ flex: 1, color: "#374151" }}>{t.title}</span>
                           <Pill label={STS[t.status]?.label || t.status} bg={STS[t.status]?.bg || "#f3f4f6"} color={STS[t.status]?.color || "#6b7280"} />
@@ -1346,16 +1368,32 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
                       <div style={{ fontSize: 12, color: "#9ca3af" }}>No history yet. History is recorded automatically when you update service dates or car counts.</div>
                     ) : eqHistory.map(h => (
                       <div key={h.id} style={{ padding: "8px 10px", background: "#f8fafc", borderRadius: 7, marginBottom: 6, fontSize: 12 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2, alignItems: "center" }}>
                           <span style={{ fontWeight: 600, color: "#374151" }}>{h.type === "inspection" ? "Inspection" : "Service"} — {h.date}</span>
-                          {h.type === "inspection" && <span style={{ color: h.failCount > 0 ? "#dc2626" : "#15803d", fontWeight: 600 }}>{h.failCount > 0 ? h.failCount + " failed" : "All passed"}</span>}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {h.type === "inspection" && <span style={{ color: h.failCount > 0 ? "#dc2626" : (h.monitorCount > 0 ? "#d97706" : "#15803d"), fontWeight: 600 }}>
+  {h.failCount > 0 ? h.failCount + " failed" : h.monitorCount > 0 ? h.monitorCount + " to monitor" : "All passed"}
+</span>}
+                          {user?.role === "manager" && (
+                            <button onClick={async () => {
+                              if (!window.confirm("Delete this history entry?")) return;
+                              await deleteDoc(doc(db, "locations", locId, "equipment", eq.id, "history", h.id));
+                              setHistories(p => ({ ...p, [eq.id]: (p[eq.id] || []).filter(x => x.id !== h.id) }));
+                            }} style={{ background: "none", color: "#dc2626", border: "1.5px solid #dc2626", borderRadius: 6, padding: "3px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                              <TrashIcon />
+                            </button>
+                          )}
+                          </div>
                         </div>
                         <div style={{ color: "#6b7280" }}>{h.note || h.taskTitle || ""}</div>
                         {h.type === "inspection" && h.items && (
                           <div style={{ marginTop: 4 }}>
                             {h.items.filter(i => i.result !== "good").map((item, idx) => (
-                              <div key={idx} style={{ fontSize: 11, color: item.result === "fail" ? "#dc2626" : "#d97706", marginTop: 2 }}>
-                                {item.result === "fail" ? "✗" : "⚠"} {item.label}{item.note ? ": " + item.note : ""}
+                              <div key={idx} style={{ marginTop: 6 }}>
+                                <div style={{ fontSize: 11, color: item.result === "fail" ? "#dc2626" : "#d97706", fontWeight: 600 }}>
+                                  {item.result === "fail" ? "✗" : "⚠"} {item.label}{item.note ? ": " + item.note : ""}
+                                </div>
+                                {item.photoUrl && <img src={item.photoUrl} alt="inspection" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6, marginTop: 4, cursor: "pointer" }} onClick={() => window.open(item.photoUrl)} />}
                               </div>
                             ))}
                           </div>
@@ -2228,8 +2266,8 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 1000 }}>
-      <div style={{ background: "#fff", borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 500, maxHeight: "90vh", overflowY: "auto", padding: "24px 20px 32px" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", overflowY: "auto", padding: "24px 20px 32px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>{task.title}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>×</button>
@@ -3993,11 +4031,11 @@ return (
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
 {locId !== "all" && view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} />}
-{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
-{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
+{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
+{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
 {view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} />}
-{view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} />}
+{view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} onNavigate={setView} />}
         {view === "alerts" && (
           <div style={{ maxWidth: 600 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Alert Settings</div>
