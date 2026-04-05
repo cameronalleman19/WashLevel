@@ -131,7 +131,7 @@ seeding = false;
 }
 }
 
-const CAT = { supplies: { bg: "#fef3c7", color: "#b45309" }, equipment: { bg: "#dbeafe", color: "#1d4ed8" }, cleaning: { bg: "#d1fae5", color: "#065f46" }, chemicals: { bg: "#ede9fe", color: "#5b21b6" } };
+const CAT = { supplies: { bg: "#fef3c7", color: "#b45309" }, equipment: { bg: "#dbeafe", color: "#1d4ed8" }, cleaning: { bg: "#d1fae5", color: "#065f46" }, chemicals: { bg: "#ede9fe", color: "#5b21b6" }, inspection: { bg: "#f0fdf4", color: "#15803d" } };
 const PRI = { high: { bg: "#fee2e2", color: "#991b1b" }, medium: { bg: "#fef3c7", color: "#92400e" }, low: { bg: "#f3f4f6", color: "#6b7280" } };
 const STS = { pending: { bg: "#f3f4f6", color: "#6b7280", dot: "#9ca3af", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, "on-hold": { bg: "#fce7f3", color: "#be185d", dot: "#ec4899", label: "On Hold" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
 const EQS = { ok: { bg: "#d1fae5", color: "#059669", icon: "?", label: "OK" }, warning: { bg: "#fef3c7", color: "#d97706", icon: "!", label: "Warning" }, error: { bg: "#fee2e2", color: "#dc2626", icon: "?", label: "Alert" } };
@@ -773,7 +773,7 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
   );
 }
 
-function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials }) {
+function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onStartInspection }) {
 const [open, setOpen] = useState(false);
 const [note, setNote] = useState(task.note || "");
 const [showHistory, setShowHistory] = useState(false);
@@ -846,7 +846,13 @@ return (
 </div>
 </div>
 <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-          <button onClick={handleStatus} style={{ background: btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{nextLabel}</button>
+          <button onClick={() => {
+  if (task.type === "inspection" && task.status !== "done" && task.checklist?.length > 0 && onStartInspection) {
+    onStartInspection(task);
+  } else { handleStatus(); }
+}} style={{ background: task.type === "inspection" && task.status !== "done" ? "#15803d" : btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+  {task.type === "inspection" && task.status !== "done" ? "Inspect" : nextLabel}
+</button>
           {task.status === "in-progress" && (
             <button onClick={e => { e.stopPropagation(); onStatus(task.id, "on-hold"); }} style={{ background: "#fce7f3", color: "#be185d", border: "1px solid #fbcfe8", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>On Hold</button>
           )}
@@ -931,6 +937,7 @@ function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, 
 const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
+const [inspectionTask, setInspectionTask] = useState(null);
 
 const mine = tasks; // All tasks are globally visible
 const filtered = mine.filter(t => {
@@ -975,8 +982,17 @@ return (
         <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
         <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
-    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} />)}
-    {false && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
+    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} />)}
+    {inspectionTask && locId && (
+  <InspectionModal
+    task={inspectionTask}
+    locId={locId}
+    user={user}
+    onClose={() => setInspectionTask(null)}
+    onComplete={() => setInspectionTask(null)}
+  />
+)}
+{false && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
   </div>
 </div>
 
@@ -1856,6 +1872,132 @@ function TimeClock({ locId, locationName, allLocations }) {
 }
 
 // ADD TASK MODAL
+function InspectionModal({ task, locId, user, onClose, onComplete }) {
+  const [items, setItems] = useState(
+    (task.checklist || []).map(i => ({ ...i, result: null, note: "", photoUrl: null }))
+  );
+  const [saving, setSaving] = useState(false);
+
+  const setResult = (id, result) => setItems(p => p.map(i => i.id === id ? { ...i, result } : i));
+  const setNote = (id, note) => setItems(p => p.map(i => i.id === id ? { ...i, note } : i));
+  const setPhoto = (id, photoUrl) => setItems(p => p.map(i => i.id === id ? { ...i, photoUrl } : i));
+
+  const allRated = items.length > 0 && items.every(i => i.result !== null);
+  const failCount = items.filter(i => i.result === "fail").length;
+
+  const handlePhoto = (id, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => setPhoto(id, e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async () => {
+    if (!allRated || saving) return;
+    setSaving(true);
+    const now = new Date().toISOString();
+
+    await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
+      status: "done", checklist: items,
+      completedAt: now, completedBy: user?.name || user?.email || "Unknown",
+      updatedAt: now
+    });
+
+    if (task.equipmentId) {
+      const histId = "insp" + Date.now();
+      await setDoc(doc(db, "locations", locId, "equipment", task.equipmentId, "history", histId), {
+        id: histId, type: "inspection", date: now.split("T")[0],
+        completedBy: user?.name || user?.email || "Unknown",
+        taskTitle: task.title, items,
+        failCount, monitorCount: items.filter(i => i.result === "monitor").length,
+        createdAt: now
+      });
+    }
+
+    for (const item of items.filter(i => i.result === "fail")) {
+      const newId = "t" + Date.now() + Math.random().toString(36).slice(2, 5);
+      await setDoc(doc(db, "locations", locId, "tasks", newId), {
+        id: newId, title: "Fix: " + item.label,
+        category: "equipment", priority: "high", status: "pending",
+        shift: "everyone", due: now.split("T")[0],
+        assignedRole: "manager", equipmentId: task.equipmentId || null,
+        note: item.note || "", createdAt: now, updatedAt: now
+      });
+    }
+
+    setSaving(false);
+    onComplete();
+    onClose();
+  };
+
+  const RBtn = ({ id, val, label, color, bg }) => {
+    const active = items.find(i => i.id === id)?.result === val;
+    return (
+      <button type="button" onClick={() => setResult(id, val)} style={{
+        flex: 1, padding: "8px 4px", borderRadius: 8, border: "2px solid",
+        borderColor: active ? color : "#e5e7eb", background: active ? bg : "#fff",
+        color: active ? color : "#9ca3af", fontWeight: 700, fontSize: 12, cursor: "pointer"
+      }}>{label}</button>
+    );
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 1000 }}>
+      <div style={{ background: "#fff", borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 500, maxHeight: "90vh", overflowY: "auto", padding: "24px 20px 32px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>{task.title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 20 }}>Inspection • {items.length} items</div>
+
+        {items.map(item => {
+          const cur = items.find(i => i.id === item.id);
+          const needsNote = cur?.result === "monitor" || cur?.result === "fail";
+          return (
+            <div key={item.id} style={{ background: "#f9fafb", borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#111827", marginBottom: 10 }}>{item.label}</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: needsNote ? 10 : 0 }}>
+                <RBtn id={item.id} val="good" label="✓ Good" color="#15803d" bg="#f0fdf4" />
+                <RBtn id={item.id} val="monitor" label="⚠ Monitor" color="#d97706" bg="#fffbeb" />
+                <RBtn id={item.id} val="fail" label="✗ Fail" color="#dc2626" bg="#fef2f2" />
+              </div>
+              {needsNote && (
+                <div>
+                  <textarea value={cur.note} onChange={e => setNote(item.id, e.target.value)}
+                    placeholder={cur.result === "fail" ? "Describe what failed..." : "Add notes..."}
+                    rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 8, color: "#111827" }} />
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "#0369a1", fontWeight: 600 }}>
+                    📷 {cur.photoUrl ? "Photo attached ✓" : "Attach photo"}
+                    <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                      onChange={e => handlePhoto(item.id, e.target.files[0])} />
+                  </label>
+                  {cur.photoUrl && <img src={cur.photoUrl} alt="inspection" style={{ width: "100%", borderRadius: 8, marginTop: 8, maxHeight: 180, objectFit: "cover" }} />}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {failCount > 0 && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
+            {failCount} failed item{failCount > 1 ? "s" : ""} — task{failCount > 1 ? "s" : ""} will be auto-created for managers
+          </div>
+        )}
+
+        <button onClick={handleSubmit} disabled={!allRated || saving} style={{
+          width: "100%", padding: 14,
+          background: !allRated ? "#e5e7eb" : failCount > 0 ? "#dc2626" : "#1a3352",
+          color: !allRated ? "#9ca3af" : "#fff",
+          border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15,
+          cursor: !allRated ? "not-allowed" : "pointer"
+        }}>
+          {saving ? "Saving..." : !allRated ? "Rate all items to submit" : failCount > 0 ? `Submit with ${failCount} Failure${failCount > 1 ? "s" : ""}` : "Submit Inspection"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AddTaskModal({ locId, onClose, onAdd, preset }) {
 const [title, setTitle] = useState("");
 const [category, setCategory] = useState("cleaning");
@@ -1874,13 +2016,22 @@ const [saving, setSaving] = useState(false);
   }, [locId]);
 
   const [recurrence, setRecurrence] = useState("");
+const [checklistItems, setChecklistItems] = useState([]);
+const [newCheckItem, setNewCheckItem] = useState("");
+
+const addCheckItem = () => {
+  if (!newCheckItem.trim()) return;
+  setChecklistItems(p => [...p, { id: "ci" + Date.now(), label: newCheckItem.trim() }]);
+  setNewCheckItem("");
+};
+const removeCheckItem = (id) => setChecklistItems(p => p.filter(i => i.id !== id));
 
 const handleSubmit = async (e) => {
 e.preventDefault();
 if (!title.trim()) return;
 setSaving(true);
 const id = "t" + Date.now();
-const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
 setSaving(false);
 onClose();
@@ -1908,6 +2059,7 @@ return (
 <option value="cleaning">Cleaning</option>
 <option value="equipment">Equipment</option>
 <option value="chemicals">Chemicals</option>
+<option value="inspection">Inspection</option>
 <option value="parts">Parts</option>
 </select>
 </div>
@@ -1942,6 +2094,25 @@ return (
               {equipmentList.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
             </select>
           </div>
+{category === "inspection" && (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Checklist Items</label>
+    {checklistItems.map(item => (
+      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f9fafb", borderRadius: 8, padding: "6px 10px" }}>
+        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{item.label}</span>
+        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}>×</button>
+      </div>
+    ))}
+    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+      <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCheckItem())}
+        placeholder="Add checklist item..." style={{ ...inp, flex: 1, marginTop: 0, color: "#111827" }} />
+      <button type="button" onClick={addCheckItem}
+        style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>+</button>
+    </div>
+    {checklistItems.length === 0 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>Add items to inspect</div>}
+  </div>
+)}
           <div style={{ marginBottom: 14 }}>
               <select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={sel}>
 <option value="">No recurrence</option>
@@ -2038,6 +2209,7 @@ function Inventory({ locId, locationName }) {
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
               <select value={newItem.category} onChange={e => setNewItem(p => ({...p, category: e.target.value}))} style={inp}>
                 <option value="chemicals">Chemicals</option>
+<option value="inspection">Inspection</option>
                 <option value="parts">Parts</option>
                 <option value="vending supplies">Vending Supplies</option>
               </select>
@@ -2085,6 +2257,7 @@ function Inventory({ locId, locationName }) {
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Category</label>
                           <select value={editData.category || "chemicals"} onChange={e => setEditData(p => ({...p, category: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
                             <option value="chemicals">Chemicals</option>
+<option value="inspection">Inspection</option>
                             <option value="parts">Parts</option>
                             <option value="vending supplies">Vending Supplies</option>
                           </select>
@@ -3051,6 +3224,25 @@ function TeamMembers({ user, locations }) {
               <option value="manager">Manager — Full access</option>
             </select>
           </div>
+{category === "inspection" && (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Checklist Items</label>
+    {checklistItems.map(item => (
+      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f9fafb", borderRadius: 8, padding: "6px 10px" }}>
+        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{item.label}</span>
+        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}>×</button>
+      </div>
+    ))}
+    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+      <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCheckItem())}
+        placeholder="Add checklist item..." style={{ ...inp, flex: 1, marginTop: 0, color: "#111827" }} />
+      <button type="button" onClick={addCheckItem}
+        style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>+</button>
+    </div>
+    {checklistItems.length === 0 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>Add items to inspect</div>}
+  </div>
+)}
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Location Access</label>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
