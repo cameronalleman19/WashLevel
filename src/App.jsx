@@ -501,6 +501,16 @@ boxShadow: "4px 0 24px rgba(0,0,0,0.25)",
 </div>
 <div style={{ padding: "14px 12px 8px" }}>
 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Location</div>
+{isManager && (
+<button onClick={() => { setLocId("all"); setView("overview"); if(isMobile) onClose(); }}
+  style={{ width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none",
+  background: locId === "all" ? "rgba(255,255,255,0.1)" : "transparent",
+  color: locId === "all" ? "#fff" : "rgba(255,255,255,0.5)",
+  cursor: "pointer", fontSize: 13, fontWeight: locId === "all" ? 600 : 400, marginBottom: 2,
+  display: "flex", alignItems: "center", gap: 8 }}>
+  <span style={{ fontSize: 12 }}>🌐</span> All Locations
+</button>
+)}
 {locs.map(l => (
 <button key={l.id} onClick={() => setLocId(l.id)} style={{ width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: locId === l.id ? "rgba(255,255,255,0.1)" : "transparent", color: locId === l.id ? "#fff" : "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 13, fontWeight: locId === l.id ? 600 : 400, marginBottom: 2, display: "flex", alignItems: "center", gap: 8 }}>
 <span style={{ width: 7, height: 7, borderRadius: "50%", background: locId === l.id ? "#34d399" : "rgba(255,255,255,0.15)", flexShrink: 0 }} />{l.name}
@@ -1239,12 +1249,32 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
         try {
           const snap = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
           const { accessToken } = snap.data();
-          const tokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ authorization: accessToken })
-          });
-          const tokenData = await tokenRes.json();
-          const token = tokenData.accesstoken || accessToken;
+          // Re-authenticate with stored credentials to get fresh token
+          const snap2 = await getDoc(doc(db, "users", user.uid, "integrations", "sensorpush"));
+          const creds = snap2.data();
+          let token = accessToken;
+          if (creds?.email && creds?.password) {
+            try {
+              const reAuthRes = await fetch("https://api.sensorpush.com/api/v1/oauth/authorize", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: creds.email, password: creds.password })
+              });
+              const reAuthData = await reAuthRes.json();
+              if (reAuthData.authorization) {
+                const reTokenRes = await fetch("https://api.sensorpush.com/api/v1/oauth/accesstoken", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ authorization: reAuthData.authorization })
+                });
+                const reTokenData = await reTokenRes.json();
+                if (reTokenData.accesstoken) {
+                  token = reTokenData.accesstoken;
+                  await updateDoc(doc(db, "users", user.uid, "integrations", "sensorpush"), {
+                    accessToken: token, tokenUpdatedAt: new Date().toISOString()
+                  });
+                }
+              }
+            } catch(e) {}
+          }
           const sampRes = await fetch("https://api.sensorpush.com/api/v1/samples", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": token },
@@ -2513,7 +2543,9 @@ function SensorPushIntegration({ locations }) {
       }));
       await setDoc(doc(db, "users", user.uid, "integrations", "sensorpush"), {
         email,
+        password,
         accessToken: tokenData.accesstoken,
+        tokenUpdatedAt: new Date().toISOString(),
         sensors: sensorList,
         assignments: assignments,
         updatedAt: new Date().toISOString()
@@ -3240,6 +3272,108 @@ function SetupWizard({ user, logout }) {
     </div>
   );
 }
+
+function AllLocations({ locations, tasks, setLocId, setView }) {
+  const today = new Date().toISOString().split("T")[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  const [daySummaries, setDaySummaries] = useState({});
+
+  useEffect(() => {
+    if (!locations.length) return;
+    const fetchAll = async () => {
+      const summaries = {};
+      for (const loc of locations) {
+        const snap = await getDoc(doc(db, "locations", loc.id, "daySummaries", today));
+        const snapY = await getDoc(doc(db, "locations", loc.id, "daySummaries", yesterday));
+        summaries[loc.id] = {
+          today: snap.exists() ? snap.data() : null,
+          yesterday: snapY.exists() ? snapY.data() : null
+        };
+      }
+      setDaySummaries(summaries);
+    };
+    fetchAll();
+  }, [locations]);
+
+  const totalCarsToday = locations.reduce((sum, loc) => sum + (daySummaries[loc.id]?.today?.carsWashed || 0), 0);
+  const totalCarsYesterday = locations.reduce((sum, loc) => sum + (daySummaries[loc.id]?.yesterday?.carsWashed || 0), 0);
+  const allTasks = Object.values(tasks).flat();
+  const openTasks = allTasks.filter(t => t.status !== "done");
+  const overdueTasks = openTasks.filter(t => t.dueDate && t.dueDate < today);
+
+  return (
+    <div style={{ padding: "20px 16px", maxWidth: 700, margin: "0 auto" }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 4 }}>All Locations</div>
+      <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>{locations.length} locations</div>
+
+      {/* Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Cars Today</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: "#1a3352" }}>{totalCarsToday}</div>
+          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Yesterday: {totalCarsYesterday}</div>
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Open Tasks</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: overdueTasks.length > 0 ? "#dc2626" : "#1a3352" }}>{openTasks.length}</div>
+          <div style={{ fontSize: 11, color: overdueTasks.length > 0 ? "#dc2626" : "#9ca3af", marginTop: 2 }}>{overdueTasks.length} overdue</div>
+        </div>
+      </div>
+
+      {/* Per Location Breakdown */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 12 }}>By Location</div>
+      {locations.map(loc => {
+        const carsToday = daySummaries[loc.id]?.today?.carsWashed || 0;
+        const carsYesterday = daySummaries[loc.id]?.yesterday?.carsWashed || 0;
+        const locTasks = tasks[loc.id] || [];
+        const locOpen = locTasks.filter(t => t.status !== "done");
+        const locOverdue = locOpen.filter(t => t.dueDate && t.dueDate < today);
+        return (
+          <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{loc.name}</div>
+              {locOverdue.length > 0 && (
+                <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>
+                  {locOverdue.length} overdue
+                </div>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div onClick={() => { setLocId(loc.id); setView("carcounts"); }}
+                style={{ background: "#f8fafc", borderRadius: 8, padding: 10, cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.background="#e0f2fe"}
+                onMouseLeave={e => e.currentTarget.style.background="#f8fafc"}>
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>Cars Today</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1a3352" }}>{carsToday}</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>Yesterday: {carsYesterday}</div>
+              </div>
+              <div onClick={() => { setLocId(loc.id); setView("tasks"); }}
+                style={{ background: "#f8fafc", borderRadius: 8, padding: 10, cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.background="#fef3c7"}
+                onMouseLeave={e => e.currentTarget.style.background="#f8fafc"}>
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>Open Tasks</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: locOverdue.length > 0 ? "#dc2626" : "#1a3352" }}>{locOpen.length}</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>{locTasks.length} total</div>
+              </div>
+            </div>
+            {locOpen.length > 0 && (
+              <div style={{ marginTop: 10, borderTop: "1px solid #f3f4f6", paddingTop: 8 }}>
+                {locOpen.slice(0, 3).map(t => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: t.dueDate && t.dueDate < today ? "#dc2626" : "#f59e0b", flexShrink: 0 }} />
+                    <div style={{ fontSize: 12, color: "#374151" }}>{t.title}</div>
+                  </div>
+                ))}
+                {locOpen.length > 3 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>+{locOpen.length - 3} more</div>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Dashboard() {
 const { user, logout } = useAuth();
 const [locations, setLocations] = useState([]);
@@ -3370,7 +3504,8 @@ return (
           <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px", marginLeft: 6 }}>PRO</span>
         </div>
       )}
-{view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} />}
+{locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
+{locId !== "all" && view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} />}
 {view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
 {view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
