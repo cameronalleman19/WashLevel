@@ -1114,6 +1114,28 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
   const [expanded, setExpanded] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
+  const [eqFiles, setEqFiles] = useState({});
+  const [eqUploading, setEqUploading] = useState({});
+  const [editingFileName, setEditingFileName] = useState(null);
+  const [fileNameEdit, setFileNameEdit] = useState("");
+  const { user } = useAuth();
+
+  const handleEqFileUpload = async (eqId, file) => {
+    if (!file || !locId) return;
+    setEqUploading(p => ({ ...p, [eqId]: true }));
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = "locations/" + locId + "/equipment/" + eqId + "/" + Date.now() + "_" + safeName;
+      const url = await uploadFile(file, path);
+      const newFile = { name: file.name, url, path, type: file.type, uploadedAt: new Date().toISOString() };
+      const current = eqFiles[eqId] || [];
+      const updated = [...current, newFile];
+      setEqFiles(p => ({ ...p, [eqId]: updated }));
+      await updateDoc(doc(db, "locations", locId, "equipment", eqId), { files: updated });
+    } catch(e) { alert("Upload failed: " + e.message); }
+    setEqUploading(p => ({ ...p, [eqId]: false }));
+  };
+
   const [histories, setHistories] = useState({});
 
   const inp = { width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff", color: "#111827" };
@@ -1225,6 +1247,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
           const isEditing = editingId === eq.id;
           const linkedTasks = (allTasks || []).filter(t => t.equipmentId === eq.id);
           const eqHistory = histories[eq.id] || [];
+          const files = eqFiles[eq.id] || eq.files || [];
           const carsSinceService = eq.carsCount && eq.lastServiceCars ? (eq.carsCount - eq.lastServiceCars).toLocaleString() : null;
           const carsUntilService = eq.nextServiceCars && eq.carsCount ? Math.max(0, eq.nextServiceCars - eq.carsCount).toLocaleString() : null;
 
@@ -1296,18 +1319,11 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
               )}
 
               {/* Expanded details */}
-              {isExpanded && !isEditing && (
+              {isExpanded && !isEditing && (<>
                 <div style={{ padding: "0 20px 20px", borderTop: "1px solid #f3f4f6" }}>
                   {eq.note && <div style={{ marginTop: 12, fontSize: 13, color: "#374151", fontStyle: "italic" }}>{eq.note}</div>}
 
-                  {/* Manuals */}
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Manuals & Documents</div>
-                    <input type="file" accept=".pdf,.doc,.docx,image/*" onChange={e => handleManualUpload(e, eq.id, eq)} style={{ fontSize: 12 }} />
-                    {eq.manuals && eq.manuals.length > 0 && eq.manuals.map((m, i) => (
-                      <a key={i} href={m.url} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 12, color: "#0ea5e9", marginTop: 4 }}>[File] {m.name}</a>
-                    ))}
-                  </div>
+
 
                   {/* Linked tasks */}
                   {linkedTasks.length > 0 && (
@@ -1331,13 +1347,85 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask }) {
                     ) : eqHistory.map(h => (
                       <div key={h.id} style={{ padding: "8px 10px", background: "#f8fafc", borderRadius: 7, marginBottom: 6, fontSize: 12 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                          <span style={{ fontWeight: 600, color: "#374151" }}>{h.date}</span>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>{h.type === "inspection" ? "Inspection" : "Service"} — {h.date}</span>
+                          {h.type === "inspection" && <span style={{ color: h.failCount > 0 ? "#dc2626" : "#15803d", fontWeight: 600 }}>{h.failCount > 0 ? h.failCount + " failed" : "All passed"}</span>}
                         </div>
-                        <div style={{ color: "#6b7280" }}>{h.note}</div>
+                        <div style={{ color: "#6b7280" }}>{h.note || h.taskTitle || ""}</div>
+                        {h.type === "inspection" && h.items && (
+                          <div style={{ marginTop: 4 }}>
+                            {h.items.filter(i => i.result !== "good").map((item, idx) => (
+                              <div key={idx} style={{ fontSize: 11, color: item.result === "fail" ? "#dc2626" : "#d97706", marginTop: 2 }}>
+                                {item.result === "fail" ? "✗" : "⚠"} {item.label}{item.note ? ": " + item.note : ""}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
+
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #f3f4f6" }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>Manuals & Documents</div>
+                  {files.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>No files uploaded yet</div>}
+                  {files.map((f, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#f9fafb", borderRadius: 8, padding: 8 }}>
+                      {f.type?.startsWith("image/") ? (
+                        <img src={f.url} alt={f.name} onClick={() => window.open(f.url)}
+                          style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, cursor: "pointer", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 48, height: 48, background: "#e0e7ff", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0, cursor: "pointer" }}
+                          onClick={() => window.open(f.url)}>PDF</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {editingFileName === eq.id + "_" + i ? (
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <input value={fileNameEdit} onChange={e => setFileNameEdit(e.target.value)}
+                              style={{ fontSize: 12, padding: "3px 6px", border: "1px solid #0369a1", borderRadius: 6, flex: 1, outline: "none" }}
+                              onKeyDown={async e => {
+                                if (e.key === "Enter") {
+                                  const updated = files.map((fl, j) => j === i ? { ...fl, name: fileNameEdit } : fl);
+                                  setEqFiles(p => ({ ...p, [eq.id]: updated }));
+                                  await updateDoc(doc(db, "locations", locId, "equipment", eq.id), { files: updated });
+                                  setEditingFileName(null);
+                                }
+                                if (e.key === "Escape") setEditingFileName(null);
+                              }} autoFocus />
+                            <button onClick={async () => {
+                              const updated = files.map((fl, j) => j === i ? { ...fl, name: fileNameEdit } : fl);
+                              setEqFiles(p => ({ ...p, [eq.id]: updated }));
+                              await updateDoc(doc(db, "locations", locId, "equipment", eq.id), { files: updated });
+                              setEditingFileName(null);
+                            }} style={{ fontSize: 11, background: "#1a3352", color: "#fff", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Save</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                            <button onClick={() => { setEditingFileName(eq.id + "_" + i); setFileNameEdit(f.name); }}
+                              style={{ fontSize: 10, color: "#6b7280", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>Edit</button>
+                          </div>
+                        )}
+                        <div style={{ fontSize: 10, color: "#9ca3af" }}>{new Date(f.uploadedAt).toLocaleDateString()}</div>
+                      </div>
+                      {user?.role === "manager" && (
+                        <button onClick={async () => {
+                          if (!window.confirm("Delete this file? This cannot be undone.")) return;
+                          try { await deleteObject(ref(storage, f.path || f.url)); } catch(e) {}
+                          const updated = files.filter((_, j) => j !== i);
+                          setEqFiles(p => ({ ...p, [eq.id]: updated }));
+                          await updateDoc(doc(db, "locations", locId, "equipment", eq.id), { files: updated });
+                        }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>Delete</button>
+                      )}
+                    </div>
+                  ))}
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: eqUploading[eq.id] ? "not-allowed" : "pointer", fontSize: 12, color: eqUploading[eq.id] ? "#9ca3af" : "#0369a1", fontWeight: 600, background: "#f0f9ff", padding: "6px 12px", borderRadius: 8, border: "1px solid #bae6fd" }}>
+                    {eqUploading[eq.id] ? "Uploading..." : "Add photo or PDF"}
+                    <input type="file" accept="image/*,application/pdf" style={{ display: "none" }}
+                      onChange={e => { if (e.target.files[0]) handleEqFileUpload(eq.id, e.target.files[0]); e.target.value = ""; }}
+                      disabled={eqUploading[eq.id]} />
+                  </label>
+                </div>
+              </>
               )}
             </div>
           );
