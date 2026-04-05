@@ -3786,7 +3786,7 @@ return (
 <div style={{ display: "flex", height: "100dvh", background: "#f8fafc", overflow: "hidden" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-<main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px" : "28px 32px", paddingTop: isMobile ? "56px" : undefined }}>
+<main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px" : "28px 32px", paddingTop: isMobile ? "72px" : "28px" }}>
       {isMobile && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 48, background: "#1a3352", display: "flex", alignItems: "center", paddingLeft: 12, zIndex: 30 }}>
           <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", padding: 8, display: "flex", flexDirection: "column", gap: 5 }}>
