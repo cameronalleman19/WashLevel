@@ -2174,6 +2174,12 @@ const [currentDate, setCurrentDate] = useState(new Date());
 const [selectedDate, setSelectedDate] = useState(null);
 const [daySummaries, setDaySummaries] = useState({});
 const [weather, setWeather] = useState({});
+
+// Reset weather when location changes
+useEffect(() => {
+  setWeather({});
+  if (selectedDate && location?.zipCode) fetchWeather(selectedDate);
+}, [locId, location?.zipCode]);
 const [selectedSummary, setSelectedSummary] = useState(null);
 const [noteText, setNoteText] = useState("");
 const [savingNote, setSavingNote] = useState(false);
