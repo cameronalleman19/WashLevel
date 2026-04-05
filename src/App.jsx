@@ -109,9 +109,9 @@ loc3: [
 };
 
 const SEED_SENSORS = {
-loc1: { soapLevel: 62, rinseAid: 74, waxLevel: 55, waterPressure: 87, tempF: 68, conveyorRPM: 24, carsToday: 142 },
-loc2: { soapLevel: 28, rinseAid: 18, waxLevel: 80, waterPressure: 91, tempF: 71, conveyorRPM: 22, carsToday: 98 },
-loc3: { soapLevel: 85, rinseAid: 92, waxLevel: 66, waterPressure: 79, tempF: 66, conveyorRPM: 25, carsToday: 73 },
+loc1: { soapLevel: 62, rinseAid: 74, waxLevel: 55, waterPressure: 87, tempF: 68, conveyorRPM: 24, carsToday: 0 },
+loc2: { soapLevel: 28, rinseAid: 18, waxLevel: 80, waterPressure: 91, tempF: 71, conveyorRPM: 22, carsToday: 0 },
+loc3: { soapLevel: 85, rinseAid: 92, waxLevel: 66, waterPressure: 79, tempF: 66, conveyorRPM: 25, carsToday: 0 },
 };
 
 const SEED_EQUIPMENT = {
