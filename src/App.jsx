@@ -3,6 +3,7 @@
 import { useState, useEffect, createContext, useContext, Component } from "react";
 import { initializeApp, getApps } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import {
 getAuth,
 signInWithEmailAndPassword,
@@ -38,6 +39,43 @@ const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : get
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 const functions = getFunctions(firebaseApp);
+const storage = getStorage(firebaseApp);
+
+// Reusable file upload helper
+const uploadFile = async (file, path) => {
+  const storageRef = ref(storage, path);
+  if (file.type.startsWith("image/")) {
+    // Compress images
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement("canvas");
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = async () => {
+        const maxW = 1200;
+        const scale = Math.min(1, maxW / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(async (blob) => {
+          try {
+            await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
+            const url2 = await getDownloadURL(storageRef);
+            URL.revokeObjectURL(url);
+            resolve(url2);
+          } catch(e) { reject(e); }
+        }, "image/jpeg", 0.8);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  } else {
+    // PDFs and other files upload directly
+    await uploadBytes(storageRef, file, { contentType: file.type });
+    return await getDownloadURL(storageRef);
+  }
+};
+
+
 
 const LOCATIONS = [
 { id: "loc1", name: "North Station", address: "1240 N. Highway Blvd" },
@@ -780,6 +818,26 @@ const [open, setOpen] = useState(false);
 const [note, setNote] = useState(task.note || "");
 const [showHistory, setShowHistory] = useState(false);
 const [history, setHistory] = useState([]);
+const [attachments, setAttachments] = useState(task.attachments || []);
+const [uploading, setUploading] = useState(false);
+const [uploadError, setUploadError] = useState("");
+
+const handleFileUpload = async (file) => {
+  if (!file || !locId) return;
+  setUploading(true);
+  setUploadError("");
+  try {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = "locations/" + locId + "/tasks/" + task.id + "/" + Date.now() + "_" + safeName;
+    const url = await uploadFile(file, path);
+    const newAttachments = [...attachments, { name: file.name, url, path, type: file.type, uploadedAt: new Date().toISOString() }];
+    setAttachments(newAttachments);
+    await updateDoc(doc(db, "locations", locId, "tasks", task.id), { attachments: newAttachments });
+  } catch(e) {
+    setUploadError("Upload failed: " + e.message);
+  }
+  setUploading(false);
+};
 const st = STS[task.status] || STS.pending;
 const next = task.status === "pending" ? "in-progress" : task.status === "in-progress" ? "done" : "pending";
 const nextLabel = task.status === "pending" ? "Start" : task.status === "in-progress" ? "Complete" : "Reopen";
@@ -895,26 +953,46 @@ style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", border
 />
           </div>
           <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Photos / Videos</label>
-            <input type="file" accept="image/*,video/*" multiple onChange={async e => {
-              const files = Array.from(e.target.files);
-              if (!files.length || !locId) return;
-              const urls = [];
-              for (const file of files) {
-                const reader = new FileReader();
-                await new Promise(r => { reader.onload = () => { urls.push(reader.result); r(); }; reader.readAsDataURL(file); });
-              }
-              const existing = task.mediaUrls || [];
-              await updateDoc(doc(db, "locations", locId, "tasks", task.id), { mediaUrls: [...existing, ...urls], updatedAt: new Date().toISOString() });
-            }} style={{ fontSize: 12, color: "#374151" }} />
-            {task.mediaUrls && task.mediaUrls.length > 0 && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                {task.mediaUrls.map((url, i) => (
-                  <img key={i} src={url} alt="task media" style={{ width: 70, height: 70, borderRadius: 6, objectFit: "cover", cursor: "pointer" }} onClick={() => window.open(url, "_blank")} />
-                ))}
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Attachments</label>
+            {attachments.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>No attachments yet</div>}
+            {attachments.map((a, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#f9fafb", borderRadius: 8, padding: 8 }}>
+                {a.type?.startsWith("image/") ? (
+                  <img src={a.url} alt={a.name} onClick={() => window.open(a.url)}
+                    style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, cursor: "pointer", flexShrink: 0 }} />
+                ) : (
+                  <a href={a.url} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 12, color: "#0369a1", textDecoration: "none", flex: 1 }}>
+                    {a.name}
+                  </a>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
+                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{new Date(a.uploadedAt).toLocaleDateString()}</div>
+                </div>
+                {user?.role === "manager" && (
+                  <button onClick={async () => {
+                    if (!window.confirm("Delete this attachment? This cannot be undone.")) return;
+                    try {
+                      const fileRef = ref(storage, a.path || a.url);
+                      await deleteObject(fileRef);
+                    } catch(e) {}
+                    const updated = attachments.filter((_, j) => j !== i);
+                    setAttachments(updated);
+                    await updateDoc(doc(db, "locations", locId, "tasks", task.id), { attachments: updated });
+                  }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>Delete</button>
+                )}
               </div>
-            )}
-</div>
+            ))}
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: uploading ? "not-allowed" : "pointer", fontSize: 12, color: uploading ? "#9ca3af" : "#0369a1", fontWeight: 600, background: "#f0f9ff", padding: "6px 12px", borderRadius: 8, border: "1px solid #bae6fd" }}>
+              {uploading ? "Uploading..." : "Add photo or file"}
+              <input type="file" accept="image/*,application/pdf" style={{ display: "none" }}
+                onChange={e => { if (e.target.files[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} disabled={uploading} />
+            </label>
+            {uploading && <div style={{ fontSize: 11, color: "#0369a1", marginTop: 4 }}>Uploading, please wait...</div>}
+{uploadError && <div style={{ fontSize: 11, color: "#dc2626", marginTop: 4 }}>{uploadError}</div>}
+          </div>
+          
 <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
 <button onClick={loadHistory} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#6b7280", cursor: "pointer" }}>
 View History
@@ -1981,11 +2059,35 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
   const allRated = items.length > 0 && items.every(i => i.result !== null);
   const failCount = items.filter(i => i.result === "fail").length;
 
-  const handlePhoto = (id, file) => {
+  const handlePhoto = async (id, file) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => setPhoto(id, e.target.result);
-    reader.readAsDataURL(file);
+    // Compress image before upload
+    const canvas = document.createElement("canvas");
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = async () => {
+      const maxW = 1200;
+      const scale = Math.min(1, maxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(async (blob) => {
+        try {
+          const path = "locations/" + locId + "/inspections/" + task.id + "/" + id + "_" + Date.now() + ".jpg";
+          const storageRef = ref(storage, path);
+          await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
+          const downloadUrl = await getDownloadURL(storageRef);
+          setPhoto(id, downloadUrl);
+        } catch(e) {
+          // Fallback to base64 if storage fails
+          const reader = new FileReader();
+          reader.onload = ev => setPhoto(id, ev.target.result);
+          reader.readAsDataURL(file);
+        }
+      }, "image/jpeg", 0.8);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
   };
 
   const handleSubmit = async () => {
