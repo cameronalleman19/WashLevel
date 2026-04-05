@@ -123,6 +123,125 @@ exports.sendPasswordResetEmail = onCall({ secrets: [RESEND_API_KEY] }, async (re
 });
 
 // Receive equipment email and parse car counts
+
+// Send daily summary email
+exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (request) => {
+  const { uid, test } = request.data;
+  if (!uid) throw new Error("No uid provided");
+
+  const resend = new Resend(RESEND_API_KEY.value());
+
+  // Get user data
+  const userSnap = await db.collection("users").doc(uid).get();
+  if (!userSnap.exists) throw new Error("User not found");
+  const userData = userSnap.data();
+
+  // Get alert prefs
+  const prefsSnap = await db.collection("users").doc(uid).collection("prefs").doc("alerts").get();
+  const prefs = prefsSnap.exists ? prefsSnap.data() : {};
+  if (!test && !prefs.dailySummaryEnabled) return { skipped: true };
+
+  const email = userData.email;
+  const isManager = userData.role === "manager";
+  const ownerId = userData.isTeamMember ? userData.ownerId : uid;
+
+  // Get locations
+  const locsSnap = await db.collection("locations").where("ownerId", "==", ownerId).get();
+  const locations = locsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Filter to allowed locations for team members
+  const allowedLocs = userData.isTeamMember
+    ? locations.filter(l => (userData.allowedLocations || []).includes(l.id))
+    : locations;
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateStr = yesterday.toISOString().split("T")[0];
+
+  let html = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: #1a3352; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: #fff; margin: 0; font-size: 22px;">WashLevel Daily Summary</h1>
+        <p style="color: #94a3b8; margin: 6px 0 0;">${yesterday.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
+      </div>
+      <div style="background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
+  `;
+
+  let totalCars = 0;
+  let totalDone = 0;
+  let totalOpen = 0;
+  let totalOverdue = 0;
+
+  for (const loc of allowedLocs) {
+    html += `<h2 style="color: #1a3352; font-size: 16px; margin: 16px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px;">${loc.name}</h2>`;
+
+    // Car counts (managers only)
+    if (isManager && prefs.includeCounts !== false) {
+      const countSnap = await db.collection("locations").doc(loc.id).collection("daySummaries").doc(dateStr).get();
+      const cars = countSnap.exists ? (countSnap.data().carsWashed || 0) : 0;
+      totalCars += cars;
+      html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars}</p>`;
+    }
+
+    // Tasks
+    const tasksSnap = await db.collection("locations").doc(loc.id).collection("tasks").get();
+    const tasks = tasksSnap.docs.map(d => d.data());
+    const today = new Date().toISOString().split("T")[0];
+
+    const done = tasks.filter(t => t.status === "done" && t.completedAt?.startsWith(dateStr));
+    const open = tasks.filter(t => t.status !== "done" && !t.archived);
+    const overdue = open.filter(t => t.due && t.due < today);
+
+    totalDone += done.length;
+    totalOpen += open.length;
+    totalOverdue += overdue.length;
+
+    if (prefs.includeTasksDone !== false && done.length > 0)
+      html += `<p style="margin: 4px 0; color: #374151;"><strong>Tasks Completed:</strong> ${done.length}</p>`;
+    if (prefs.includeOpenTasks !== false && open.length > 0)
+      html += `<p style="margin: 4px 0; color: #374151;"><strong>Open Tasks:</strong> ${open.length}</p>`;
+    if (prefs.includeOverdue !== false && overdue.length > 0)
+      html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Overdue Tasks:</strong> ${overdue.length}</p>`;
+
+    // Equipment alerts (managers only)
+    if (isManager && prefs.includeEquipment !== false) {
+      const eqSnap = await db.collection("locations").doc(loc.id).collection("equipment").where("status", "!=", "ok").get();
+      if (!eqSnap.empty) {
+        html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Equipment Alerts:</strong> ${eqSnap.docs.map(d => d.data().name).join(", ")}</p>`;
+      }
+    }
+  }
+
+  // Totals for managers
+  if (isManager && allowedLocs.length > 1) {
+    html += `
+      <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin-top: 20px;">
+        <h3 style="margin: 0 0 10px; color: #1a3352;">All Locations Total</h3>
+        ${prefs.includeCounts !== false ? `<p style="margin: 4px 0;"><strong>Total Cars:</strong> ${totalCars}</p>` : ""}
+        <p style="margin: 4px 0;"><strong>Tasks Done:</strong> ${totalDone} | <strong>Open:</strong> ${totalOpen} | <strong style="color: #e74c3c;">Overdue:</strong> ${totalOverdue}</p>
+      </div>
+    `;
+  }
+
+  html += `
+      <p style="margin-top: 24px; font-size: 12px; color: #9ca3af; text-align: center;">
+        WashLevel.com — Manage your alert preferences in the app
+      </p>
+      </div>
+    </div>
+  `;
+
+  await resend.emails.send({
+    from: "WashLevel <noreply@washlevel.com>",
+    to: email,
+    subject: `WashLevel Daily Summary — ${yesterday.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+    html
+  });
+
+  return { sent: true, to: email };
+});
+
+
 exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req, res) => {
   try {
     if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }

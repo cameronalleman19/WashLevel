@@ -2418,25 +2418,7 @@ return (
               {equipmentList.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
             </select>
           </div>
-{category === "inspection" && (
-  <div style={{ marginBottom: 14 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Checklist Items</label>
-    {checklistItems.map(item => (
-      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f9fafb", borderRadius: 8, padding: "6px 10px" }}>
-        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{item.label}</span>
-        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}>×</button>
-      </div>
-    ))}
-    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-      <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCheckItem())}
-        placeholder="Add checklist item..." style={{ ...inp, flex: 1, marginTop: 0, color: "#111827" }} />
-      <button type="button" onClick={addCheckItem}
-        style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>+</button>
-    </div>
-    {checklistItems.length === 0 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>Add items to inspect</div>}
-  </div>
-)}
+
           <div style={{ marginBottom: 14 }}>
               <select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={sel}>
 <option value="">No recurrence</option>
@@ -3484,7 +3466,7 @@ function TeamMembers({ user, locations }) {
     const loadTeam = async () => {
       try {
         const memSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", user.uid), where("isTeamMember", "==", true)));
-        setMembers(memSnap.docs.map(d => d.data()));
+        setMembers(memSnap.docs.map(d => ({ uid: d.id, ...d.data() })));
         const invSnap = await getDocs(query(collection(db, "invites"), where("ownerId", "==", user.uid)));
         setInvites(invSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch(e) {}
@@ -3548,25 +3530,7 @@ function TeamMembers({ user, locations }) {
               <option value="manager">Manager — Full access</option>
             </select>
           </div>
-{category === "inspection" && (
-  <div style={{ marginBottom: 14 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Checklist Items</label>
-    {checklistItems.map(item => (
-      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f9fafb", borderRadius: 8, padding: "6px 10px" }}>
-        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{item.label}</span>
-        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}>×</button>
-      </div>
-    ))}
-    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-      <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCheckItem())}
-        placeholder="Add checklist item..." style={{ ...inp, flex: 1, marginTop: 0, color: "#111827" }} />
-      <button type="button" onClick={addCheckItem}
-        style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>+</button>
-    </div>
-    {checklistItems.length === 0 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>Add items to inspect</div>}
-  </div>
-)}
+
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Location Access</label>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -3793,6 +3757,123 @@ function SetupWizard({ user, logout }) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AlertSettings({ locId, locations, user }) {
+  const [prefs, setPrefs] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const defaults = {
+    dailySummaryEnabled: false,
+    dailySummaryTime: "07:00",
+    summaryEmail: "",
+    includeCounts: true,
+    includeTasksDone: true,
+    includeOpenTasks: true,
+    includeOverdue: true,
+    includeEquipment: true,
+    overdueTasksAlert: true,
+    lowInventoryAlert: true,
+    equipmentAlert: true,
+    newTaskAlert: false,
+  };
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db, "users", user.uid, "prefs", "alerts")).then(snap => {
+      setPrefs(snap.exists() ? { ...defaults, ...snap.data() } : defaults);
+    });
+  }, [user?.uid]);
+
+  const update = (key, val) => setPrefs(p => ({ ...p, [key]: val }));
+
+  const save = async () => {
+    setSaving(true);
+    await setDoc(doc(db, "users", user.uid, "prefs", "alerts"), prefs);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  if (!prefs) return <div style={{ padding: 40, color: "#9ca3af", textAlign: "center" }}>Loading...</div>;
+
+  const Toggle = ({ k }) => (
+    <div onClick={() => update(k, !prefs[k])}
+      style={{ width: 44, height: 24, borderRadius: 12, background: prefs[k] ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+      <div style={{ position: "absolute", top: 2, left: prefs[k] ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+    </div>
+  );
+
+  const Row = ({ label, desc, k }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ flex: 1, marginRight: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{label}</div>
+        {desc && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{desc}</div>}
+      </div>
+      <Toggle k={k} />
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Alert Settings</div>
+      <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Configure how and when you receive notifications</div>
+
+      {/* Daily Summary Email */}
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Daily Summary Email</div>
+          <Toggle k="dailySummaryEnabled" />
+        </div>
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
+          Receive a morning recap of the previous day
+        </div>
+        {prefs.dailySummaryEnabled && (
+          <>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Send at</label>
+              <input type="time" value={prefs.dailySummaryTime} onChange={e => update("dailySummaryTime", e.target.value)}
+                style={{ padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none" }} />
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Include in summary:</div>
+            {user?.role === "manager" && <Row label="Car counts" desc="Yesterday's wash counts per location" k="includeCounts" />}
+            <Row label="Tasks completed" desc="Tasks finished yesterday" k="includeTasksDone" />
+            <Row label="Open tasks" desc="All currently pending or in-progress tasks" k="includeOpenTasks" />
+            <Row label="Overdue tasks" desc="Tasks past their due date" k="includeOverdue" />
+            {user?.role === "manager" && <Row label="Equipment alerts" desc="Any equipment in warning or alert status" k="includeEquipment" />}
+          </>
+        )}
+      </div>
+
+      {/* Instant Alerts */}
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Instant Alerts</div>
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Get notified immediately when these occur</div>
+        <Row label="Overdue tasks" desc="Task passes due date without completion" k="overdueTasksAlert" />
+        {user?.role === "manager" && <Row label="Low inventory" desc="Item falls below low stock threshold" k="lowInventoryAlert" />}
+        {user?.role === "manager" && <Row label="Equipment alerts" desc="Equipment status changes to warning or alert" k="equipmentAlert" />}
+        <Row label="New task assigned" desc="New task added at your location" k="newTaskAlert" />
+      </div>
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button onClick={save} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          {saving ? "Saving..." : saved ? "Saved!" : "Save Preferences"}
+        </button>
+        <button onClick={async () => {
+          setSaving(true);
+          try {
+            const sendTestSummary = httpsCallable(functions, "sendDailySummary");
+            await sendTestSummary({ uid: user.uid, test: true });
+            alert("Test email sent to " + (user.email || "your email") + "!");
+          } catch(e) { alert("Error: " + e.message); }
+          setSaving(false);
+        }} style={{ background: "#fff", color: "#1a3352", border: "2px solid #1a3352", borderRadius: 10, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          Send Test Email
+        </button>
       </div>
     </div>
   );
@@ -4037,64 +4118,9 @@ return (
 {view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} />}
 {view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} onNavigate={setView} />}
         {view === "alerts" && (
-          <div style={{ maxWidth: 600 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Alert Settings</div>
-            <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Configure how and when you receive notifications</div>
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Email Notifications</div>
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>Email delivery will be activated in a future update.</div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Email Address</label>
-              <input value={alertEmail} onChange={e => setAlertEmail(e.target.value)} placeholder="your@email.com" type="email" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#111827", background: "#fff", boxSizing: "border-box", marginBottom: 12 }} />
-              <button onClick={handleSaveAlertEmail} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{alertSaved ? "Saved!" : "Save Email"}</button>
-            </div>
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>Alert Frequency</div>
-              {["Immediately", "Daily Digest", "Weekly Summary"].map(opt => (
-                <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, cursor: "pointer" }}>
-                  <input type="checkbox" defaultChecked={opt === "Immediately"} style={{ width: 16, height: 16, accentColor: "#1a3352", cursor: "pointer" }} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{opt}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{opt === "Immediately" ? "Notified as soon as triggered" : opt === "Daily Digest" ? "Summary every morning at 7am" : "Weekly summary every Monday"}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>Alert Preferences</div>
-              {[
-                { label: "Overdue Tasks", desc: "Task passes due date without completion" },
-                { label: "Low Inventory", desc: "Item falls below low stock threshold" },
-                { label: "Low Sensor Readings", desc: "Chemical or fluid levels drop too low" },
-                { label: "Equipment Alerts", desc: "Equipment status changes to warning or alert" },
-                { label: "New Task Created", desc: "New task added at your location" },
-              ].map(item => (
-                <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.label}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{item.desc}</div>
-                  </div>
-                  <input type="checkbox" defaultChecked style={{ width: 18, height: 18, accentColor: "#1a3352", cursor: "pointer" }} />
-                </div>
-              ))}
-            </div>
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Quiet Hours</div>
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>No alerts during these hours</div>
-              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>From</label>
-                  <input type="time" defaultValue="22:00" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                </div>
-                <div style={{ fontSize: 13, color: "#9ca3af", paddingTop: 20 }}>to</div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>To</label>
-                  <input type="time" defaultValue="07:00" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
+  <AlertSettings locId={locId} locations={locations} user={user} />
+)}
+{view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
         {view === "carcounts" && <CarCounts locations={locations} />}
 {view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
