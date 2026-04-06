@@ -137,11 +137,7 @@ loc3: [
 };
 
 const DEMO_PROFILES = {
-"manager@washlevel.com": { name: "Alex Rivera", role: "manager", locationId: null, color: "#6366f1" },
-"jordan@washlevel.com": { name: "Jordan Lee", role: "attendant", locationId: "loc1", color: "#0ea5e9" },
-"casey@washlevel.com": { name: "Casey Kim", role: "technician", locationId: "loc1", color: "#f59e0b" },
-"sam@washlevel.com": { name: "Sam Torres", role: "attendant", locationId: "loc2", color: "#10b981" },
-"morgan@washlevel.com": { name: "Morgan Blake", role: "attendant", locationId: "loc3", color: "#ec4899" },
+"manager@washlevel.com": { name: "Manager", role: "manager", locationId: null, color: "#6366f1" },
 };
 
 let seeding = false;
@@ -3211,6 +3207,24 @@ const [zipCode, setZipCode] = useState("");
 const [saved, setSaved] = useState(false);
 const [profileName, setProfileName] = useState(user?.name || user?.email?.split("@")[0] || "");
 const [profileSaved, setProfileSaved] = useState(false);
+const [newEmail, setNewEmail] = useState("");
+const [emailMsg, setEmailMsg] = useState("");
+const [emailSaving, setEmailSaving] = useState(false);
+
+const handleSaveEmail = async () => {
+  if (!newEmail.trim() || !newEmail.includes("@")) return;
+  setEmailSaving(true);
+  try {
+    await updateDoc(doc(db, "users", user.uid), { email: newEmail.trim() });
+    await refreshUser();
+    setEmailMsg("Notification email updated! Login email unchanged.");
+    setNewEmail("");
+  } catch(e) {
+    setEmailMsg("Error: " + e.message);
+  }
+  setEmailSaving(false);
+  setTimeout(() => setEmailMsg(""), 4000);
+};
 
 const handleSaveProfile = async () => {
   if (!profileName.trim()) return;
@@ -3268,11 +3282,21 @@ return (
     <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Email</label>
     <div style={{ padding: "9px 12px", background: "#f3f4f6", borderRadius: 8, fontSize: 13, color: "#6b7280", marginTop: 6 }}>{user?.email}</div>
   </div>
+  <div style={{ marginBottom: 16 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Update Email</label>
+    <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new@email.com" type="email"
+      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#111827" }} />
+    {emailMsg && <div style={{ fontSize: 12, color: emailMsg.includes("Error") ? "#dc2626" : "#059669", marginTop: 6 }}>{emailMsg}</div>}
+    <button onClick={handleSaveEmail} disabled={emailSaving || !newEmail}
+      style={{ marginTop: 8, background: newEmail ? "#0ea5e9" : "#e5e7eb", color: newEmail ? "#fff" : "#9ca3af", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: newEmail ? "pointer" : "not-allowed" }}>
+      {emailSaving ? "Updating..." : "Update Email"}
+    </button>
+  </div>
   <button onClick={handleSaveProfile} style={{ background: profileSaved ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
     {profileSaved ? "Saved!" : "Save Profile"}
   </button>
 </div>
-{!user?.isTeamMember && <TeamMembers user={user} locations={locations} />}
+{user?.role === "manager" && <TeamMembers user={user} locations={locations} />}
 {saved && (
 <div style={{ background: "#d1fae5", color: "#065f46", padding: "10px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
 Changes saved!
@@ -3483,7 +3507,8 @@ function TeamMembers({ user, locations }) {
   useEffect(() => {
     const loadTeam = async () => {
       try {
-        const memSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", user.uid), where("isTeamMember", "==", true)));
+        const memSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", user.uid)));
+
         setMembers(memSnap.docs.map(d => ({ uid: d.id, ...d.data() })));
         const invSnap = await getDocs(query(collection(db, "invites"), where("ownerId", "==", user.uid)));
         setInvites(invSnap.docs.map(d => ({ id: d.id, ...d.data() })));
