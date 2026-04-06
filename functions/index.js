@@ -1,4 +1,5 @@
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -239,6 +240,122 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
   });
 
   return { sent: true, to: email };
+});
+
+
+
+// Scheduled daily summary - runs every hour
+exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "America/New_York", secrets: ["RESEND_API_KEY"] }, async () => {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTime = String(currentHour).padStart(2, "0") + ":" + String(currentMinute).padStart(2, "0");
+  const hourStr = String(currentHour).padStart(2, "0") + ":00";
+
+  // Get all users with daily summary enabled
+  const usersSnap = await db.collection("users").get();
+
+  for (const userDoc of usersSnap.docs) {
+    const userData = userDoc.data();
+    if (!userData.email) continue;
+
+    // Get alert prefs
+    const prefsSnap = await db.collection("users").doc(userDoc.id).collection("prefs").doc("alerts").get();
+    if (!prefsSnap.exists) continue;
+    const prefs = prefsSnap.data();
+    if (!prefs.dailySummaryEnabled) continue;
+
+    // Check if this is the right hour to send
+    const sendTime = prefs.dailySummaryTime || "07:00";
+    const sendHour = sendTime.split(":")[0].padStart(2, "0") + ":00";
+    if (sendHour !== hourStr) continue;
+
+    // Send the summary using the same logic as sendDailySummary
+    try {
+      const isManager = userData.role === "manager";
+      const ownerId = userData.isTeamMember ? userData.ownerId : userDoc.id;
+      const email = prefs.summaryEmail || userData.email;
+
+      const locsSnap = await db.collection("locations").where("ownerId", "==", ownerId).get();
+      const locations = locsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allowedLocs = userData.isTeamMember
+        ? locations.filter(l => (userData.allowedLocations || []).includes(l.id))
+        : locations;
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateStr = yesterday.toISOString().split("T")[0];
+
+      const resend = new Resend(RESEND_API_KEY.value());
+
+      let html = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #1a3352; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
+          <h1 style="color: #fff; margin: 0; font-size: 22px;">WashLevel Daily Summary</h1>
+          <p style="color: #94a3b8; margin: 6px 0 0;">${yesterday.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
+        </div>
+        <div style="background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">`;
+
+      let totalCars = 0;
+      let totalDone = 0;
+      let totalOpen = 0;
+      let totalOverdue = 0;
+      const today = new Date().toISOString().split("T")[0];
+
+      for (const loc of allowedLocs) {
+        html += `<h2 style="color: #1a3352; font-size: 16px; margin: 16px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px;">${loc.name}</h2>`;
+
+        if (isManager && prefs.includeCounts !== false) {
+          const countSnap = await db.collection("locations").doc(loc.id).collection("daySummaries").doc(dateStr).get();
+          const cars = countSnap.exists ? (countSnap.data().carsWashed || 0) : 0;
+          totalCars += cars;
+          html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars}</p>`;
+        }
+
+        const tasksSnap = await db.collection("locations").doc(loc.id).collection("tasks").get();
+        const tasks = tasksSnap.docs.map(d => d.data());
+        const done = tasks.filter(t => t.status === "done" && t.completedAt?.startsWith(dateStr));
+        const open = tasks.filter(t => t.status !== "done" && !t.archived);
+        const overdue = open.filter(t => t.due && t.due < today);
+
+        totalDone += done.length;
+        totalOpen += open.length;
+        totalOverdue += overdue.length;
+
+        if (prefs.includeTasksDone !== false && done.length > 0)
+          html += `<p style="margin: 4px 0; color: #374151;"><strong>Tasks Completed:</strong> ${done.length}</p>`;
+        if (prefs.includeOpenTasks !== false && open.length > 0)
+          html += `<p style="margin: 4px 0; color: #374151;"><strong>Open Tasks:</strong> ${open.length}</p>`;
+        if (prefs.includeOverdue !== false && overdue.length > 0)
+          html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Overdue Tasks:</strong> ${overdue.length}</p>`;
+
+        if (isManager && prefs.includeEquipment !== false) {
+          const eqSnap = await db.collection("locations").doc(loc.id).collection("equipment").where("status", "!=", "ok").get();
+          if (!eqSnap.empty)
+            html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Equipment Alerts:</strong> ${eqSnap.docs.map(d => d.data().name).join(", ")}</p>`;
+        }
+      }
+
+      if (isManager && allowedLocs.length > 1) {
+        html += `<div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin-top: 20px;">
+          <h3 style="margin: 0 0 10px; color: #1a3352;">All Locations Total</h3>
+          ${prefs.includeCounts !== false ? `<p style="margin: 4px 0;"><strong>Total Cars:</strong> ${totalCars}</p>` : ""}
+          <p style="margin: 4px 0;"><strong>Tasks Done:</strong> ${totalDone} | <strong>Open:</strong> ${totalOpen} | <strong style="color: #e74c3c;">Overdue:</strong> ${totalOverdue}</p>
+        </div>`;
+      }
+
+      html += `<p style="margin-top: 24px; font-size: 12px; color: #9ca3af; text-align: center;">WashLevel.com</p></div></div>`;
+
+      await resend.emails.send({
+        from: "WashLevel <noreply@washlevel.com>",
+        to: email,
+        subject: `WashLevel Daily Summary — ${yesterday.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+        html
+      });
+
+    } catch(e) {
+      console.log("Error sending summary to", userDoc.id, e.message);
+    }
+  }
 });
 
 
