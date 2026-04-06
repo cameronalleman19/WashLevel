@@ -880,6 +880,31 @@ duration: duration,
 updatedAt: new Date().toISOString(),
 note: note,
 });
+
+// Auto-create next occurrence for recurring tasks
+if (task.recurrence && !task.recurrence.includes("cars")) {
+  const nextDue = new Date();
+  if (task.recurrence === "daily") nextDue.setDate(nextDue.getDate() + 1);
+  else if (task.recurrence === "weekly") nextDue.setDate(nextDue.getDate() + 7);
+  else if (task.recurrence === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
+  else if (task.recurrence === "quarterly") nextDue.setMonth(nextDue.getMonth() + 3);
+  const newId = "t" + Date.now();
+  await setDoc(doc(db, "locations", locId, "tasks", newId), {
+    ...task,
+    id: newId,
+    status: "pending",
+    completedAt: null,
+    completedBy: null,
+    startedAt: null,
+    archived: false,
+    archivedAt: null,
+    due: nextDue.toISOString().split("T")[0],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    note: "",
+    attachments: [],
+  });
+}
 } else if (locId) {
 const updates = { status: next, updatedAt: new Date().toISOString() };
 if (next === "in-progress") updates.startedAt = new Date().toISOString();
@@ -2343,6 +2368,7 @@ const [saving, setSaving] = useState(false);
   }, [locId]);
 
   const [recurrence, setRecurrence] = useState("");
+const [customCars, setCustomCars] = useState("");
 const [checklistItems, setChecklistItems] = useState([]);
 const [newCheckItem, setNewCheckItem] = useState("");
 
@@ -2441,16 +2467,33 @@ return (
   </div>
 )}
           <div style={{ marginBottom: 14 }}>
-              <select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={sel}>
+              <select value={recurrence.startsWith("every") && !["every 100 cars","every 250 cars","every 500 cars","every 1000 cars","every 2500 cars","every 5000 cars"].includes(recurrence) ? "custom_cars" : recurrence} onChange={e => {
+  if (e.target.value === "custom_cars") { setRecurrence("custom_cars"); }
+  else { setRecurrence(e.target.value); setCustomCars(""); }
+}} style={sel}>
 <option value="">No recurrence</option>
 <option value="daily">Daily</option>
 <option value="weekly">Weekly</option>
 <option value="monthly">Monthly</option>
 <option value="quarterly">Quarterly</option>
-<option value="every 100 cars">Every 100 cars</option>
 <option value="every 500 cars">Every 500 cars</option>
 <option value="every 1000 cars">Every 1,000 cars</option>
+<option value="every 2500 cars">Every 2,500 cars</option>
+<option value="every 5000 cars">Every 5,000 cars</option>
+<option value="every 7500 cars">Every 7,500 cars</option>
+<option value="every 10000 cars">Every 10,000 cars</option>
+<option value="custom_cars">Custom car count...</option>
 </select>
+{(recurrence === "custom_cars" || (customCars && recurrence.includes("cars"))) && (
+  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+    <span style={{ fontSize: 13, color: "#374151" }}>Every</span>
+    <input type="number" min="1" value={customCars} onChange={e => {
+      setCustomCars(e.target.value);
+      setRecurrence(e.target.value ? "every " + e.target.value + " cars" : "custom_cars");
+    }} placeholder="e.g. 750" style={{ ...inp, width: 100, marginTop: 0, color: "#111827" }} />
+    <span style={{ fontSize: 13, color: "#374151" }}>cars</span>
+  </div>
+)}
 </div>
 <div style={{ display: "flex", gap: 10 }}>
 <button type="submit" disabled={saving} style={{ flex: 1, background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
