@@ -3205,6 +3205,20 @@ const [name, setName] = useState("");
 const [address, setAddress] = useState("");
 const [zipCode, setZipCode] = useState("");
 const [saved, setSaved] = useState(false);
+const [sortedLocs, setSortedLocs] = useState([]);
+useEffect(() => {
+  setSortedLocs([...locations].sort((a, b) => (a.order || 0) - (b.order || 0)));
+}, [locations]);
+const moveLocation = async (idx, dir) => {
+  const updated = [...sortedLocs];
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= updated.length) return;
+  [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
+  setSortedLocs(updated);
+  for (let i = 0; i < updated.length; i++) {
+    await updateDoc(doc(db, "locations", updated[i].id), { order: i });
+  }
+};
 const [profileName, setProfileName] = useState(user?.name || user?.email?.split("@")[0] || "");
 const [profileSaved, setProfileSaved] = useState(false);
 const [newEmail, setNewEmail] = useState("");
@@ -3307,8 +3321,12 @@ Changes saved!
 <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Locations</div>
 <button onClick={() => setEditing("**new**")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Location</button>
 </div>
-{locations.map(loc => (
+{sortedLocs.map((loc, idx) => (
 <div key={loc.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+<div style={{ display: "flex", justifyContent: "flex-end", gap: 4, marginBottom: 4 }}>
+  <button onClick={() => moveLocation(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "2px 8px", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "#d1d5db" : "#6b7280", fontSize: 12 }}>↑</button>
+  <button onClick={() => moveLocation(idx, 1)} disabled={idx === sortedLocs.length - 1} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "2px 8px", cursor: idx === sortedLocs.length - 1 ? "default" : "pointer", color: idx === sortedLocs.length - 1 ? "#d1d5db" : "#6b7280", fontSize: 12 }}>↓</button>
+</div>
 {editing === loc.id ? (
 <div>
 <div style={{ marginBottom: 12 }}>
@@ -3809,6 +3827,20 @@ function AlertSettings({ locId, locations, user }) {
   const [prefs, setPrefs] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+const [sortedLocs, setSortedLocs] = useState([]);
+useEffect(() => {
+  setSortedLocs([...locations].sort((a, b) => (a.order || 0) - (b.order || 0)));
+}, [locations]);
+const moveLocation = async (idx, dir) => {
+  const updated = [...sortedLocs];
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= updated.length) return;
+  [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
+  setSortedLocs(updated);
+  for (let i = 0; i < updated.length; i++) {
+    await updateDoc(doc(db, "locations", updated[i].id), { order: i });
+  }
+};
 
   const defaults = {
     dailySummaryEnabled: false,
@@ -4052,7 +4084,7 @@ if (!user) return;
 const ownerId = user.isTeamMember ? user.ownerId : user.uid;
 const allowedLocs = user.allowedLocations || [];
 const unsub = onSnapshot(query(collection(db, "locations"), where("ownerId", "==", ownerId)), snap => {
-const allLocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+const allLocs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
 const locs = user.isTeamMember && allowedLocs.length ? allLocs.filter(l => allowedLocs.includes(l.id)) : allLocs;
 setLocations(locs);
 setLocId(id => id || user.locationId || locs[0]?.id);
