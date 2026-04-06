@@ -507,19 +507,20 @@ const isMobile = useIsMobile();
   }, [isMobile]);
 const isManager = user?.role === "manager";
 const locs = isManager ? locations : locations.filter(l => l.id === user?.locationId);
+const isTechnician = user?.role === "technician";
 const nav = [
 { id: "overview",   label: "Overview"   },
     ...(isManager ? [{ id: "alerts", label: "Alerts" }] : []),
-{ id: "calendar",   label: "Calendar"   },
-    { id: "carcounts",  label: "Car Counts" },
-{ id: "timeclock",  label: "Time Clock" },
+...(isManager ? [{ id: "calendar", label: "Calendar" }] : []),
+    ...(!isTechnician ? [{ id: "carcounts", label: "Car Counts" }] : []),
+...(!isTechnician ? [{ id: "timeclock", label: "Time Clock" }] : []),
 { id: "tasks",      label: "Tasks"      },
 { id: "inventory",  label: "Inventory"  },
 { id: "equipment",  label: "Equipment"  },
-{ id: "sensors",    label: "Sensors"    },
+...(isManager ? [{ id: "sensors", label: "Sensors" }] : []),
 ...(isManager ? [{ id: "settings", label: "Settings" }] : []),
 ];
-const RC = { manager: "#6366f1", attendant: "#0ea5e9", technician: "#f59e0b" };
+const RC = { manager: "#6366f1", attendant: "#0ea5e9", technician: "#f59e0b", owner: "#10b981" };
 
 return (
 <>
@@ -1049,7 +1050,13 @@ const [showHistory, setShowHistory] = useState(false);
 const isManager = user?.role === "manager";
 const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-const mine = tasks;
+const isTech = user?.role === "technician";
+const isAttendant = user?.role === "attendant";
+const mine = isManager ? tasks : tasks.filter(t =>
+  t.shift === "everyone" || t.shift === user?.role ||
+  (isTech && t.shift === "technician") ||
+  (isAttendant && t.shift === "attendant")
+);
 const filtered = mine.filter(t => {
 // Hide archived tasks unless showArchived
 if (t.archived && !showArchived) return false;
@@ -3589,6 +3596,8 @@ function TeamMembers({ user, locations }) {
               style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827", marginTop: 6 }}>
               <option value="attendant">Attendant — Limited access</option>
               <option value="manager">Manager — Full access</option>
+              <option value="technician">Technician — Equipment & tasks</option>
+<option value="technician">Technician — Equipment & tasks</option>
             </select>
           </div>
 
