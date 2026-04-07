@@ -2619,7 +2619,7 @@ function Inventory({ locId, locationName }) {
                 {UNITS.map(u => <option key={u} value={u}>{u.charAt(0).toUpperCase()+u.slice(1)}</option>)}
               </select>
             </div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Cost Per Unit ($)</label><input type="number" step="0.01" value={newItem.costPerUnit || ""} onChange={e => setNewItem(p => ({...p, costPerUnit: parseFloat(e.target.value)||0}))} placeholder="0.00" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Vendor</label><select value={newItem.vendorId || ""} onChange={e => setNewItem(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label><input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={inp} /></div>
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Reorder At (qty)</label><input type="number" value={newItem.reorderAt || ""} onChange={e => setNewItem(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} placeholder="e.g. 5" style={inp} /></div>
           </div>
@@ -2667,7 +2667,7 @@ function Inventory({ locId, locationName }) {
                             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                           </select>
                         </div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Cost Per Unit ($)</label><input type="number" step="0.01" value={editData.costPerUnit || ""} onChange={e => setEditData(p => ({...p, costPerUnit: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
                       </div>
