@@ -2513,8 +2513,23 @@ function Inventory({ locId, locationName }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
-  const [newItem, setNewItem] = useState({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0 });
+  const [newItem, setNewItem] = useState({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0, vendorId: "" });
+  const [activeTab, setActiveTab] = useState("inventory");
+  const [vendors, setVendors] = useState([]);
+  const [showAddVendor, setShowAddVendor] = useState(false);
+  const [newVendor, setNewVendor] = useState({ name: "", phone: "", email: "", website: "", accountNumber: "", notes: "" });
+  const [savingVendor, setSavingVendor] = useState(false);
+  const [editingVendorId, setEditingVendorId] = useState(null);
+  const [editVendorData, setEditVendorData] = useState({});
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!locId) return;
+    const unsubV = onSnapshot(collection(db, "locations", locId, "vendors"), snap => {
+      setVendors(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||"").localeCompare(b.name||"")));
+    });
+    return () => unsubV();
+  }, [locId]);
 
   useEffect(() => {
     if (!locId) return;
@@ -2562,13 +2577,27 @@ function Inventory({ locId, locationName }) {
 
   return (
     <div>
-      <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Inventory</div>
           <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>
+        {activeTab === "vendors" && <button onClick={() => setShowAddVendor(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
+        {activeTab === "inventory" && <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>}
       </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {["inventory", "reorder", "vendors"].map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            background: activeTab === tab ? "#1a3352" : "#f3f4f6",
+            color: activeTab === tab ? "#fff" : "#6b7280" }}>
+            {tab === "inventory" ? "All Items" : tab === "reorder" ? "Reorder List" : "Vendors"}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "inventory" && <>
 
       {showAdd && (
         <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 18 }}>
@@ -2682,6 +2711,121 @@ function Inventory({ locId, locationName }) {
         );
       })}
       {items.length === 0 && !showAdd && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No inventory items yet. Tap + Add Item to get started.</div>}
+      </>}
+
+      {activeTab === "reorder" && (
+        <div>
+          {(() => {
+            const lowItems = items.filter(i => i.reorderAt > 0 && i.quantity <= i.reorderAt);
+            if (lowItems.length === 0) return <div style={{ textAlign: "center", color: "#9ca3af", padding: 40 }}>No items need reordering right now.</div>;
+            const byVendor = {};
+            lowItems.forEach(item => {
+              const v = vendors.find(v => v.id === item.vendorId);
+              const key = v ? v.id : "unassigned";
+              if (!byVendor[key]) byVendor[key] = { vendor: v || null, items: [] };
+              byVendor[key].items.push(item);
+            });
+            return Object.values(byVendor).map((group, gi) => (
+              <div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#1a3352", marginBottom: 4 }}>
+                  {group.vendor ? group.vendor.name : "No Vendor Assigned"}
+                </div>
+                {group.vendor && (
+                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    {group.vendor.phone && <span>{group.vendor.phone}</span>}
+                    {group.vendor.email && <span>{group.vendor.email}</span>}
+                    {group.vendor.accountNumber && <span>Acct: {group.vendor.accountNumber}</span>}
+                  </div>
+                )}
+                {group.items.map(item => (
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid #f3f4f6" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.name}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>Have: {item.quantity} {item.unit} — Reorder at: {item.reorderAt}{item.partNumber ? " | #" + item.partNumber : ""}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, background: "#fee2e2", padding: "3px 8px", borderRadius: 6 }}>LOW</div>
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+
+      {activeTab === "vendors" && (
+        <div>
+          {showAddVendor && (
+            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add Vendor</div>
+              {[["name","Vendor Name *","text"],["phone","Phone","tel"],["email","Email","email"],["website","Website","text"],["accountNumber","Account #","text"]].map(([field,label,type]) => (
+                <div key={field} style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>{label}</label>
+                  <input type={type} value={newVendor[field]} onChange={e => setNewVendor(p => ({...p, [field]: e.target.value}))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+              ))}
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Notes</label>
+                <textarea value={newVendor.notes} onChange={e => setNewVendor(p => ({...p, notes: e.target.value}))}
+                  rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "none", color: "#111827" }} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={async () => {
+                  if (!newVendor.name.trim()) return;
+                  setSavingVendor(true);
+                  const id = "ven" + Date.now();
+                  await setDoc(doc(db, "locations", locId, "vendors", id), { ...newVendor, id, createdAt: new Date().toISOString() });
+                  setNewVendor({ name: "", phone: "", email: "", website: "", accountNumber: "", notes: "" });
+                  setShowAddVendor(false);
+                  setSavingVendor(false);
+                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingVendor ? "Saving..." : "Save Vendor"}</button>
+                <button onClick={() => setShowAddVendor(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {!showAddVendor && vendors.length === 0 && <div style={{ textAlign: "center", color: "#9ca3af", padding: 40 }}>No vendors yet. Click + Add Vendor to get started.</div>}
+          {vendors.map(v => (
+            <div key={v.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+              {editingVendorId === v.id ? (
+                <div>
+                  {[["name","Vendor Name","text"],["phone","Phone","tel"],["email","Email","email"],["website","Website","text"],["accountNumber","Account #","text"]].map(([field,label,type]) => (
+                    <div key={field} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 2 }}>{label}</label>
+                      <input type={type} value={editVendorData[field] || ""} onChange={e => setEditVendorData(p => ({...p, [field]: e.target.value}))}
+                        style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button onClick={async () => {
+                      await updateDoc(doc(db, "locations", locId, "vendors", v.id), { ...editVendorData, updatedAt: new Date().toISOString() });
+                      setEditingVendorId(null);
+                    }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                    <button onClick={() => setEditingVendorId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#1a3352" }}>{v.name}</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => { setEditingVendorId(v.id); setEditVendorData({...v}); }} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Edit</button>
+                      <button onClick={async () => { if (!window.confirm("Delete vendor?")) return; await deleteDoc(doc(db, "locations", locId, "vendors", v.id)); }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    {v.phone && <span>{v.phone}</span>}
+                    {v.email && <span>{v.email}</span>}
+                    {v.website && <a href={v.website} target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}>{v.website}</a>}
+                    {v.accountNumber && <span>Acct: {v.accountNumber}</span>}
+                  </div>
+                  {v.notes && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>{v.notes}</div>}
+                  <div style={{ fontSize: 11, color: "#6366f1", marginTop: 6, fontWeight: 600 }}>{items.filter(i => i.vendorId === v.id).length} items assigned</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
