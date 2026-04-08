@@ -247,10 +247,9 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
 // Scheduled daily summary - runs every hour
 exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "America/New_York", secrets: ["RESEND_API_KEY"] }, async () => {
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-  const currentTime = String(currentHour).padStart(2, "0") + ":" + String(currentMinute).padStart(2, "0");
-  const hourStr = String(currentHour).padStart(2, "0") + ":00";
+  // Get Eastern time hour
+  const etHour = parseInt(now.toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }));
+  const hourStr = String(etHour).padStart(2, "0") + ":00";
 
   // Get all users with daily summary enabled
   const usersSnap = await db.collection("users").get();

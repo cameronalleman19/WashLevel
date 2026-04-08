@@ -1108,7 +1108,7 @@ return (
 <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>"Tasks"</div>
 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
 </div>
-<button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>+ Add Task</button>
+<button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, WebkitAppearance: "none" }}>+ Add Task</button>
 <button onClick={() => setShowHistory(true)} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Task History</button>
 </div>
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
@@ -1231,7 +1231,6 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
 
   const handleDelete = async (eqId) => {
     if (!window.confirm("Delete this equipment?")) return;
-    const { deleteDoc } = await import("firebase/firestore");
     await deleteDoc(doc(db, "locations", locId, "equipment", eqId));
   };
 
