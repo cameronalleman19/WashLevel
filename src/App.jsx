@@ -510,7 +510,7 @@ const locs = isManager ? locations : locations.filter(l => l.id === user?.locati
 const isTechnician = user?.role === "technician";
 const nav = [
 { id: "overview",   label: "Overview"   },
-    ...(isManager ? [{ id: "alerts", label: "Alerts" }] : []),
+    ...(isManager ? [{ id: "alerts", label: "Notifications" }] : []),
 ...(isManager ? [{ id: "calendar", label: "Calendar" }] : []),
     ...(!isTechnician ? [{ id: "carcounts", label: "Car Counts" }] : []),
 ...(!isTechnician ? [{ id: "timeclock", label: "Time Clock" }] : []),
@@ -524,18 +524,16 @@ const RC = { manager: "#6366f1", attendant: "#0ea5e9", technician: "#f59e0b", ow
 
 return (
 <>
-{isMobile && open && (
+{open && (
 <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
 )}
 <aside style={{
-width: 220, flexShrink: 0, background: "#1a3352", display: "flex", flexDirection: "column",
+width: 260, flexShrink: 0, background: "#1a3352", display: "flex", flexDirection: "column",
 height: "100dvh", overflowY: "auto",
-...(isMobile ? {
 position: "fixed", left: 0, top: 0, zIndex: 50,
 transform: open ? "translateX(0)" : "translateX(-100%)",
 transition: "transform 0.25s ease",
-boxShadow: "4px 0 24px rgba(0,0,0,0.25)",
-} : {})
+boxShadow: open ? "4px 0 24px rgba(0,0,0,0.25)" : "none"
 }}>
 <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -4020,6 +4018,7 @@ function SetupWizard({ user, logout }) {
 
 function AlertSettings({ locId, locations, user }) {
   const [prefs, setPrefs] = useState(null);
+  const [notifTab, setNotifTab] = useState("inbox");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 const [sortedLocs, setSortedLocs] = useState([]);
@@ -4368,16 +4367,15 @@ return (
 <div style={{ display: "flex", height: "100dvh", background: "#f8fafc", overflow: "hidden" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-<main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px" : "28px 32px", paddingTop: isMobile ? "72px" : "28px" }}>
-      {isMobile && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 48, background: "#1a3352", display: "flex", alignItems: "center", paddingLeft: 12, zIndex: 30 }}>
+<main style={{ flex: 1, overflowY: "auto", padding: "24px", paddingTop: "64px", width: "100%", boxSizing: "border-box" }}>
+      {(
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 48, background: "#1a3352", display: "flex", alignItems: "center", paddingLeft: 12, paddingRight: 8, zIndex: 30 }}>
           <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", padding: 8, display: "flex", flexDirection: "column", gap: 5 }}>
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
           </button>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 16, marginLeft: 8 }}>WashLevel</span>
-          <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px", marginLeft: 6 }}>PRO</span>
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}><span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>WashLevel</span><span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px" }}>PRO</span></div><button onClick={() => setView("alerts")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 8 }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
         </div>
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
