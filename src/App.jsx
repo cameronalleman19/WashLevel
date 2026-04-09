@@ -2460,7 +2460,7 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
   );
 }
 
-function AddTaskModal({ locId, onClose, onAdd, preset }) {
+function AddTaskModal({ locId, onClose, onAdd, preset, user }) {
 const [title, setTitle] = useState("");
 const [category, setCategory] = useState("cleaning");
 const [priority, setPriority] = useState("medium");
@@ -2469,6 +2469,18 @@ const [due, setDue] = useState(new Date().toISOString().split("T")[0]);
 const [saving, setSaving] = useState(false);
   const [equipmentId, setEquipmentId] = useState(preset?.id || "");
   const [equipmentList, setEquipmentList] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [assignTo, setAssignTo] = useState("everyone");
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const ownerId = user.isTeamMember ? user.ownerId : user.uid;
+    getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId))).then(snap => {
+      const members = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      const allMembers = members.some(m => m.uid === user.uid) ? members : [{ uid: user.uid, name: user.name || user.email, role: user.role }, ...members];
+      setTeamMembers(allMembers);
+    });
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!locId) return;
@@ -2494,8 +2506,64 @@ e.preventDefault();
 if (!title.trim()) return;
 setSaving(true);
 const id = "t" + Date.now();
-const task = { id, title: title.trim(), category, priority, shift, due, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+const resolvedUserId = (assignTo && !["everyone","attendant","technician","manager","user",""].includes(assignTo)) ? assignTo : null;
+    const resolvedUserName = resolvedUserId ? (teamMembers.find(m => m.uid === resolvedUserId)?.name || teamMembers.find(m => m.uid === resolvedUserId)?.email || "") : null;
+    const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
+// Notify assigned user via Firebase Function
+if (resolvedUserId) {
+  try {
+    const createNotif = httpsCallable(functions, "createNotification");
+    await createNotif({ userId: resolvedUserId, type: "task_assigned", title: "New task assigned to you", body: title.trim(), locationId: locId, taskId: id });
+  } catch(e) { console.log("Notif error:", e.message); }
+}
+
+// Notify all users with access to this location who have newTaskAlert enabled
+try {
+  const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
+  const teamSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId)));
+  const createNotif = httpsCallable(functions, "createNotification");
+  const allUsers = [...teamSnap.docs];
+  for (const memberDoc of allUsers) {
+    // Skip if already notified via direct assignment
+    if (memberDoc.id === resolvedUserId) continue;
+    const md = memberDoc.data();
+    const hasAccess = !md.allowedLocations || md.allowedLocations.includes(locId);
+    if (!hasAccess) continue;
+    const prefsSnap = await getDoc(doc(db, "users", memberDoc.id, "prefs", "alerts"));
+    const prefs = prefsSnap.exists() ? prefsSnap.data() : {};
+    if (prefs.newTaskAlert) {
+      await createNotif({ userId: memberDoc.id, type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
+    }
+  }
+} catch(e) { console.log("Location notif error:", e.message); }
+
+// Notify all users with access to this location who have newTaskAlert enabled
+try {
+  const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
+  const teamSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId)));
+  const createNotif = httpsCallable(functions, "createNotification");
+  const allUsers = [...teamSnap.docs];
+  for (const memberDoc of allUsers) {
+    // Skip if already notified via direct assignment
+    if (memberDoc.id === resolvedUserId) continue;
+    const md = memberDoc.data();
+    const hasAccess = !md.allowedLocations || md.allowedLocations.includes(locId);
+    if (!hasAccess) continue;
+    const prefsSnap = await getDoc(doc(db, "users", memberDoc.id, "prefs", "alerts"));
+    const prefs = prefsSnap.exists() ? prefsSnap.data() : {};
+    if (prefs.newTaskAlert) {
+      await createNotif({ userId: memberDoc.id, type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
+    }
+  }
+  // Also notify current user if they have newTaskAlert on
+  const myPrefsSnap = await getDoc(doc(db, "users", user.uid, "prefs", "alerts"));
+  const myPrefs = myPrefsSnap.exists() ? myPrefsSnap.data() : {};
+  if (myPrefs.newTaskAlert) {
+    await createNotif({ userId: user.uid, type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
+  }
+} catch(e) { console.log("Location notif error:", e.message); }
+
 setSaving(false);
 onClose();
 };
@@ -2538,11 +2606,21 @@ return (
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
 <div>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Assigned To</label>
-<select value={shift} onChange={e => setShift(e.target.value)} style={sel}>
+<select value={assignTo} onChange={e => {
+  const val = e.target.value;
+  setAssignTo(val);
+  if (["everyone","attendant","technician","manager"].includes(val)) {
+    setShift(val);
+  } else {
+    setShift("user");
+  }
+}} style={sel}>
 <option value="everyone">Everyone</option>
-                <option value="attendant">Attendants</option>
-                <option value="technician">Technicians</option>
-                <option value="manager">Managers</option>
+<option value="attendant">Attendants</option>
+<option value="technician">Technicians</option>
+<option value="manager">Managers</option>
+{teamMembers.length > 0 && <option disabled>── Specific Person ──</option>}
+{teamMembers.map(m => <option key={m.uid} value={m.uid}>{m.name || m.email} — {m.role}</option>)}
 </select>
 </div>
 <div>
@@ -4129,7 +4207,7 @@ function SetupWizard({ user, logout }) {
   );
 }
 
-function AlertSettings({ locId, locations, user }) {
+function AlertSettings({ locId, locations, user, setView, setLocId }) {
   const [prefs, setPrefs] = useState(null);
   const [notifTab, setNotifTab] = useState("inbox");
   const [saving, setSaving] = useState(false);
@@ -4216,14 +4294,20 @@ function AlertSettings({ locId, locations, user }) {
             <div style={{ fontSize: 13, color: "#9ca3af" }}>Task assignments and alerts will appear here</div>
           </div>
         ) : notifications.map(n => (
-          <div key={n.id} onClick={() => markRead(n.id)} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10, cursor: "pointer", display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div key={n.id} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10, display: "flex", gap: 12, alignItems: "flex-start" }}>
             <div style={{ fontSize: 20 }}>📋</div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, cursor: "pointer" }} onClick={() => {
+              markRead(n.id);
+              if (n.locationId) { setLocId(n.locationId); setView("tasks"); }
+            }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{n.title}</div>
               <div style={{ fontSize: 13, color: "#374151", marginTop: 2 }}>{n.body}</div>
               <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
             </div>
-            {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", flexShrink: 0, marginTop: 4 }} />}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6" }} />}
+              <button onClick={async () => { await deleteDoc(doc(db, "users", user.uid, "notifications", n.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, padding: 2 }}>✕</button>
+            </div>
           </div>
         ))}
       </div>
@@ -4524,14 +4608,14 @@ return (
 {view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} />}
 {view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} onNavigate={setView} />}
         {view === "alerts" && (
-  <AlertSettings locId={locId} locations={locations} user={user} />
+  <AlertSettings locId={locId} locations={locations} user={user} setView={setView} setLocId={setLocId} />
 )}
 {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
         {view === "carcounts" && <CarCounts locations={locations} />}
 {view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
 </main>
-{showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); }} onAdd={() => {}} preset={taskPreset} />}
+{showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); }} onAdd={() => {}} preset={taskPreset} user={user} />}
 {materialsTask && <MaterialsModal locId={locId} task={materialsTask} onClose={() => setMaterialsTask(null)} />}
 </div>
 );
