@@ -24,6 +24,7 @@ deleteDoc,
 onSnapshot,
 query,
 where,
+orderBy,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -4133,20 +4134,21 @@ function AlertSettings({ locId, locations, user }) {
   const [notifTab, setNotifTab] = useState("inbox");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-const [sortedLocs, setSortedLocs] = useState([]);
-useEffect(() => {
-  setSortedLocs([...locations].sort((a, b) => (a.order || 0) - (b.order || 0)));
-}, [locations]);
-const moveLocation = async (idx, dir) => {
-  const updated = [...sortedLocs];
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= updated.length) return;
-  [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
-  setSortedLocs(updated);
-  for (let i = 0; i < updated.length; i++) {
-    await updateDoc(doc(db, "locations", updated[i].id), { order: i });
-  }
-};
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = onSnapshot(
+      query(collection(db, "users", user.uid, "notifications"), orderBy("createdAt", "desc")),
+      snap => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+    return () => unsub();
+  }, [user?.uid]);
+
+  const markRead = async (notifId) => {
+    await updateDoc(doc(db, "users", user.uid, "notifications", notifId), { read: true });
+  };
+
 
   const defaults = {
     dailySummaryEnabled: false,
@@ -4201,8 +4203,31 @@ const moveLocation = async (idx, dir) => {
 
   return (
     <div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Alert Settings</div>
-      <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Configure how and when you receive notifications</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 12 }}>Notifications</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button onClick={() => setNotifTab("inbox")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "inbox" ? "#1a3352" : "#f3f4f6", color: notifTab === "inbox" ? "#fff" : "#6b7280" }}>Inbox {notifications.filter(n => !n.read).length > 0 ? "(" + notifications.filter(n => !n.read).length + ")" : ""}</button>
+        <button onClick={() => setNotifTab("settings")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "settings" ? "#1a3352" : "#f3f4f6", color: notifTab === "settings" ? "#fff" : "#6b7280" }}>Alert Settings</button>
+      </div>
+      <div style={{ display: notifTab === "inbox" ? "block" : "none" }}>
+        {notifications.length === 0 ? (
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 32, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🔔</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: "#111827", marginBottom: 4 }}>No notifications yet</div>
+            <div style={{ fontSize: 13, color: "#9ca3af" }}>Task assignments and alerts will appear here</div>
+          </div>
+        ) : notifications.map(n => (
+          <div key={n.id} onClick={() => markRead(n.id)} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10, cursor: "pointer", display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ fontSize: 20 }}>📋</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{n.title}</div>
+              <div style={{ fontSize: 13, color: "#374151", marginTop: 2 }}>{n.body}</div>
+              <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
+            </div>
+            {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", flexShrink: 0, marginTop: 4 }} />}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: notifTab === "settings" ? "block" : "none" }}>
 
       {/* Daily Summary Email */}
       <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
@@ -4255,6 +4280,7 @@ const moveLocation = async (idx, dir) => {
         }} style={{ background: "#fff", color: "#1a3352", border: "2px solid #1a3352", borderRadius: 10, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
           Send Test Email
         </button>
+      </div>
       </div>
     </div>
   );
