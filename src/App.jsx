@@ -1505,6 +1505,20 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
   const [spSensors, setSpSensors] = useState([]);
   const [history, setHistory] = useState({});
   const [selectedSensor, setSelectedSensor] = useState(null);
+  const [chemSensors, setChemSensors] = useState([]);
+  const [showAddChem, setShowAddChem] = useState(false);
+  const [newChem, setNewChem] = useState({ name: "", type: "pressure", unit: "PSI", minAlert: 20, maxAlert: 150, sensorId: "" });
+  const [savingChem, setSavingChem] = useState(false);
+  const [activeTab, setActiveTab] = useState("sensorpush");
+  useEffect(() => {
+    if (!locId) return;
+    const unsub = onSnapshot(collection(db, "locations", locId, "sensorReadings"), snap => {
+      const readings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setChemSensors(readings);
+    });
+    return () => unsub();
+  }, [locId]);
+
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const [timeRange, setTimeRange] = useState("6h");
@@ -1624,12 +1638,110 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
 
   return (
     <div>
-      <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Sensor Dashboard</div>
-        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Sensor Dashboard</div>
+          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+        </div>
+        {activeTab === "chemlevel" && <button onClick={() => setShowAddChem(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Sensor</button>}
       </div>
 
-      {spSensors.length > 0 && (
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button onClick={() => setActiveTab("sensorpush")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "sensorpush" ? "#1a3352" : "#f3f4f6", color: activeTab === "sensorpush" ? "#fff" : "#6b7280" }}>SensorPush</button>
+        <button onClick={() => setActiveTab("chemlevel")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "chemlevel" ? "#1a3352" : "#f3f4f6", color: activeTab === "chemlevel" ? "#fff" : "#6b7280" }}>ChemLevel</button>
+      </div>
+
+      {activeTab === "chemlevel" && (
+        <div>
+          {showAddChem && (
+            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add ChemLevel Sensor</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Sensor Name</label>
+                  <input value={newChem.name} onChange={e => setNewChem(p => ({...p, name: e.target.value}))} placeholder="e.g. City Water Pressure" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Sensor ID</label>
+                  <input value={newChem.sensorId} onChange={e => setNewChem(p => ({...p, sensorId: e.target.value}))} placeholder="e.g. pressure1" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Type</label>
+                  <select value={newChem.type} onChange={e => setNewChem(p => ({...p, type: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}>
+                    <option value="pressure">Pressure</option>
+                    <option value="flow">Flow Rate</option>
+                    <option value="level">Chemical Level</option>
+                    <option value="temperature">Temperature</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Unit</label>
+                  <input value={newChem.unit} onChange={e => setNewChem(p => ({...p, unit: e.target.value}))} placeholder="PSI" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Min Alert</label>
+                  <input type="number" value={newChem.minAlert} onChange={e => setNewChem(p => ({...p, minAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Max Alert</label>
+                  <input type="number" value={newChem.maxAlert} onChange={e => setNewChem(p => ({...p, maxAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={async () => {
+                  if (!newChem.name || !newChem.sensorId) return;
+                  setSavingChem(true);
+                  await setDoc(doc(db, "locations", locId, "chemSensors", newChem.sensorId), { ...newChem, createdAt: new Date().toISOString(), locationId: locId });
+                  setNewChem({ name: "", type: "pressure", unit: "PSI", minAlert: 20, maxAlert: 150, sensorId: "" });
+                  setShowAddChem(false);
+                  setSavingChem(false);
+                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingChem ? "Saving..." : "Add Sensor"}</button>
+                <button onClick={() => setShowAddChem(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {chemSensors.length === 0 && !showAddChem && (
+            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📡</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>No ChemLevel sensors yet</div>
+              <div style={{ fontSize: 13 }}>Add a sensor above then upload firmware to your ESP32</div>
+              <div style={{ marginTop: 16, background: "#f8fafc", borderRadius: 10, padding: 16, textAlign: "left", fontFamily: "monospace", fontSize: 12, color: "#374151" }}>
+                <div style={{ fontWeight: 700, marginBottom: 8, fontFamily: "sans-serif" }}>Arduino endpoint:</div>
+                POST https://us-central1-washlevel-c16d9.cloudfunctions.net/ingestSensorReading<br/>
+                {"{"}"sensorId": "pressure1", "locationId": "{locId}", "value": 87.5, "unit": "PSI", "secret": "chemlevel2025"{"}"}
+              </div>
+            </div>
+          )}
+          {chemSensors.map(sensor => {
+            const isAlert = sensor.value < sensor.minAlert || sensor.value > sensor.maxAlert;
+            const pct = Math.min(100, Math.max(0, ((sensor.value - 0) / (sensor.maxAlert * 1.2)) * 100));
+            return (
+              <div key={sensor.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{sensor.name || sensor.sensorId}</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>ID: {sensor.sensorId} · {sensor.type} · Last update: {sensor.timestamp ? new Date(sensor.timestamp).toLocaleTimeString() : "never"}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: isAlert ? "#dc2626" : "#1a3352" }}>{sensor.value ?? "--"}</div>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>{sensor.unit}</div>
+                  </div>
+                </div>
+                <div style={{ background: "#f3f4f6", borderRadius: 999, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: pct + "%", height: "100%", background: isAlert ? "#dc2626" : "#22c55e", borderRadius: 999, transition: "width 0.5s" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                  <span>Min alert: {sensor.minAlert} {sensor.unit}</span>
+                  <span>Max alert: {sensor.maxAlert} {sensor.unit}</span>
+                </div>
+                {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>⚠️ Alert: Reading outside normal range</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === "sensorpush" && spSensors.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>SensorPush Sensors</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 13, marginBottom: 16 }}>

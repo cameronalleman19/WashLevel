@@ -358,6 +358,60 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
 });
 
 
+
+// ChemLevel sensor data ingestion endpoint
+exports.ingestSensorReading = onRequest({ cors: true }, async (req, res) => {
+  if (req.method !== "POST") return res.status(405).send("Method not allowed");
+
+  const { sensorId, locationId, value, unit, secret } = req.body;
+
+  // Basic auth check
+  if (secret !== "chemlevel2025") return res.status(401).send("Unauthorized");
+  if (!sensorId || !locationId || value === undefined) return res.status(400).send("Missing fields");
+
+  const timestamp = new Date().toISOString();
+  const reading = { sensorId, locationId, value: parseFloat(value), unit: unit || "PSI", timestamp };
+
+  // Write latest reading
+  await db.collection("locations").doc(locationId)
+    .collection("sensorReadings").doc(sensorId)
+    .set({ ...reading, updatedAt: timestamp });
+
+  // Write to history (last 1000 readings kept)
+  await db.collection("locations").doc(locationId)
+    .collection("sensorReadings").doc(sensorId)
+    .collection("history").add(reading);
+
+  res.status(200).json({ ok: true, timestamp });
+});
+
+
+// ChemLevel sensor data ingestion endpoint
+exports.ingestSensorReading = onRequest({ cors: true }, async (req, res) => {
+  if (req.method !== "POST") return res.status(405).send("Method not allowed");
+
+  const { sensorId, locationId, value, unit, secret } = req.body;
+
+  // Basic auth check
+  if (secret !== "chemlevel2025") return res.status(401).send("Unauthorized");
+  if (!sensorId || !locationId || value === undefined) return res.status(400).send("Missing fields");
+
+  const timestamp = new Date().toISOString();
+  const reading = { sensorId, locationId, value: parseFloat(value), unit: unit || "PSI", timestamp };
+
+  // Write latest reading
+  await db.collection("locations").doc(locationId)
+    .collection("sensorReadings").doc(sensorId)
+    .set({ ...reading, updatedAt: timestamp });
+
+  // Write to history (last 1000 readings kept)
+  await db.collection("locations").doc(locationId)
+    .collection("sensorReadings").doc(sensorId)
+    .collection("history").add(reading);
+
+  res.status(200).json({ ok: true, timestamp });
+});
+
 exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req, res) => {
   try {
     if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
