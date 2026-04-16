@@ -2263,7 +2263,7 @@ function TaskHistoryModal({ tasks, onClose }) {
       return 0;
     });
 
-  const CAT_COLORS = { inspection: "#15803d", equipment: "#1d4ed8", cleaning: "#065f46", supplies: "#b45309", chemicals: "#5b21b6" };
+  const CAT_COLORS = { inspection: "#15803d", equipment: "#1d4ed8", cleaning: "#065f46", supplies: "#b45309", chemicals: "#5b21b6", maintenance: "#ef4444" };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 1000 }}>
@@ -2568,7 +2568,7 @@ setSaving(false);
 onClose();
 };
 
-const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fafafa", marginTop: 4 };
+const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fafafa", marginTop: 4, color: "#111827" };
 const sel = { ...inp, cursor: "pointer" };
 
 return (
@@ -2588,6 +2588,7 @@ return (
 <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
 <select value={category} onChange={e => setCategory(e.target.value)} style={sel}>
 <option value="cleaning">Cleaning</option>
+<option value="maintenance">Maintenance</option>
 <option value="equipment">Equipment</option>
 <option value="chemicals">Chemicals</option>
 <option value="inspection">Inspection</option>
