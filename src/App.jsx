@@ -819,7 +819,7 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
   );
 }
 
-function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onStartInspection, equipment }) {
+function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onEdit, onStartInspection, equipment }) {
 const { user } = useAuth();
 const [open, setOpen] = useState(false);
 const [note, setNote] = useState(task.note || "");
@@ -952,6 +952,9 @@ return (
   }} style={{ background: "#d1fae5", color: "#065f46", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Approve</button>
 )}
 {user?.role === "manager" && (
+  <button onClick={e => { e.stopPropagation(); onEdit && onEdit(task); }} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Edit</button>
+)}
+{user?.role === "manager" && (
   <button onClick={async (e) => {
     e.stopPropagation();
     if (!window.confirm("Delete this task?")) return;
@@ -1064,7 +1067,7 @@ View History
 );
 }
 
-function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, locId, onSelectMaterials, equipment }) {
+function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, locId, onSelectMaterials, onEdit, equipment }) {
 const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
@@ -1131,7 +1134,7 @@ return (
         <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
         <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
-    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} />)}
+    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} />)}
     {showHistory && (
   <TaskHistoryModal
     tasks={tasks}
@@ -2460,17 +2463,17 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
   );
 }
 
-function AddTaskModal({ locId, onClose, onAdd, preset, user }) {
-const [title, setTitle] = useState("");
-const [category, setCategory] = useState("cleaning");
-const [priority, setPriority] = useState("medium");
-const [shift, setShift] = useState("everyone");
-const [due, setDue] = useState(new Date().toISOString().split("T")[0]);
+function AddTaskModal({ locId, onClose, onAdd, preset, user, editTask }) {
+const [title, setTitle] = useState(editTask?.title || "");
+const [category, setCategory] = useState(editTask?.category || "cleaning");
+const [priority, setPriority] = useState(editTask?.priority || "medium");
+const [shift, setShift] = useState(editTask?.shift || "everyone");
+const [due, setDue] = useState(editTask?.due || new Date().toISOString().split("T")[0]);
 const [saving, setSaving] = useState(false);
   const [equipmentId, setEquipmentId] = useState(preset?.id || "");
   const [equipmentList, setEquipmentList] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
-  const [assignTo, setAssignTo] = useState("everyone");
+  const [assignTo, setAssignTo] = useState(editTask?.assignedUserId || editTask?.shift || "everyone");
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -2508,6 +2511,14 @@ setSaving(true);
 const id = "t" + Date.now();
 const resolvedUserId = (assignTo && !["everyone","attendant","technician","manager","user",""].includes(assignTo)) ? assignTo : null;
     const resolvedUserName = resolvedUserId ? (teamMembers.find(m => m.uid === resolvedUserId)?.name || teamMembers.find(m => m.uid === resolvedUserId)?.email || "") : null;
+    if (editTask) {
+      await updateDoc(doc(db, "locations", locId, "tasks", editTask.id), {
+        title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due,
+        assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null,
+        recurrence: recurrence || null, updatedAt: new Date().toISOString(),
+      });
+      setSaving(false); onClose(); return;
+    }
     const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
 // Notify assigned user via Firebase Function
@@ -4482,6 +4493,7 @@ const [view, setView] = useState("overview");
 const [locId, setLocId] = useState(null);
 const [ready, setReady] = useState(false);
 const [showAddTask, setShowAddTask] = useState(false);
+  const [editTask, setEditTask] = useState(null);
 const [materialsTask, setMaterialsTask] = useState(null);
   const [taskPreset, setTaskPreset] = useState(null);
   const [alertEmail, setAlertEmail] = useState("");
@@ -4603,8 +4615,8 @@ return (
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
 {locId !== "all" && view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} />}
-{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
-{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
+{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
+{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
 {view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} />}
 {view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} onNavigate={setView} />}
@@ -4616,7 +4628,7 @@ return (
 {view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
 </main>
-{showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); }} onAdd={() => {}} preset={taskPreset} user={user} />}
+{showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); setEditTask(null); }} onAdd={() => {}} preset={taskPreset} user={user} editTask={editTask} />}
 {materialsTask && <MaterialsModal locId={locId} task={materialsTask} onClose={() => setMaterialsTask(null)} />}
 </div>
 );
