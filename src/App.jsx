@@ -922,7 +922,7 @@ return (
 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", cursor: "pointer" }} onClick={() => setOpen(!open)}>
 <div style={{ width: 9, height: 9, borderRadius: "50%", background: st.dot, flexShrink: 0 }} />
 <div style={{ flex: 1, minWidth: 0 }}>
-<div style={{ fontWeight: 600, fontSize: 13.5, color: task.status === "done" ? "#9ca3af" : "#111827", textDecoration: task.status === "done" ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.title}</div>
+<div style={{ fontWeight: 600, fontSize: 13.5, color: task.status === "done" ? "#9ca3af" : "#111827", textDecoration: task.status === "done" ? "line-through" : "none", overflowWrap: "anywhere" }}>{task.title}</div>
 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
 <Pill label={task.category} bg={CAT[task.category]?.bg} color={CAT[task.category]?.color} />
 <Pill label={task.priority} bg={PRI[task.priority]?.bg} color={PRI[task.priority]?.color} />
@@ -936,7 +936,7 @@ return (
             )}
 </div>
 </div>
-<div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+<div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "50%" }}>
           <button onClick={(e) => {
   e.stopPropagation();
   if ((task.type === "inspection" || task.category === "inspection") && task.status !== "done" && task.checklist?.length > 0 && onStartInspection) {
