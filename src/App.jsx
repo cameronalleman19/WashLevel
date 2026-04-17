@@ -3888,7 +3888,7 @@ function CarCounts({ locations }) {
               value={loaded[loc.id] ? (counts[loc.id] ?? "") : ""}
               placeholder={loaded[loc.id] ? "0" : "..."}
               onChange={e => setCounts(p => ({ ...p, [loc.id]: e.target.value }))}
-              style={{ flex: 1, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa" }} />
+              style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa", boxSizing: "border-box" }} />
             <button onClick={() => setCounts(p => ({ ...p, [loc.id]: (parseInt(p[loc.id]) || 0) + 1 }))}
               style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>+</button>
           </div>
@@ -4602,7 +4602,7 @@ return (
 <div style={{ height: "100dvh", background: "#f8fafc", overflow: "hidden" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-<main style={{ overflowY: "auto", height: "100dvh", padding: "24px", paddingTop: "64px", boxSizing: "border-box", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+<main style={{ overflowY: "auto", height: "100dvh", padding: "16px", paddingTop: "64px", boxSizing: "border-box", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
       {(
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 48, background: "#1a3352", display: "flex", alignItems: "center", paddingLeft: 12, paddingRight: 8, zIndex: 30 }}>
           <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", padding: 8, display: "flex", flexDirection: "column", gap: 5 }}>
