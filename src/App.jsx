@@ -4494,6 +4494,16 @@ const [locId, setLocId] = useState(null);
 const [ready, setReady] = useState(false);
 const [showAddTask, setShowAddTask] = useState(false);
   const [editTask, setEditTask] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = onSnapshot(
+      collection(db, "users", user.uid, "notifications"),
+      snap => setUnreadCount(snap.docs.filter(d => !d.data().read).length)
+    );
+    return () => unsub();
+  }, [user?.uid]);
 const [materialsTask, setMaterialsTask] = useState(null);
   const [taskPreset, setTaskPreset] = useState(null);
   const [alertEmail, setAlertEmail] = useState("");
@@ -4610,7 +4620,7 @@ return (
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
           </button>
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}><span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>WashLevel</span><span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px" }}>PRO</span></div><button onClick={() => setView("alerts")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 8 }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}><span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>WashLevel</span><span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px" }}>PRO</span></div><button onClick={() => setView("alerts")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 8, position: "relative" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>{unreadCount > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 10, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}</button>
         </div>
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
