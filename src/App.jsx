@@ -1089,7 +1089,11 @@ const filtered = mine.filter(t => {
 if (t.archived && !showArchived) return false;
 // Hide completed tasks older than 7 days unless showArchived
 if (t.status === "done" && !showArchived && t.completedAt && t.completedAt < sevenDaysAgo) return false;
-if (fStatus === "monitor") {
+if (fStatus === "overdue") {
+  const today = new Date().toISOString().split("T")[0];
+  if (t.status === "done") return false;
+  if (!t.due || !t.due.includes("-") || t.due >= today) return false;
+} else if (fStatus === "monitor") {
   const hasMonitor = t.checklist?.some(i => i.result === "monitor");
   if (!hasMonitor) return false;
 } else if (fStatus !== "all" && t.status !== fStatus) return false;
@@ -1113,19 +1117,24 @@ return (
 <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, WebkitAppearance: "none" }}>+ Add Task</button>
 <button onClick={() => setShowHistory(true)} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Task History</button>
 </div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
-<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-<span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>Today's Progress</span>
-<span style={{ fontSize: 13, fontWeight: 700 }}>{done}/{mine.length} ({pct}%)</span>
+<div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+  <select value={fStatus} onChange={e => setFS(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#374151", background: "#fff", cursor: "pointer", outline: "none" }}>
+    <option value="all">All Status</option>
+    <option value="pending">Pending</option>
+    <option value="in-progress">In Progress</option>
+    <option value="done">Done</option>
+    <option value="overdue">Overdue</option>
+  </select>
+  <select value={fCat} onChange={e => setFC(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#374151", background: "#fff", cursor: "pointer", outline: "none" }}>
+    <option value="all">All Types</option>
+    <option value="cleaning">Cleaning</option>
+    <option value="equipment">Equipment</option>
+    <option value="maintenance">Maintenance</option>
+    <option value="chemicals">Chemicals</option>
+    <option value="supplies">Supplies</option>
+    <option value="inspection">Inspection</option>
+  </select>
 </div>
-<Bar value={pct} color={pct === 100 ? "#10b981" : "#6366f1"} height={8} />
-</div>
-<div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 18 }}>
-{chip("all", fStatus, setFS, "All")} {chip("pending", fStatus, setFS, "Pending")} {chip("in-progress", fStatus, setFS, "In Progress")} {chip("done", fStatus, setFS, "Done")}
-<div style={{ width: 1, background: "#e5e7eb" }} />
-{["all", "cleaning", "equipment", "chemicals", "supplies", "inspection"].map(c => chip(c, fCat, setFC, c === "all" ? "All Types" : c.charAt(0).toUpperCase() + c.slice(1)))}
-
-  </div>
   <div>
     {filtered.length === 0 ? (
       <div style={{ textAlign: "center", padding: "40px 20px" }}>
