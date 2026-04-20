@@ -4067,6 +4067,10 @@ function TeamMembers({ user, locations }) {
                     alert("Invite email sent to " + inv.email);
                   } catch(e) { alert("Could not send email: " + e.message); }
                 }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Send Email</button>
+                <button onClick={async () => {
+                  if (!window.confirm("Delete this invite?")) return;
+                  await deleteDoc(doc(db, "invites", inv.id));
+                }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Delete</button>
               </div>
             </div>
           ))}
