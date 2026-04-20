@@ -656,8 +656,8 @@ return (
 })}
 </div>
 </div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>? Open Tasks</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, cursor: "pointer" }} onClick={() => onNavigate && onNavigate("tasks")}>
+<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>? Open Tasks <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>View All →</span></div>
 {tasks.filter(t => t.status !== "done").slice(0, 6).map((t, i, arr) => (
 <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none" }}>
 <div style={{ width: 8, height: 8, borderRadius: "50%", background: STS[t.status]?.dot, flexShrink: 0 }} />
