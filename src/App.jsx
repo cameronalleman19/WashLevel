@@ -1523,6 +1523,30 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
   const [newChem, setNewChem] = useState({ name: "", type: "pressure", unit: "PSI", minAlert: 20, maxAlert: 150, sensorId: "" });
   const [savingChem, setSavingChem] = useState(false);
   const [activeTab, setActiveTab] = useState("sensorpush");
+  const [shellyDevices, setShellyDevices] = useState([]);
+  const [showAddShelly, setShowAddShelly] = useState(false);
+  const [newShelly, setNewShelly] = useState({ name: "", deviceId: "", channel: 0, type: "input", alertOn: "on" });
+  const [savingShelly, setSavingShelly] = useState(false);
+  const [shellyReadings, setShellyReadings] = useState({});
+  useEffect(() => {
+    if (!locId) return;
+    const unsubShelly = onSnapshot(collection(db, "locations", locId, "shellyDevices"), snap => {
+      setShellyDevices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsubShelly();
+  }, [locId]);
+
+  // Load latest Shelly readings
+  useEffect(() => {
+    if (!locId) return;
+    const unsub2 = onSnapshot(collection(db, "locations", locId, "shellyReadings"), snap => {
+      const r = {};
+      snap.docs.forEach(d => { r[d.id] = d.data(); });
+      setShellyReadings(r);
+    });
+    return () => unsub2();
+  }, [locId]);
+
   useEffect(() => {
     if (!locId) return;
     const unsub = onSnapshot(collection(db, "locations", locId, "sensorReadings"), snap => {
@@ -1656,12 +1680,14 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
           <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Sensor Dashboard</div>
           <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
         </div>
+        {activeTab === "shelly" && <button onClick={() => setShowAddShelly(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Device</button>}
         {activeTab === "chemlevel" && <button onClick={() => setShowAddChem(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Sensor</button>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button onClick={() => setActiveTab("sensorpush")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "sensorpush" ? "#1a3352" : "#f3f4f6", color: activeTab === "sensorpush" ? "#fff" : "#6b7280" }}>SensorPush</button>
         <button onClick={() => setActiveTab("chemlevel")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "chemlevel" ? "#1a3352" : "#f3f4f6", color: activeTab === "chemlevel" ? "#fff" : "#6b7280" }}>ChemLevel</button>
+        <button onClick={() => setActiveTab("shelly")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "shelly" ? "#1a3352" : "#f3f4f6", color: activeTab === "shelly" ? "#fff" : "#6b7280" }}>Shelly</button>
       </div>
 
       {activeTab === "chemlevel" && (
@@ -1748,6 +1774,104 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
                   <span>Max alert: {sensor.maxAlert} {sensor.unit}</span>
                 </div>
                 {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>⚠️ Alert: Reading outside normal range</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+
+      {activeTab === "shelly" && (
+        <div>
+          {showAddShelly && (
+            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add Shelly Device</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Display Name</label>
+                  <input value={newShelly.name} onChange={e => setNewShelly(p => ({...p, name: e.target.value}))} placeholder="e.g. Fault Light Bay 1"
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Device ID</label>
+                  <input value={newShelly.deviceId} onChange={e => setNewShelly(p => ({...p, deviceId: e.target.value}))} placeholder="e.g. shellyplus1-ABC123"
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Type</label>
+                  <select value={newShelly.type} onChange={e => setNewShelly(p => ({...p, type: e.target.value}))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}>
+                    <option value="input">Digital Input</option>
+                    <option value="relay">Relay Output</option>
+                    <option value="power">Power Monitor</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Alert When</label>
+                  <select value={newShelly.alertOn} onChange={e => setNewShelly(p => ({...p, alertOn: e.target.value}))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}>
+                    <option value="on">Signal ON (active/fault)</option>
+                    <option value="off">Signal OFF (inactive)</option>
+                    <option value="never">No alerts</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Channel</label>
+                  <input type="number" min="0" max="3" value={newShelly.channel} onChange={e => setNewShelly(p => ({...p, channel: Number(e.target.value)}))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={async () => {
+                  if (!newShelly.name || !newShelly.deviceId) return;
+                  setSavingShelly(true);
+                  const id = "shelly_" + Date.now();
+                  await setDoc(doc(db, "locations", locId, "shellyDevices", id), { ...newShelly, id, createdAt: new Date().toISOString(), locationId: locId });
+                  setNewShelly({ name: "", deviceId: "", channel: 0, type: "input", alertOn: "on" });
+                  setShowAddShelly(false);
+                  setSavingShelly(false);
+                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingShelly ? "Saving..." : "Add Device"}</button>
+                <button onClick={() => setShowAddShelly(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {shellyDevices.length === 0 && !showAddShelly && (
+            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🔌</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>No Shelly devices yet</div>
+              <div style={{ fontSize: 13, marginBottom: 16 }}>Add a device to monitor fault lights, inputs, and relay states</div>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: 16, textAlign: "left", fontSize: 12, color: "#374151" }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Setup steps:</div>
+                <div>1. Connect your Shelly device to WiFi</div>
+                <div>2. Note the Device ID from the Shelly app</div>
+                <div>3. Add it here and assign your API key below</div>
+              </div>
+            </div>
+          )}
+          {shellyDevices.map(device => {
+            const reading = shellyReadings[device.id];
+            const state = reading?.state;
+            const isAlert = device.alertOn !== "never" && state === (device.alertOn === "on" ? true : false);
+            const stateLabel = state === true ? "ON" : state === false ? "OFF" : "Unknown";
+            const stateColor = state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af";
+            return (
+              <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{device.name}</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>ID: {device.deviceId} · Ch {device.channel} · {device.type}</div>
+                    {reading?.timestamp && <div style={{ fontSize: 11, color: "#9ca3af" }}>Last update: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: stateColor }}>{stateLabel}</div>
+                    {isAlert && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 700 }}>⚠️ Alert</div>}
+                  </div>
+                </div>
+                {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>⚠️ {device.name} is in alert state</div>}
+                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                  <button onClick={async () => { if (!window.confirm("Delete this device?")) return; await deleteDoc(doc(db, "locations", locId, "shellyDevices", device.id)); }}
+                    style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
+                </div>
               </div>
             );
           })}
