@@ -1986,18 +1986,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
         </div>
       )}
 
-      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "11px 16px", marginBottom: 20, fontSize: 13, color: "#92400e" }}>
-        <b>Sensor Integration Ready</b> - Connect IoT hardware to populate live data.
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 13 }}>
-        {cards.filter(c => c.val != null).map(c => (
-          <div key={c.label} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{c.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: c.val < c.low ? "#ef4444" : c.color }}>{c.val}{c.unit}</div>
-            {c.unit === "%" && <Bar value={c.val} color={c.val < c.low ? "#ef4444" : c.color} />}
-          </div>
-        ))}
-      </div>
+
     </div>
   );
 }
