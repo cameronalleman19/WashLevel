@@ -377,10 +377,49 @@ exports.ingestSensorReading = onRequest({ cors: true }, async (req, res) => {
     .collection("sensorReadings").doc(sensorId)
     .set({ ...reading, updatedAt: timestamp });
 
-  // Write to history (last 1000 readings kept)
+  // Write to history
   await db.collection("locations").doc(locationId)
     .collection("sensorReadings").doc(sensorId)
     .collection("history").add(reading);
+
+  // Check Shelly BLU distance threshold alerts
+  try {
+    const shellySnap = await db.collection("locations").doc(locationId)
+      .collection("shellyDevices").where("type", "==", "blu_distance").get();
+
+    for (const deviceDoc of shellySnap.docs) {
+      const device = deviceDoc.data();
+      if (device.sensorId !== sensorId) continue;
+      const distInches = parseFloat((parseFloat(value) / 25.4).toFixed(1));
+      const minAlert = device.minAlert || 2;
+      if (distInches < minAlert) {
+        // Get all users for this location
+        const locDoc = await db.collection("locations").doc(locationId).get();
+        const ownerId = locDoc.data()?.ownerId;
+        if (!ownerId) continue;
+        const usersSnap = await db.collection("users")
+          .where("ownerId", "==", ownerId).get();
+        const ownerSnap = await db.collection("users").doc(ownerId).get();
+        const allUsers = [...usersSnap.docs, ownerSnap];
+        for (const userDoc of allUsers) {
+          if (!userDoc.exists) continue;
+          const notifId = "notif" + Date.now() + userDoc.id;
+          await db.collection("users").doc(userDoc.id)
+            .collection("notifications").doc(notifId).set({
+              id: notifId,
+              type: "sensor_alert",
+              title: "⚠️ Sensor Alert: " + device.name,
+              body: device.name + " reading is " + distInches + '" — below threshold of ' + minAlert + '"',
+              locationId,
+              createdAt: new Date().toISOString(),
+              read: false,
+            });
+        }
+      }
+    }
+  } catch(e) {
+    console.log("Alert check error:", e.message);
+  }
 
   res.status(200).json({ ok: true, timestamp });
 });
@@ -404,13 +443,142 @@ exports.ingestSensorReading = onRequest({ cors: true }, async (req, res) => {
     .collection("sensorReadings").doc(sensorId)
     .set({ ...reading, updatedAt: timestamp });
 
-  // Write to history (last 1000 readings kept)
+  // Write to history
   await db.collection("locations").doc(locationId)
     .collection("sensorReadings").doc(sensorId)
     .collection("history").add(reading);
 
+  // Check Shelly BLU distance threshold alerts
+  try {
+    const shellySnap = await db.collection("locations").doc(locationId)
+      .collection("shellyDevices").where("type", "==", "blu_distance").get();
+
+    for (const deviceDoc of shellySnap.docs) {
+      const device = deviceDoc.data();
+      if (device.sensorId !== sensorId) continue;
+      const distInches = parseFloat((parseFloat(value) / 25.4).toFixed(1));
+      const minAlert = device.minAlert || 2;
+      if (distInches < minAlert) {
+        // Get all users for this location
+        const locDoc = await db.collection("locations").doc(locationId).get();
+        const ownerId = locDoc.data()?.ownerId;
+        if (!ownerId) continue;
+        const usersSnap = await db.collection("users")
+          .where("ownerId", "==", ownerId).get();
+        const ownerSnap = await db.collection("users").doc(ownerId).get();
+        const allUsers = [...usersSnap.docs, ownerSnap];
+        for (const userDoc of allUsers) {
+          if (!userDoc.exists) continue;
+          const notifId = "notif" + Date.now() + userDoc.id;
+          await db.collection("users").doc(userDoc.id)
+            .collection("notifications").doc(notifId).set({
+              id: notifId,
+              type: "sensor_alert",
+              title: "⚠️ Sensor Alert: " + device.name,
+              body: device.name + " reading is " + distInches + '" — below threshold of ' + minAlert + '"',
+              locationId,
+              createdAt: new Date().toISOString(),
+              read: false,
+            });
+        }
+      }
+    }
+  } catch(e) {
+    console.log("Alert check error:", e.message);
+  }
+
   res.status(200).json({ ok: true, timestamp });
 });
+
+
+// Check SensorPush thresholds for all users
+exports.checkSensorPushAlerts = onSchedule({ schedule: "*/10 * * * *", timeZone: "America/New_York", secrets: ["RESEND_API_KEY"] }, async () => {
+  console.log("checkSensorPushAlerts running at", new Date().toISOString());
+  const usersSnap = await db.collection("users").get();
+  console.log("Found", usersSnap.docs.length, "users");
+  
+  for (const userDoc of usersSnap.docs) {
+    try {
+      const prefsSnap = await db.collection("users").doc(userDoc.id).collection("prefs").doc("alerts").get();
+      if (!prefsSnap.exists || !prefsSnap.data().sensorPushAlert) continue;
+      console.log("Checking SensorPush for user", userDoc.id);
+
+      const alertPrefsSnap = await db.collection("users").doc(userDoc.id).collection("prefs").doc("sensorAlerts").get();
+      if (!alertPrefsSnap.exists) { console.log("No sensorAlerts prefs for", userDoc.id); continue; }
+      const alertPrefs = alertPrefsSnap.data();
+      console.log("Alert prefs:", JSON.stringify(alertPrefs));
+
+      const spSnap = await db.collection("users").doc(userDoc.id).collection("integrations").doc("sensorpush").get();
+      if (!spSnap.exists || spSnap.data().disconnected) { console.log("No SensorPush integration"); continue; }
+      const { accessToken, sensors, assignments } = spSnap.data();
+      if (!accessToken) { console.log("No accessToken"); continue; }
+      // sensors could be array or object
+      const sensorIds = Array.isArray(sensors) 
+        ? sensors.map(s => s.id || s).filter(Boolean)
+        : sensors ? Object.keys(sensors) : [];
+      // also try assignments
+      const allIds = sensorIds.length > 0 ? sensorIds : (assignments ? Object.values(assignments) : []);
+      console.log("Sensor IDs:", allIds);
+      console.log("Sensors structure:", JSON.stringify(sensors).substring(0, 300));
+      if (!allIds.length) { console.log("No sensor IDs found"); continue; }
+
+      const sampleRes = await fetch("https://api.sensorpush.com/api/v1/samples", {
+        method: "POST",
+        headers: { "Authorization": accessToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 1, sensors: allIds })
+      });
+      const sampleData = await sampleRes.json();
+      console.log("SensorPush response:", JSON.stringify(sampleData).substring(0, 200));
+      if (!sampleData.sensors) continue;
+
+      for (const [sensorId, readings] of Object.entries(sampleData.sensors)) {
+        if (!readings || readings.length === 0) continue;
+        const latest = readings[0];
+        const tempF = latest.temperature ? Math.round(latest.temperature * 9/5 + 32) : null;
+        const humidity = latest.humidity ? Math.round(latest.humidity) : null;
+        const thresholds = alertPrefs[sensorId];
+        console.log("Sensor", sensorId, "tempF:", tempF, "humidity:", humidity, "thresholds:", JSON.stringify(thresholds));
+        if (!thresholds) continue;
+        // sensors could be array or object with name
+        let sensorName = sensorId;
+        if (Array.isArray(sensors)) {
+          const found = sensors.find(s => s.id === sensorId);
+          sensorName = found?.name || sensorId;
+        } else if (sensors[sensorId]) {
+          sensorName = sensors[sensorId]?.name || sensorId;
+        }
+        console.log("Sensor name for", sensorId, ":", sensorName);
+
+        const alerts = [];
+        if (tempF !== null && thresholds.minTemp !== undefined && tempF < Number(thresholds.minTemp))
+          alerts.push("Temperature " + tempF + "°F is below minimum " + thresholds.minTemp + "°F");
+        if (tempF !== null && thresholds.maxTemp !== undefined && tempF > Number(thresholds.maxTemp))
+          alerts.push("Temperature " + tempF + "°F is above maximum " + thresholds.maxTemp + "°F");
+        if (humidity !== null && thresholds.minHumidity !== undefined && humidity < Number(thresholds.minHumidity))
+          alerts.push("Humidity " + humidity + "% is below minimum " + thresholds.minHumidity + "%");
+        if (humidity !== null && thresholds.maxHumidity !== undefined && humidity > Number(thresholds.maxHumidity))
+          alerts.push("Humidity " + humidity + "% is above maximum " + thresholds.maxHumidity + "%");
+
+        console.log("Alerts for", sensorId, ":", alerts);
+
+        for (const alertMsg of alerts) {
+          const nid = "notif" + Date.now() + sensorId;
+          await db.collection("users").doc(userDoc.id).collection("notifications").doc(nid).set({
+            id: nid, type: "sensor_alert", sensorId,
+            title: "⚠️ SensorPush Alert: " + sensorName,
+            body: alertMsg,
+            view: "sensors",
+            createdAt: new Date().toISOString(), read: false,
+          });
+          console.log("Notification sent for", sensorId, ":", alertMsg);
+        }
+      }
+    } catch(e) {
+      console.log("Error for user", userDoc.id, ":", e.message);
+    }
+  }
+});
+
 
 exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req, res) => {
   try {

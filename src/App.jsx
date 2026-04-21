@@ -1804,6 +1804,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
                     <option value="input">Digital Input</option>
                     <option value="relay">Relay Output</option>
                     <option value="power">Power Monitor</option>
+                    <option value="blu_distance">BLU Distance Sensor</option>
                   </select>
                 </div>
                 <div>
@@ -1815,6 +1816,11 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
                     <option value="never">No alerts</option>
                   </select>
                 </div>
+                {newShelly.type === "blu_distance" && <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Min Alert (inches)</label>
+                  <input type="number" value={newShelly.minAlert || ""} onChange={e => setNewShelly(p => ({...p, minAlert: Number(e.target.value)}))} placeholder="e.g. 50"
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                </div>}
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Channel</label>
                   <input type="number" min="0" max="3" value={newShelly.channel} onChange={e => setNewShelly(p => ({...p, channel: Number(e.target.value)}))}
@@ -1851,9 +1857,18 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
           {shellyDevices.map(device => {
             const reading = shellyReadings[device.id];
             const state = reading?.state;
-            const isAlert = device.alertOn !== "never" && state === (device.alertOn === "on" ? true : false);
-            const stateLabel = state === true ? "ON" : state === false ? "OFF" : "Unknown";
-            const stateColor = state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af";
+            const isBluDist = device.type === "blu_distance";
+            const distValue = reading?.distance;
+            const isAlert = device.alertOn !== "never" && (isBluDist
+              ? (device.alertOn === "on" && distValue !== undefined && distValue < (device.minAlert || 50))
+              : state === (device.alertOn === "on" ? true : false));
+            const distInches = distValue !== undefined ? (distValue / 25.4).toFixed(1) : undefined;
+            const stateLabel = isBluDist
+              ? (distInches !== undefined ? distInches + '"' : "Unknown")
+              : (state === true ? "ON" : state === false ? "OFF" : "Unknown");
+            const stateColor = isBluDist
+              ? (distInches !== undefined && parseFloat(distInches) < (device.minAlert || 2) ? "#dc2626" : "#10b981")
+              : (state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af");
             return (
               <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -4365,6 +4380,39 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     await updateDoc(doc(db, "users", user.uid, "notifications", notifId), { read: true });
   };
 
+  const [chemSensors, setChemSensors] = useState([]);
+  const [shellySensors, setShellySensors] = useState([]);
+  const [spSensors, setSpSensors] = useState([]);
+  const [spAlerts, setSpAlerts] = useState({});
+
+  useEffect(() => {
+    if (!locId || !user?.uid) return;
+    const unsub1 = onSnapshot(collection(db, "locations", locId, "chemSensors"), snap => {
+      setChemSensors(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    const unsub2 = onSnapshot(collection(db, "locations", locId, "shellyDevices"), snap => {
+      setShellySensors(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    // Load SensorPush sensors from user integrations
+    getDoc(doc(db, "users", user.uid, "integrations", "sensorpush")).then(snap => {
+      if (snap.exists()) {
+        const { sensors } = snap.data();
+        if (sensors) setSpSensors(Object.values(sensors));
+      }
+    });
+    // Load SensorPush alert thresholds
+    getDoc(doc(db, "users", user.uid, "prefs", "sensorAlerts")).then(snap => {
+      if (snap.exists()) setSpAlerts(snap.data());
+    });
+    return () => { unsub1(); unsub2(); };
+  }, [locId, user?.uid]);
+
+  const saveSpAlert = async (sensorId, field, value) => {
+    const updated = { ...spAlerts, [sensorId]: { ...(spAlerts[sensorId] || {}), [field]: Number(value) } };
+    setSpAlerts(updated);
+    await setDoc(doc(db, "users", user.uid, "prefs", "sensorAlerts"), updated);
+  };
+
 
   const defaults = {
     dailySummaryEnabled: false,
@@ -4379,6 +4427,9 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     lowInventoryAlert: true,
     equipmentAlert: true,
     newTaskAlert: false,
+    sensorPushAlert: true,
+    chemLevelAlert: true,
+    shellyAlert: true,
   };
 
   useEffect(() => {
@@ -4436,7 +4487,10 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
             <div style={{ fontSize: 20 }}>📋</div>
             <div style={{ flex: 1, cursor: "pointer" }} onClick={() => {
               markRead(n.id);
-              if (n.locationId) { setLocId(n.locationId); setView("tasks"); }
+              if (n.locationId) setLocId(n.locationId);
+              if (n.view) setView(n.view);
+              else if (n.type === "sensor_alert") setView("sensors");
+              else if (n.locationId) setView("tasks");
             }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{n.title}</div>
               <div style={{ fontSize: 13, color: "#374151", marginTop: 2 }}>{n.body}</div>
@@ -4485,6 +4539,106 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
         {user?.role === "manager" && <Row label="Low inventory" desc="Item falls below low stock threshold" k="lowInventoryAlert" />}
         {user?.role === "manager" && <Row label="Equipment alerts" desc="Equipment status changes to warning or alert" k="equipmentAlert" />}
         <Row label="New task assigned" desc="New task added at your location" k="newTaskAlert" />
+      </div>
+
+      {/* Sensor Alerts */}
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Sensor Alerts</div>
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Get notified when sensor readings exceed thresholds</div>
+
+        <Row label="ChemLevel alerts" desc="Pressure sensor outside min/max range" k="chemLevelAlert" />
+        {prefs.chemLevelAlert && (
+          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            {chemSensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>No ChemLevel sensors found for this location. Add them in Sensors → ChemLevel tab.</div>}
+            {chemSensors.map(s => (
+              <div key={s.id} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{s.name || s.sensorId}</div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>Min ({s.unit || "PSI"})</label>
+                    <input type="number" defaultValue={s.minAlert} onBlur={async e => {
+                      await updateDoc(doc(db, "locations", locId, "chemSensors", s.id), { minAlert: Number(e.target.value) });
+                    }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>Max ({s.unit || "PSI"})</label>
+                    <input type="number" defaultValue={s.maxAlert} onBlur={async e => {
+                      await updateDoc(doc(db, "locations", locId, "chemSensors", s.id), { maxAlert: Number(e.target.value) });
+                    }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+            {chemSensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af" }}>No ChemLevel sensors configured yet. Add them in the Sensors tab.</div>}
+          </div>
+        )}
+
+        <Row label="Shelly alerts" desc="Digital input or distance sensor triggered" k="shellyAlert" />
+        {prefs.shellyAlert && (
+          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            {shellySensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>No Shelly devices found for this location. Add them in Sensors → Shelly tab.</div>}
+            {shellySensors.map(s => (
+              <div key={s.id} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{s.name} ({s.type})</div>
+                {s.type === "blu_distance" ? (
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: "#6b7280" }}>Min Distance (inches)</label>
+                      <input type="number" defaultValue={s.minAlert || 2} onBlur={async e => {
+                        await updateDoc(doc(db, "locations", locId, "shellyDevices", s.id), { minAlert: Number(e.target.value) });
+                      }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>Alert when signal is:</label>
+                    <select defaultValue={s.alertOn || "on"} onBlur={async e => {
+                      await updateDoc(doc(db, "locations", locId, "shellyDevices", s.id), { alertOn: e.target.value });
+                    }} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", background: "#fff", color: "#111827" }}>
+                      <option value="on">ON</option>
+                      <option value="off">OFF</option>
+                      <option value="never">Never</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Row label="SensorPush alerts" desc="Temperature or humidity out of range" k="sensorPushAlert" />
+        {prefs.sensorPushAlert && (
+          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            {spSensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af" }}>No SensorPush sensors found. Connect SensorPush in the Sensors tab.</div>}
+            {spSensors.map(s => (
+              <div key={s.id} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{s.name}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>Min Temp (°F)</label>
+                    <input type="number" defaultValue={spAlerts[s.id]?.minTemp ?? ""} onBlur={e => saveSpAlert(s.id, "minTemp", e.target.value)}
+                      placeholder="e.g. 32" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>Max Temp (°F)</label>
+                    <input type="number" defaultValue={spAlerts[s.id]?.maxTemp ?? ""} onBlur={e => saveSpAlert(s.id, "maxTemp", e.target.value)}
+                      placeholder="e.g. 100" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>Min Humidity (%)</label>
+                    <input type="number" defaultValue={spAlerts[s.id]?.minHumidity ?? ""} onBlur={e => saveSpAlert(s.id, "minHumidity", e.target.value)}
+                      placeholder="e.g. 20" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>Max Humidity (%)</label>
+                    <input type="number" defaultValue={spAlerts[s.id]?.maxHumidity ?? ""} onBlur={e => saveSpAlert(s.id, "maxHumidity", e.target.value)}
+                      placeholder="e.g. 80" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
