@@ -580,6 +580,80 @@ exports.checkSensorPushAlerts = onSchedule({ schedule: "*/10 * * * *", timeZone:
 });
 
 
+
+// Shelly Cloud proxy
+exports.shellyCloudProxy = onCall({ timeoutSeconds: 30 }, async (request) => {
+  console.log("shellyCloudProxy called with data:", JSON.stringify(request.data).slice(0,100));
+  console.log("Auth:", request.auth?.uid || "none");
+  const { authKey, server, deviceId } = request.data;
+  if (!authKey || !server) throw new Error("Missing credentials");
+
+  const cleanServer = server.replace("https://", "").replace(/\/$/, "");
+  
+  try {
+    // If deviceId provided, get specific device status
+    if (deviceId) {
+      const url = `https://${cleanServer}/device/status`;
+      console.log("Getting device status:", url, "device:", deviceId);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `auth_key=${encodeURIComponent(authKey)}&id=${encodeURIComponent(deviceId)}`
+      });
+      const data = await res.json();
+      console.log("Device status response:", JSON.stringify(data).slice(0, 300));
+      return data;
+    }
+    
+    // Try multiple possible list endpoints
+    const listEndpoints = [
+      "/interface/account/getdeviceslist",
+      "/api/shelly/device/list", 
+      "/account/getdeviceslist",
+      "/interface/device/list",
+    ];
+    
+    for (const ep of listEndpoints) {
+      const url = `https://${cleanServer}${ep}`;
+      console.log("Trying endpoint:", url);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: `auth_key=${encodeURIComponent(authKey)}`,
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        const data = await res.json();
+        console.log("Response from", ep, ":", JSON.stringify(data).slice(0, 200));
+        if (data.isok) return data;
+      } catch(fetchErr) {
+        clearTimeout(timeout);
+        console.log("Fetch error for", ep, ":", fetchErr.message);
+      }
+    }
+    
+    // Last resort - verify key is valid with device/status
+    const verifyUrl = `https://${cleanServer}/device/status`;
+    const vRes = await fetch(verifyUrl, {
+      method: "POST", 
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `auth_key=${encodeURIComponent(authKey)}&id=verify`
+    });
+    const vData = await vRes.json();
+    console.log("Verify response:", JSON.stringify(vData).slice(0, 200));
+    // If we get wrong_device_id error, key is valid
+    if (vData.errors?.wrong_device_id) return { isok: true, verified: true, devices: [] };
+    return vData;
+  } catch(e) {
+    console.log("Shelly fetch error:", e.message);
+    throw new Error("Could not connect to Shelly Cloud: " + e.message);
+  }
+});
+
+
 exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req, res) => {
   try {
     if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }

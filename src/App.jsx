@@ -1528,13 +1528,101 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
   const [newShelly, setNewShelly] = useState({ name: "", deviceId: "", channel: 0, type: "input", alertOn: "on" });
   const [savingShelly, setSavingShelly] = useState(false);
   const [shellyReadings, setShellyReadings] = useState({});
+  const [shellyCloud, setShellyCloud] = useState(null);
+  const [shellyAuthKey, setShellyAuthKey] = useState("");
+  const [shellyServer, setShellyServer] = useState("shelly-103-eu.shelly.cloud");
+  const [connectingShelly, setConnectingShelly] = useState(false);
+  const [shellyCloudDevices, setShellyCloudDevices] = useState([]);
+  const [loadingCloudDevices, setLoadingCloudDevices] = useState(false);
+  const [pollingShelly, setPollingShelly] = useState(false);
+  useEffect(() => {
+    if (!uid) return;
+    getDoc(doc(db, "users", uid, "integrations", "shelly")).then(snap => {
+      if (snap.exists() && !snap.data().disconnected) {
+        setShellyCloud(snap.data());
+        loadShellyCloudDevices(snap.data());
+      }
+    });
+  }, [uid]);
+
+  const pollShellyDevices = async (creds, devices) => {
+    if (!creds || !devices.length || pollingShelly) return;
+    setPollingShelly(true);
+    try {
+      const shellyProxy = httpsCallable(functions, "shellyCloudProxy");
+      for (const device of devices) {
+        const result = await shellyProxy({ authKey: creds.authKey, server: creds.server, deviceId: device.deviceId });
+        const data = result.data;
+        if (data.isok && data.data) {
+          const status = data.data.device_status;
+          const state = status?.["input:0"]?.state ?? status?.inputs?.[0]?.input ?? null;
+          const online = data.data.online;
+          await setDoc(doc(db, "locations", locId, "shellyReadings", device.id), {
+            state, online, timestamp: new Date().toISOString()
+          });
+        }
+      }
+    } catch(e) { console.log("Shelly poll error:", e.message); }
+    setPollingShelly(false);
+  };
+
+  const loadShellyCloudDevices = async (creds) => {
+    setLoadingCloudDevices(true);
+    try {
+      const shellyProxy = httpsCallable(functions, "shellyCloudProxy");
+      const result = await shellyProxy({ authKey: creds.authKey, server: creds.server });
+      const data = result.data;
+      if (data.isok && data.data?.devices_status) {
+        const devices = Object.entries(data.data.devices_status).map(([id, status]) => ({
+          id, name: data.data.devices_info?.[id]?.name || id,
+          type: data.data.devices_info?.[id]?.type || "unknown",
+          online: status.online,
+          inputs: status["input:0"] || status.inputs?.[0] || null,
+          relays: status["switch:0"] || status.relays?.[0] || null,
+        }));
+        setShellyCloudDevices(devices);
+        // Save latest readings to Firestore
+        for (const device of devices) {
+          if (!locId) continue;
+          const state = device.inputs?.state ?? device.relays?.output ?? null;
+          if (state !== null) {
+            await setDoc(doc(db, "locations", locId, "shellyReadings", device.id), {
+              state, timestamp: new Date().toISOString(), online: device.online
+            });
+          }
+        }
+      }
+    } catch(e) { console.log("Shelly Cloud error:", e.message); }
+    setLoadingCloudDevices(false);
+  };
+
+  const connectShellyCloud = async () => {
+    if (!shellyAuthKey.trim()) return;
+    setConnectingShelly(true);
+    try {
+      const shellyProxy = httpsCallable(functions, "shellyCloudProxy");
+      const result = await shellyProxy({ authKey: shellyAuthKey.trim(), server: shellyServer });
+      const data = result.data;
+      if (data.verified || data.isok || (data.errors && data.errors.wrong_device_id)) {
+        const creds = { authKey: shellyAuthKey.trim(), server: shellyServer, connectedAt: new Date().toISOString() };
+        await setDoc(doc(db, "users", uid, "integrations", "shelly"), creds);
+        setShellyCloud(creds);
+      } else {
+        alert("Connection failed. Check your Auth Key and server URL.");
+      }
+    } catch(e) { alert("Error: " + e.message + (e.details ? " - " + JSON.stringify(e.details) : "")); }
+    setConnectingShelly(false);
+  };
+
   useEffect(() => {
     if (!locId) return;
     const unsubShelly = onSnapshot(collection(db, "locations", locId, "shellyDevices"), snap => {
-      setShellyDevices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const devs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setShellyDevices(devs);
+      if (shellyCloud && devs.length > 0) pollShellyDevices(shellyCloud, devs);
     });
     return () => unsubShelly();
-  }, [locId]);
+  }, [locId, shellyCloud]);
 
   // Load latest Shelly readings
   useEffect(() => {
@@ -1783,6 +1871,84 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
 
       {activeTab === "shelly" && (
         <div>
+          {/* Shelly Cloud Connection */}
+          {!shellyCloud ? (
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Connect Shelly Cloud</div>
+              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Enter your Shelly Cloud Auth Key to import all your devices automatically.</div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12, background: "#f8fafc", borderRadius: 8, padding: 12 }}>
+                <b>Where to find your Auth Key:</b><br/>
+                Shelly Smart Control App → Menu → User Settings → Security → Authorization Cloud Key
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Server URL <span style={{ fontWeight: 400, color: "#9ca3af" }}>(found in Shelly app under Authorization cloud key)</span></label>
+                <input value={shellyServer} onChange={e => setShellyServer(e.target.value.replace("https://",""))} 
+                  placeholder="e.g. shelly-256-eu.shelly.cloud"
+                  style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827", marginBottom: 10 }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Auth Key</label>
+                <input value={shellyAuthKey} onChange={e => setShellyAuthKey(e.target.value)} placeholder="Paste your Auth Key here"
+                  style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+              </div>
+              <button onClick={connectShellyCloud} disabled={connectingShelly || !shellyAuthKey}
+                style={{ background: shellyAuthKey ? "#1a3352" : "#e5e7eb", color: shellyAuthKey ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: shellyAuthKey ? "pointer" : "not-allowed" }}>
+                {connectingShelly ? "Connecting..." : "Connect Shelly Cloud"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ background: "#d1fae5", border: "1px solid #6ee7b7", borderRadius: 10, padding: "10px 16px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#065f46" }}>✓ Shelly Cloud Connected</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { loadShellyCloudDevices(shellyCloud); if (shellyDevices.length > 0) pollShellyDevices(shellyCloud, shellyDevices); }} disabled={loadingCloudDevices}
+                  style={{ background: "#fff", color: "#065f46", border: "1px solid #6ee7b7", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+                  {loadingCloudDevices ? "Refreshing..." : "Refresh"}
+                </button>
+                <button onClick={async () => {
+                  if (!window.confirm("Disconnect Shelly Cloud?")) return;
+                  await updateDoc(doc(db, "users", uid, "integrations", "shelly"), { disconnected: true });
+                  setShellyCloud(null);
+                  setShellyCloudDevices([]);
+                }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Disconnect</button>
+              </div>
+            </div>
+          )}
+
+          {/* Cloud Devices */}
+          {shellyCloud && shellyCloudDevices.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#374151", marginBottom: 10 }}>Cloud Devices ({shellyCloudDevices.length})</div>
+              {shellyCloudDevices.map(device => {
+                const reading = shellyReadings[device.id];
+                const state = reading?.state;
+                const manualDevice = shellyDevices.find(d => d.deviceId === device.id);
+                const isAlert = manualDevice && manualDevice.alertOn !== "never" && state === (manualDevice.alertOn === "on" ? true : false);
+                return (
+                  <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{device.name}</div>
+                        <div style={{ fontSize: 11, color: device.online ? "#10b981" : "#9ca3af", marginTop: 2 }}>
+                          {device.online ? "● Online" : "○ Offline"} · {device.type}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
+                          {state === true ? "ON" : state === false ? "OFF" : "--"}
+                        </div>
+                      </div>
+                    </div>
+                    {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>⚠️ Alert: {device.name} triggered</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {shellyCloud && shellyCloudDevices.length === 0 && !loadingCloudDevices && (
+            <div style={{ textAlign: "center", color: "#9ca3af", padding: 20 }}>No devices found in your Shelly Cloud account.</div>
+          )}
+          {loadingCloudDevices && <div style={{ textAlign: "center", color: "#6b7280", padding: 20 }}>Loading devices...</div>}
+
+          <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, marginTop: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>Manual Device Config</div>
           {showAddShelly && (
             <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 16 }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add Shelly Device</div>
@@ -1841,8 +2007,9 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
               </div>
             </div>
           )}
+          </div>
           {shellyDevices.length === 0 && !showAddShelly && (
-            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+            <div style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>🔌</div>
               <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>No Shelly devices yet</div>
               <div style={{ fontSize: 13, marginBottom: 16 }}>Add a device to monitor fault lights, inputs, and relay states</div>
