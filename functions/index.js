@@ -810,7 +810,23 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     const eqRef = db.collection("locations").doc(foundLocId).collection("equipment").doc(foundEqId);
     const eqDoc = await eqRef.get();
     const currentCarsCount = eqDoc.exists ? (eqDoc.data().carsCount || 0) : 0;
-    await eqRef.update({ carsCount: currentCarsCount + count, updatedAt: new Date().toISOString() });
+    const newCarsCount = currentCarsCount + count;
+    await eqRef.update({ carsCount: newCarsCount, updatedAt: new Date().toISOString() });
+
+    // Check if any car-recurrence tasks for this equipment are now due
+    try {
+      const tasksSnap = await db.collection("locations").doc(foundLocId).collection("tasks").get();
+      const carTasks = tasksSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(t => t.equipmentId === foundEqId && t.nextCarsDue && t.status !== "done" && newCarsCount >= t.nextCarsDue);
+      for (const t of carTasks) {
+        await db.collection("locations").doc(foundLocId).collection("tasks").doc(t.id).update({
+          due: dateStr,
+          updatedAt: new Date().toISOString(),
+        });
+        console.log("Car recurrence triggered for task", t.id, "at", newCarsCount, "cars");
+      }
+    } catch(e) { console.log("Car recurrence check error:", e.message); }
 
     console.log("Saved", count, "cars for equipment", foundEqId, "at location", foundLocId, "on", dateStr);
     res.status(200).send("OK");
