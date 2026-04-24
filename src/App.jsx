@@ -1483,7 +1483,7 @@ return (
 
 function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onNavigate }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [newEq, setNewEq] = useState({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0 });
+  const [newEq, setNewEq] = useState({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0, tracksCarCount: false });
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [editingId, setEditingId] = useState(null);
@@ -1528,15 +1528,24 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
     if (!newEq.name.trim()) return;
     setSaving(true);
     const id = "e" + Date.now();
-    await setDoc(doc(db, "locations", locId, "equipment", id), { ...newEq, id, note: "", manuals: [], createdAt: new Date().toISOString() });
-    setNewEq({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0 });
+    const washWords = ["wash", "clean", "rinse", "foam", "shine", "scrub", "spray", "buff", "gloss", "suds"];
+    const washWord = washWords[Math.floor(Math.random() * washWords.length)];
+    const eqEmailCode = newEq.tracksCarCount ? (washWord + Math.floor(1000 + Math.random() * 9000)) : null;
+    await setDoc(doc(db, "locations", locId, "equipment", id), { ...newEq, id, note: "", manuals: [], emailCode: eqEmailCode, createdAt: new Date().toISOString() });
+    setNewEq({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0, tracksCarCount: false });
     setShowAdd(false);
     setSaving(false);
   };
 
   const handleSaveEdit = async (eqId) => {
     const eq = equipment.find(e => e.id === eqId);
+    const washWords2 = ["wash", "clean", "rinse", "foam", "shine", "scrub", "spray", "buff", "gloss", "suds"];
+    const washWord2 = washWords2[Math.floor(Math.random() * washWords2.length)];
     const updates = { ...editData, updatedAt: new Date().toISOString() };
+    if (editData.tracksCarCount && !eq.emailCode) {
+      updates.emailCode = washWord2 + Math.floor(1000 + Math.random() * 9000);
+    }
+    if (!editData.tracksCarCount) updates.emailCode = null;
     await updateDoc(doc(db, "locations", locId, "equipment", eqId), updates);
     // Log to history if car count or service date changed
     const changed = [];
@@ -1599,6 +1608,18 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Next Service at Cars</label><input type="number" value={newEq.nextServiceCars} onChange={e => setNewEq(p => ({...p, nextServiceCars: parseInt(e.target.value)||0}))} placeholder="e.g. 50000" style={inp} /></div>
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Current Car Count</label><input type="number" value={newEq.carsCount} onChange={e => setNewEq(p => ({...p, carsCount: parseInt(e.target.value)||0}))} placeholder="0" style={inp} /></div>
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, cursor: "pointer" }}>
+            <input type="checkbox" checked={newEq.tracksCarCount} onChange={e => setNewEq(p => ({...p, tracksCarCount: e.target.checked}))} style={{ width: 16, height: 16, accentColor: "#1a3352" }} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Track car count for this equipment</div>
+              <div style={{ fontSize: 11, color: "#9ca3af" }}>Generates a dedicated email address for automated car count logging</div>
+            </div>
+          </label>
+          {newEq.tracksCarCount && (
+            <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#0369a1" }}>
+              A unique email address will be generated for this equipment when saved.
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={handleAdd} disabled={saving} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add"}</button>
             <button onClick={() => setShowAdd(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
@@ -1656,9 +1677,16 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                       </div>
                     )}
                   </div>
+                  {eq.emailCode && (
+                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, background: "#f0f9ff", borderRadius: 7, padding: "7px 10px" }}>
+                      <div style={{ fontSize: 11, color: "#0369a1" }}>Car count email: <b>{eq.emailCode}@washlevel.com</b></div>
+                      <button onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(eq.emailCode + "@washlevel.com"); }}
+                        style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 4, padding: "2px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>Copy</button>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
-                  <button onClick={e => { e.stopPropagation(); setEditingId(isEditing ? null : eq.id); setEditData({ status: eq.status, lastService: eq.lastService||"", lastServiceCars: eq.lastServiceCars||0, nextService: eq.nextService||"", nextServiceCars: eq.nextServiceCars||0, carsCount: eq.carsCount||0, note: eq.note||"" }); }} style={{ background: "#f3f4f6", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#374151", fontWeight: 600 }}>Edit</button>
+                  <button onClick={e => { e.stopPropagation(); setEditingId(isEditing ? null : eq.id); setEditData({ status: eq.status, lastService: eq.lastService||"", lastServiceCars: eq.lastServiceCars||0, nextService: eq.nextService||"", nextServiceCars: eq.nextServiceCars||0, carsCount: eq.carsCount||0, note: eq.note||"", tracksCarCount: eq.tracksCarCount||false }); }} style={{ background: "#f3f4f6", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#374151", fontWeight: 600 }}>Edit</button>
                   <button onClick={e => { e.stopPropagation(); onCreateTask && onCreateTask(eq); }} style={{ background: "#ede9fe", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#6366f1", fontWeight: 600 }}>+ Task</button>
                   <button onClick={e => { e.stopPropagation(); handleDelete(eq.id); }} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Delete</button>
                 </div>
@@ -1684,6 +1712,13 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                     <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Notes</label>
                     <textarea value={editData.note} onChange={e => setEditData(p => ({...p, note: e.target.value}))} rows={2} style={{ ...inp, resize: "vertical", fontFamily: "inherit", fontSize: 12, padding: "6px 8px" }} />
                   </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, cursor: "pointer" }}>
+                    <input type="checkbox" checked={editData.tracksCarCount || false} onChange={e => setEditData(p => ({...p, tracksCarCount: e.target.checked}))} style={{ width: 16, height: 16, accentColor: "#1a3352" }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>Track car count for this equipment</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{eq.emailCode ? "Email: " + eq.emailCode + "@washlevel.com" : "Will generate a dedicated email address"}</div>
+                    </div>
+                  </label>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => handleSaveEdit(eq.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
                     <button onClick={() => setEditingId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
@@ -4434,6 +4469,17 @@ const [address, setAddress] = useState("");
 const [zipCode, setZipCode] = useState("");
 const [saved, setSaved] = useState(false);
 const [sortedLocs, setSortedLocs] = useState([]);
+const [locEquipment, setLocEquipment] = useState({});
+
+useEffect(() => {
+  if (!locations.length) return;
+  locations.forEach(loc => {
+    getDocs(collection(db, "locations", loc.id, "equipment")).then(snap => {
+      const eqs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.tracksCarCount && e.emailCode);
+      if (eqs.length) setLocEquipment(p => ({ ...p, [loc.id]: eqs }));
+    });
+  });
+}, [locations.length]);
 useEffect(() => {
   setSortedLocs([...locations].sort((a, b) => (a.order || 0) - (b.order || 0)));
 }, [locations]);
@@ -4581,11 +4627,18 @@ Changes saved!
 <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{loc.address || "No address set"}</div>
 {loc.emailCode && (
   <div style={{ fontSize: 11, color: "#0369a1", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-    <span>Equipment email: <b>{loc.emailCode}@washlevel.com</b></span>
+    <span>Location email: <b>{loc.emailCode}@washlevel.com</b></span>
     <button onClick={() => navigator.clipboard.writeText(loc.emailCode + "@washlevel.com")}
       style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Copy</button>
   </div>
 )}
+{(locEquipment[loc.id] || []).map(eq => (
+  <div key={eq.id} style={{ fontSize: 11, color: "#6366f1", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+    <span>{eq.name} email: <b>{eq.emailCode}@washlevel.com</b></span>
+    <button onClick={() => navigator.clipboard.writeText(eq.emailCode + "@washlevel.com")}
+      style={{ background: "#ede9fe", color: "#6366f1", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Copy</button>
+  </div>
+))}
 </div>
 <button onClick={() => startEdit(loc)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
 </div>
