@@ -1201,6 +1201,7 @@ if (task.recurrence && !task.recurrence.includes("cars")) {
   else if (task.recurrence === "weekly") nextDue.setDate(nextDue.getDate() + 7);
   else if (task.recurrence === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
   else if (task.recurrence === "quarterly") nextDue.setMonth(nextDue.getMonth() + 3);
+  else if (task.recurrence === "annually") nextDue.setFullYear(nextDue.getFullYear() + 1);
   const newId = "t" + Date.now();
   await setDoc(doc(db, "locations", locId, "tasks", newId), {
     ...task,
@@ -2857,6 +2858,8 @@ function TimeClock({ locId, locationName, allLocations }) {
                 <option value="biweekly">Bi-Weekly</option>
                 <option value="semimonthly">Semi-Monthly (1st and 15th)</option>
                 <option value="monthly">Monthly</option>
+<option value="quarterly">Quarterly</option>
+<option value="annually">Annually</option>
               </select>
             </div>
           </div>
@@ -3344,6 +3347,7 @@ return (
 <option value="weekly">Weekly</option>
 <option value="monthly">Monthly</option>
 <option value="quarterly">Quarterly</option>
+<option value="annually">Annually</option>
 <option value="every 500 cars">Every 500 cars</option>
 <option value="every 1000 cars">Every 1,000 cars</option>
 <option value="every 2500 cars">Every 2,500 cars</option>
