@@ -4681,17 +4681,36 @@ function CarCounts({ locations }) {
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
   const [counts, setCounts] = useState({});
+  const [eqCounts, setEqCounts] = useState({});
   const [saved, setSaved] = useState({});
   const [saving, setSaving] = useState({});
   const [loaded, setLoaded] = useState({});
+  const [locEquipment, setLocEquipment] = useState({});
+
+  // Load car-tracking equipment per location
+  useEffect(() => {
+    if (!locations.length) return;
+    locations.forEach(async loc => {
+      const snap = await getDocs(collection(db, "locations", loc.id, "equipment"));
+      const eqs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.tracksCarCount);
+      if (eqs.length) setLocEquipment(p => ({ ...p, [loc.id]: eqs }));
+    });
+  }, [locations.length]);
 
   useEffect(() => {
     if (!selectedDate) return;
     setLoaded({});
     locations.forEach(async loc => {
       const snap = await getDoc(doc(db, "locations", loc.id, "daySummaries", selectedDate));
-      const cars = snap.exists() ? (snap.data().carsWashed ?? "") : "";
+      const data = snap.exists() ? snap.data() : {};
+      const cars = data.carsWashed ?? "";
       setCounts(p => ({ ...p, [loc.id]: cars === 0 ? "0" : cars || "" }));
+      // Load per-equipment counts
+      if (data.equipment) {
+        Object.entries(data.equipment).forEach(([eqId, eqData]) => {
+          setEqCounts(p => ({ ...p, [loc.id + "_" + eqId]: eqData.carsWashed ?? "" }));
+        });
+      }
       setLoaded(p => ({ ...p, [loc.id]: true }));
     });
   }, [selectedDate, locations.length]);
@@ -4705,6 +4724,44 @@ function CarCounts({ locations }) {
     setSaving(p => ({ ...p, [locId]: false }));
     setSaved(p => ({ ...p, [locId]: true }));
     setTimeout(() => setSaved(p => ({ ...p, [locId]: false })), 2000);
+  };
+
+  const handleSaveEq = async (locId, eqId) => {
+    const key = locId + "_" + eqId;
+    const val = parseInt(eqCounts[key]) || 0;
+    setSaving(p => ({ ...p, [key]: true }));
+
+    // Write equipment-specific count
+    await setDoc(doc(db, "locations", locId, "daySummaries", selectedDate), {
+      [`equipment.${eqId}.carsWashed`]: val,
+      [`equipment.${eqId}.date`]: selectedDate,
+      [`equipment.${eqId}.updatedAt`]: new Date().toISOString(),
+      date: selectedDate, updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    // Recalculate location total from all equipment counts
+    const snap = await getDoc(doc(db, "locations", locId, "daySummaries", selectedDate));
+    const eqData = snap.exists() ? (snap.data().equipment || {}) : {};
+    const locTotal = Object.values(eqData).reduce((sum, e) => sum + (e.carsWashed || 0), 0);
+    await setDoc(doc(db, "locations", locId, "daySummaries", selectedDate), {
+      carsWashed: locTotal, updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    setCounts(p => ({ ...p, [locId]: locTotal }));
+
+    // Update equipment lifetime car count
+    const eqRef = doc(db, "locations", locId, "equipment", eqId);
+    const eqDoc = await getDoc(eqRef);
+    if (eqDoc.exists()) {
+      const prev = eqDoc.data().equipment?.[eqId]?.carsWashed || 0;
+      const diff = val - prev;
+      if (diff !== 0) {
+        await updateDoc(eqRef, { carsCount: Math.max(0, (eqDoc.data().carsCount || 0) + diff) });
+      }
+    }
+
+    setSaving(p => ({ ...p, [key]: false }));
+    setSaved(p => ({ ...p, [key]: true }));
+    setTimeout(() => setSaved(p => ({ ...p, [key]: false })), 2000);
   };
 
   const totalCars = Object.values(counts).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
@@ -4740,29 +4797,70 @@ function CarCounts({ locations }) {
         <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600 }}>Total Cars</div>
         <div style={{ color: "#fff", fontSize: 28, fontWeight: 800 }}>{totalCars}</div>
       </div>
-      {locations.map(loc => (
-        <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 18, marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{loc.name}</div>
-            {saved[loc.id] && <span style={{ fontSize: 12, color: "#10b981", fontWeight: 600 }}>Saved!</span>}
+      {locations.map(loc => {
+        const eqs = locEquipment[loc.id] || [];
+        const hasEq = eqs.length > 0;
+        return (
+          <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 18, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{loc.name}</div>
+              {saved[loc.id] && <span style={{ fontSize: 12, color: "#10b981", fontWeight: 600 }}>Saved!</span>}
+            </div>
+
+            {hasEq ? (
+              // Per-equipment count inputs
+              <>
+                {eqs.map(eq => {
+                  const key = loc.id + "_" + eq.id;
+                  return (
+                    <div key={eq.id} style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>{eq.name}</div>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                        <button onClick={() => setEqCounts(p => ({ ...p, [key]: Math.max(0, (parseInt(p[key]) || 0) - 1) }))}
+                          style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>-</button>
+                        <input type="number" min="0"
+                          value={loaded[loc.id] ? (eqCounts[key] ?? "") : ""}
+                          placeholder={loaded[loc.id] ? "0" : "..."}
+                          onChange={e => setEqCounts(p => ({ ...p, [key]: e.target.value }))}
+                          style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa", boxSizing: "border-box" }} />
+                        <button onClick={() => setEqCounts(p => ({ ...p, [key]: (parseInt(p[key]) || 0) + 1 }))}
+                          style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>+</button>
+                      </div>
+                      <button onClick={() => handleSaveEq(loc.id, eq.id)} disabled={saving[key]}
+                        style={{ width: "100%", marginTop: 8, background: saved[key] ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        {saving[key] ? "Saving..." : saved[key] ? "Saved!" : "Save " + eq.name + " Count"}
+                      </button>
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 8, padding: "8px 12px", background: "#f8fafc", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>Location Total</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "#1a3352" }}>{counts[loc.id] || 0}</span>
+                </div>
+              </>
+            ) : (
+              // Single location count input (existing behavior)
+              <>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <button onClick={() => setCounts(p => ({ ...p, [loc.id]: Math.max(0, (parseInt(p[loc.id]) || 0) - 1) }))}
+                    style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>-</button>
+                  <input type="number" min="0"
+                    value={loaded[loc.id] ? (counts[loc.id] ?? "") : ""}
+                    placeholder={loaded[loc.id] ? "0" : "..."}
+                    onChange={e => setCounts(p => ({ ...p, [loc.id]: e.target.value }))}
+                    style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa", boxSizing: "border-box" }} />
+                  <button onClick={() => setCounts(p => ({ ...p, [loc.id]: (parseInt(p[loc.id]) || 0) + 1 }))}
+                    style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>+</button>
+                </div>
+                <button onClick={() => handleSave(loc.id)} disabled={saving[loc.id]}
+                  style={{ width: "100%", marginTop: 12, background: saved[loc.id] ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  {saving[loc.id] ? "Saving..." : saved[loc.id] ? "Saved!" : "Save Count"}
+                </button>
+              </>
+            )}
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => setCounts(p => ({ ...p, [loc.id]: Math.max(0, (parseInt(p[loc.id]) || 0) - 1) }))}
-              style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>-</button>
-            <input type="number" min="0"
-              value={loaded[loc.id] ? (counts[loc.id] ?? "") : ""}
-              placeholder={loaded[loc.id] ? "0" : "..."}
-              onChange={e => setCounts(p => ({ ...p, [loc.id]: e.target.value }))}
-              style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa", boxSizing: "border-box" }} />
-            <button onClick={() => setCounts(p => ({ ...p, [loc.id]: (parseInt(p[loc.id]) || 0) + 1 }))}
-              style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>+</button>
-          </div>
-          <button onClick={() => handleSave(loc.id)} disabled={saving[loc.id]}
-            style={{ width: "100%", marginTop: 12, background: saved[loc.id] ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            {saving[loc.id] ? "Saving..." : saved[loc.id] ? "Saved!" : "Save Count"}
-          </button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

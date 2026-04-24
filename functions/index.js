@@ -721,20 +721,76 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split("T")[0];
     
-    // Find location by emailCode
+    // First try location-level emailCode
     const locsSnap = await db.collection("locations").where("emailCode", "==", locationCode).get();
-    if (locsSnap.empty) { console.log("No location for code:", locationCode); res.status(200).send("Location not found"); return; }
-    
-    const locId = locsSnap.docs[0].id;
-    const summaryRef = db.collection("locations").doc(locId).collection("daySummaries").doc(dateStr);
-    const existing = await summaryRef.get();
-    const existingCount = existing.exists ? (existing.data().carsWashed || 0) : 0;
-    const newCount = existingCount + count;
-    await summaryRef.set({
-      carsWashed: newCount, date: dateStr, source: "email", updatedAt: new Date().toISOString()
+
+    if (!locsSnap.empty) {
+      // Location-level match — existing behavior unchanged
+      const locId = locsSnap.docs[0].id;
+      const summaryRef = db.collection("locations").doc(locId).collection("daySummaries").doc(dateStr);
+      const existing = await summaryRef.get();
+      const existingCount = existing.exists ? (existing.data().carsWashed || 0) : 0;
+      const newCount = existingCount + count;
+      await summaryRef.set({
+        carsWashed: newCount, date: dateStr, source: "email", updatedAt: new Date().toISOString()
+      }, { merge: true });
+      console.log("Saved", count, "cars for location", locId, "on", dateStr);
+      res.status(200).send("OK");
+      return;
+    }
+
+    // Try equipment-level emailCode
+    const allLocs = await db.collection("locations").get();
+    let foundLocId = null;
+    let foundEqId = null;
+
+    for (const locDoc of allLocs.docs) {
+      const eqSnap = await db.collection("locations").doc(locDoc.id)
+        .collection("equipment").where("emailCode", "==", locationCode).get();
+      if (!eqSnap.empty) {
+        foundLocId = locDoc.id;
+        foundEqId = eqSnap.docs[0].id;
+        break;
+      }
+    }
+
+    if (!foundLocId) {
+      console.log("No location or equipment for code:", locationCode);
+      res.status(200).send("Location not found");
+      return;
+    }
+
+    // Write to equipment-specific day summary
+    const eqSummaryRef = db.collection("locations").doc(foundLocId)
+      .collection("daySummaries").doc(dateStr);
+    const existingEqSummary = await eqSummaryRef.get();
+    const existingEqCars = existingEqSummary.exists
+      ? (existingEqSummary.data().equipment?.[foundEqId]?.carsWashed || 0)
+      : 0;
+    const newEqCount = existingEqCars + count;
+
+    await eqSummaryRef.set({
+      [`equipment.${foundEqId}.carsWashed`]: newEqCount,
+      [`equipment.${foundEqId}.date`]: dateStr,
+      [`equipment.${foundEqId}.source`]: "email",
+      [`equipment.${foundEqId}.updatedAt`]: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }, { merge: true });
-    
-    console.log("Saved", count, "cars for location", locId, "on", dateStr);
+
+    // Also add to location total
+    const existingLocCount = existingEqSummary.exists ? (existingEqSummary.data().carsWashed || 0) : 0;
+    const newLocCount = existingLocCount + count;
+    await eqSummaryRef.set({
+      carsWashed: newLocCount, date: dateStr, updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    // Update equipment carsCount lifetime total
+    const eqRef = db.collection("locations").doc(foundLocId).collection("equipment").doc(foundEqId);
+    const eqDoc = await eqRef.get();
+    const currentCarsCount = eqDoc.exists ? (eqDoc.data().carsCount || 0) : 0;
+    await eqRef.update({ carsCount: currentCarsCount + count, updatedAt: new Date().toISOString() });
+
+    console.log("Saved", count, "cars for equipment", foundEqId, "at location", foundLocId, "on", dateStr);
     res.status(200).send("OK");
   } catch(e) {
     console.error("Error:", e.message);
