@@ -591,8 +591,21 @@ exports.shellyCloudProxy = onCall({ timeoutSeconds: 30 }, async (request) => {
   const cleanServer = server.replace("https://", "").replace(/\/$/, "");
   
   try {
-    // If deviceId provided, get specific device status
+    // If deviceId provided, get specific device status or control relay
     if (deviceId) {
+      const { action, turn, channel } = request.data;
+      if (action === "relay") {
+        const url = `https://${cleanServer}/device/relay/control`;
+        console.log("Relay control:", url, "device:", deviceId, "turn:", turn);
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: `auth_key=${encodeURIComponent(authKey)}&id=${encodeURIComponent(deviceId)}&channel=${channel || 0}&turn=${turn}`
+        });
+        const data = await res.json();
+        console.log("Relay control response:", JSON.stringify(data).slice(0, 200));
+        return data;
+      }
       const url = `https://${cleanServer}/device/status`;
       console.log("Getting device status:", url, "device:", deviceId);
       const res = await fetch(url, {
@@ -605,46 +618,27 @@ exports.shellyCloudProxy = onCall({ timeoutSeconds: 30 }, async (request) => {
       return data;
     }
     
-    // Try multiple possible list endpoints
-    const listEndpoints = [
-      "/interface/account/getdeviceslist",
-      "/api/shelly/device/list", 
-      "/account/getdeviceslist",
-      "/interface/device/list",
-    ];
+    // List all devices
+    const listUrl = `https://${cleanServer}/interface/device/list`;
+    console.log("Listing devices:", listUrl);
+    const listRes = await fetch(listUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `auth_key=${encodeURIComponent(authKey)}`
+    });
+    const listData = await listRes.json();
+    console.log("Device list response:", JSON.stringify(listData).slice(0, 500));
+    if (listData.isok) return listData;
     
-    for (const ep of listEndpoints) {
-      const url = `https://${cleanServer}${ep}`;
-      console.log("Trying endpoint:", url);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: `auth_key=${encodeURIComponent(authKey)}`,
-          signal: controller.signal
-        });
-        clearTimeout(timeout);
-        const data = await res.json();
-        console.log("Response from", ep, ":", JSON.stringify(data).slice(0, 200));
-        if (data.isok) return data;
-      } catch(fetchErr) {
-        clearTimeout(timeout);
-        console.log("Fetch error for", ep, ":", fetchErr.message);
-      }
-    }
-    
-    // Last resort - verify key is valid with device/status
+    // Fallback - verify key is valid
     const verifyUrl = `https://${cleanServer}/device/status`;
     const vRes = await fetch(verifyUrl, {
-      method: "POST", 
+      method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `auth_key=${encodeURIComponent(authKey)}&id=verify`
     });
     const vData = await vRes.json();
     console.log("Verify response:", JSON.stringify(vData).slice(0, 200));
-    // If we get wrong_device_id error, key is valid
     if (vData.errors?.wrong_device_id) return { isok: true, verified: true, devices: [] };
     return vData;
   } catch(e) {

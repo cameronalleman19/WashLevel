@@ -1512,7 +1512,39 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
   );
 }
 
-function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
+
+// Shelly device capability detection
+function getShellyCapabilities(typeCode) {
+  if (!typeCode) return { inputs: 0, relays: 0, power: false, distance: false };
+  const t = typeCode.toUpperCase();
+  
+  // Input-only devices - Shelly splits multi-channel devices into individual entries
+  if (t.includes('SN-002') || t.includes('I4') || t.includes('SNS')) 
+    return { inputs: 1, relays: 0, power: false, distance: false, label: "Digital Input" };
+  if (t.includes('SN-001')) 
+    return { inputs: 1, relays: 0, power: false, distance: false, label: "Digital Input" };
+  
+  // Relay + Input devices
+  if (t.includes('S4SW-001') || t.includes('SHSW-1') || t.includes('SNSW-001')) 
+    return { inputs: 1, relays: 1, power: false, distance: false, label: "Relay + Input" };
+  if (t.includes('SNSW-002') || t.includes('SHSW-2') || t.includes('S4SW-002')) 
+    return { inputs: 2, relays: 2, power: false, distance: false, label: "2-Channel Relay + Input" };
+  
+  // Power monitoring devices
+  if (t.includes('SNPL') || t.includes('SHPLG') || t.includes('PLUG'))
+    return { inputs: 0, relays: 1, power: true, distance: false, label: "Smart Plug" };
+  if (t.includes('SPSW') || t.includes('PRO'))
+    return { inputs: 1, relays: 1, power: true, distance: false, label: "Pro Relay" };
+  
+  // BLU distance
+  if (t.includes('BLU') || t.includes('DIST'))
+    return { inputs: 0, relays: 0, power: false, distance: true, label: "BLU Distance" };
+  
+  // Default - assume basic relay
+  return { inputs: 1, relays: 1, power: false, distance: false, label: "Relay" };
+}
+
+function Sensors({ sensors, locationName, locId, onNavigate, uid, locations }) {
   const user = { uid };
   const s = sensors || {};
   const [spSensors, setSpSensors] = useState([]);
@@ -1528,6 +1560,8 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
   const [newShelly, setNewShelly] = useState({ name: "", deviceId: "", channel: 0, type: "input", alertOn: "on" });
   const [savingShelly, setSavingShelly] = useState(false);
   const [shellyReadings, setShellyReadings] = useState({});
+  const [selectedShellyDevice, setSelectedShellyDevice] = useState(null);
+  const [togglingShelly, setTogglingShelly] = useState(false);
   const [shellyCloud, setShellyCloud] = useState(null);
   const [shellyAuthKey, setShellyAuthKey] = useState("");
   const [shellyServer, setShellyServer] = useState("shelly-103-eu.shelly.cloud");
@@ -1535,8 +1569,18 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
   const [shellyCloudDevices, setShellyCloudDevices] = useState([]);
   const [loadingCloudDevices, setLoadingCloudDevices] = useState(false);
   const [pollingShelly, setPollingShelly] = useState(false);
+  const [shellyAssignments, setShellyAssignments] = useState({});
+  const [hiddenShellyDevices, setHiddenShellyDevices] = useState([]);
+  const [expandedDevice, setExpandedDevice] = useState(null);
+  const [shellyOrder, setShellyOrder] = useState([]);
   useEffect(() => {
     if (!uid) return;
+    getDoc(doc(db, "users", uid, "prefs", "shellyConfig")).then(snap => {
+      if (snap.exists()) {
+        setShellyAssignments(snap.data().assignments || {});
+        setHiddenShellyDevices(snap.data().hidden || []);
+      }
+    });
     getDoc(doc(db, "users", uid, "integrations", "shelly")).then(snap => {
       if (snap.exists() && !snap.data().disconnected) {
         setShellyCloud(snap.data());
@@ -1544,6 +1588,28 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
       }
     });
   }, [uid]);
+
+  const toggleShellyRelay = async (device, currentState) => {
+    if (!shellyCloud) return;
+    setTogglingShelly(true);
+    try {
+      const shellyProxy = httpsCallable(functions, "shellyCloudProxy");
+      await shellyProxy({ 
+        authKey: shellyCloud.authKey, 
+        server: shellyCloud.server, 
+        deviceId: device.id,
+        action: "relay",
+        turn: currentState ? "off" : "on",
+        channel: 0
+      });
+      // Update local reading optimistically
+      await setDoc(doc(db, "locations", locId, "shellyReadings", device.id), {
+        state: !currentState, timestamp: new Date().toISOString(), online: true
+      });
+      setSelectedShellyDevice(d => d ? {...d, reading: {...(d.reading||{}), state: !currentState}} : null);
+    } catch(e) { alert("Toggle failed: " + e.message); }
+    setTogglingShelly(false);
+  };
 
   const pollShellyDevices = async (creds, devices) => {
     if (!creds || !devices.length || pollingShelly) return;
@@ -1555,11 +1621,19 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
         const data = result.data;
         if (data.isok && data.data) {
           const status = data.data.device_status;
-          const state = status?.["input:0"]?.state ?? status?.inputs?.[0]?.input ?? null;
-          const online = data.data.online;
+          const online = data.data.online === true;
+          const inputState = status?.["input:0"]?.state ?? null;
+          const relayState = status?.["switch:0"]?.output ?? null;
+          const power = status?.["switch:0"]?.apower ?? null;
+          // state = input if input-only, relay if relay-only, relay if both
+          const caps = getShellyCapabilities(device.type);
+          const state = caps.relays > 0 ? relayState : inputState;
           await setDoc(doc(db, "locations", locId, "shellyReadings", device.id), {
-            state, online, timestamp: new Date().toISOString()
+            state, inputState, relayState, online, power, timestamp: new Date().toISOString()
           });
+          console.log("Device", device.id, "online:", online, "state:", state);
+          // Update cloud device online status in state
+          setShellyCloudDevices(prev => prev.map(d => d.id === device.id ? {...d, online} : d));
         }
       }
     } catch(e) { console.log("Shelly poll error:", e.message); }
@@ -1572,15 +1646,25 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
       const shellyProxy = httpsCallable(functions, "shellyCloudProxy");
       const result = await shellyProxy({ authKey: creds.authKey, server: creds.server });
       const data = result.data;
-      if (data.isok && data.data?.devices_status) {
-        const devices = Object.entries(data.data.devices_status).map(([id, status]) => ({
-          id, name: data.data.devices_info?.[id]?.name || id,
-          type: data.data.devices_info?.[id]?.type || "unknown",
-          online: status.online,
-          inputs: status["input:0"] || status.inputs?.[0] || null,
-          relays: status["switch:0"] || status.relays?.[0] || null,
-        }));
+      const devices = [];
+      if (data.isok && data.data?.devices) {
+        Object.values(data.data.devices).forEach(d => {
+          devices.push({
+            id: d.id, name: d.name || d.id,
+            type: d.type || "unknown",
+            online: d.cloud_online || false,
+            gen: d.gen, ip: d.ip,
+          });
+        });
+      }
+      if (devices.length > 0 || data.verified) {
         setShellyCloudDevices(devices);
+        setShellyOrder(prev => {
+          // Keep existing order, add new devices at end
+          const existing = prev.filter(id => devices.some(d => d.id === id));
+          const newDevices = devices.filter(d => !prev.includes(d.id)).map(d => d.id);
+          return [...existing, ...newDevices];
+        });
         // Save latest readings to Firestore
         for (const device of devices) {
           if (!locId) continue;
@@ -1594,6 +1678,22 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
       }
     } catch(e) { console.log("Shelly Cloud error:", e.message); }
     setLoadingCloudDevices(false);
+  };
+
+  const saveShellyConfig = async (assignments, hidden) => {
+    await setDoc(doc(db, "users", uid, "prefs", "shellyConfig"), { assignments, hidden });
+  };
+
+  const assignDevice = async (deviceId, locationId) => {
+    const newAssignments = { ...shellyAssignments, [deviceId]: locationId };
+    setShellyAssignments(newAssignments);
+    await saveShellyConfig(newAssignments, hiddenShellyDevices);
+  };
+
+  const hideDevice = async (deviceId) => {
+    const newHidden = [...hiddenShellyDevices, deviceId];
+    setHiddenShellyDevices(newHidden);
+    await saveShellyConfig(shellyAssignments, newHidden);
   };
 
   const connectShellyCloud = async () => {
@@ -1871,192 +1971,140 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid }) {
 
       {activeTab === "shelly" && (
         <div>
-          {/* Shelly Cloud Connection */}
           {!shellyCloud ? (
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Connect Shelly Cloud</div>
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Enter your Shelly Cloud Auth Key to import all your devices automatically.</div>
-              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12, background: "#f8fafc", borderRadius: 8, padding: 12 }}>
-                <b>Where to find your Auth Key:</b><br/>
-                Shelly Smart Control App → Menu → User Settings → Security → Authorization Cloud Key
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Server URL <span style={{ fontWeight: 400, color: "#9ca3af" }}>(found in Shelly app under Authorization cloud key)</span></label>
-                <input value={shellyServer} onChange={e => setShellyServer(e.target.value.replace("https://",""))} 
-                  placeholder="e.g. shelly-256-eu.shelly.cloud"
-                  style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827", marginBottom: 10 }} />
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Auth Key</label>
-                <input value={shellyAuthKey} onChange={e => setShellyAuthKey(e.target.value)} placeholder="Paste your Auth Key here"
-                  style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
-              </div>
-              <button onClick={connectShellyCloud} disabled={connectingShelly || !shellyAuthKey}
-                style={{ background: shellyAuthKey ? "#1a3352" : "#e5e7eb", color: shellyAuthKey ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: shellyAuthKey ? "pointer" : "not-allowed" }}>
-                {connectingShelly ? "Connecting..." : "Connect Shelly Cloud"}
-              </button>
+            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🔌</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>Shelly not connected</div>
+              <div style={{ fontSize: 13 }}>Connect your Shelly Cloud account in Settings → Integrations</div>
+            </div>
+          ) : shellyCloudDevices.filter(d => !hiddenShellyDevices.includes(d.id) && (shellyAssignments[d.id] === locId || !shellyAssignments[d.id])).length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🔌</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>No devices assigned to this location</div>
+              <div style={{ fontSize: 13 }}>Assign devices in Settings → Integrations → Shelly Cloud</div>
             </div>
           ) : (
-            <div style={{ background: "#d1fae5", border: "1px solid #6ee7b7", borderRadius: 10, padding: "10px 16px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#065f46" }}>✓ Shelly Cloud Connected</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { loadShellyCloudDevices(shellyCloud); if (shellyDevices.length > 0) pollShellyDevices(shellyCloud, shellyDevices); }} disabled={loadingCloudDevices}
-                  style={{ background: "#fff", color: "#065f46", border: "1px solid #6ee7b7", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
-                  {loadingCloudDevices ? "Refreshing..." : "Refresh"}
-                </button>
-                <button onClick={async () => {
-                  if (!window.confirm("Disconnect Shelly Cloud?")) return;
-                  await updateDoc(doc(db, "users", uid, "integrations", "shelly"), { disconnected: true });
-                  setShellyCloud(null);
-                  setShellyCloudDevices([]);
-                }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Disconnect</button>
-              </div>
-            </div>
-          )}
-
-          {/* Cloud Devices */}
-          {shellyCloud && shellyCloudDevices.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "#374151", marginBottom: 10 }}>Cloud Devices ({shellyCloudDevices.length})</div>
-              {shellyCloudDevices.map(device => {
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
+              {(shellyOrder.length > 0
+                ? shellyOrder.map(id => shellyCloudDevices.find(d => d.id === id)).filter(Boolean)
+                : shellyCloudDevices
+              ).filter(d => !hiddenShellyDevices.includes(d.id) && (shellyAssignments[d.id] === locId || !shellyAssignments[d.id])).map(device => {
                 const reading = shellyReadings[device.id];
                 const state = reading?.state;
-                const manualDevice = shellyDevices.find(d => d.deviceId === device.id);
-                const isAlert = manualDevice && manualDevice.alertOn !== "never" && state === (manualDevice.alertOn === "on" ? true : false);
+                const caps = getShellyCapabilities(device.type);
+                const isAlert = state === true && caps.inputs > 0;
                 return (
-                  <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{device.name}</div>
-                        <div style={{ fontSize: 11, color: device.online ? "#10b981" : "#9ca3af", marginTop: 2 }}>
-                          {device.online ? "● Online" : "○ Offline"} · {device.type}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
-                          {state === true ? "ON" : state === false ? "OFF" : "--"}
-                        </div>
-                      </div>
+                  <div key={device.id} onClick={() => setSelectedShellyDevice({...device, reading, caps})} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, cursor: "pointer" }}>
+                    <div style={{ fontSize: 12, color: device.online === true ? "#10b981" : device.online === false ? "#ef4444" : "#9ca3af", marginBottom: 4 }}>
+                      {device.online === true ? "● Online" : device.online === false ? "● Offline" : "○ Checking..."} · {caps.label}
                     </div>
-                    {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>⚠️ Alert: {device.name} triggered</div>}
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 8 }}>{device.name}</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
+                      {state === true ? "ON" : state === false ? "OFF" : "--"}
+                    </div>
+                    {reading?.timestamp && <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>Updated: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
+                    {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600 }}>⚠️ Alert</div>}
                   </div>
                 );
               })}
             </div>
           )}
-          {shellyCloud && shellyCloudDevices.length === 0 && !loadingCloudDevices && (
-            <div style={{ textAlign: "center", color: "#9ca3af", padding: 20 }}>No devices found in your Shelly Cloud account.</div>
-          )}
-          {loadingCloudDevices && <div style={{ textAlign: "center", color: "#6b7280", padding: 20 }}>Loading devices...</div>}
-
-          <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, marginTop: 8 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>Manual Device Config</div>
-          {showAddShelly && (
-            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add Shelly Device</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Display Name</label>
-                  <input value={newShelly.name} onChange={e => setNewShelly(p => ({...p, name: e.target.value}))} placeholder="e.g. Fault Light Bay 1"
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Device ID</label>
-                  <input value={newShelly.deviceId} onChange={e => setNewShelly(p => ({...p, deviceId: e.target.value}))} placeholder="e.g. shellyplus1-ABC123"
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Type</label>
-                  <select value={newShelly.type} onChange={e => setNewShelly(p => ({...p, type: e.target.value}))}
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}>
-                    <option value="input">Digital Input</option>
-                    <option value="relay">Relay Output</option>
-                    <option value="power">Power Monitor</option>
-                    <option value="blu_distance">BLU Distance Sensor</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Alert When</label>
-                  <select value={newShelly.alertOn} onChange={e => setNewShelly(p => ({...p, alertOn: e.target.value}))}
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}>
-                    <option value="on">Signal ON (active/fault)</option>
-                    <option value="off">Signal OFF (inactive)</option>
-                    <option value="never">No alerts</option>
-                  </select>
-                </div>
-                {newShelly.type === "blu_distance" && <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Min Alert (inches)</label>
-                  <input type="number" value={newShelly.minAlert || ""} onChange={e => setNewShelly(p => ({...p, minAlert: Number(e.target.value)}))} placeholder="e.g. 50"
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
-                </div>}
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Channel</label>
-                  <input type="number" min="0" max="3" value={newShelly.channel} onChange={e => setNewShelly(p => ({...p, channel: Number(e.target.value)}))}
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={async () => {
-                  if (!newShelly.name || !newShelly.deviceId) return;
-                  setSavingShelly(true);
-                  const id = "shelly_" + Date.now();
-                  await setDoc(doc(db, "locations", locId, "shellyDevices", id), { ...newShelly, id, createdAt: new Date().toISOString(), locationId: locId });
-                  setNewShelly({ name: "", deviceId: "", channel: 0, type: "input", alertOn: "on" });
-                  setShowAddShelly(false);
-                  setSavingShelly(false);
-                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingShelly ? "Saving..." : "Add Device"}</button>
-                <button onClick={() => setShowAddShelly(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-              </div>
-            </div>
-          )}
-          </div>
-          {shellyDevices.length === 0 && !showAddShelly && (
-            <div style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>🔌</div>
-              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>No Shelly devices yet</div>
-              <div style={{ fontSize: 13, marginBottom: 16 }}>Add a device to monitor fault lights, inputs, and relay states</div>
-              <div style={{ background: "#f8fafc", borderRadius: 10, padding: 16, textAlign: "left", fontSize: 12, color: "#374151" }}>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>Setup steps:</div>
-                <div>1. Connect your Shelly device to WiFi</div>
-                <div>2. Note the Device ID from the Shelly app</div>
-                <div>3. Add it here and assign your API key below</div>
-              </div>
-            </div>
-          )}
-          {shellyDevices.map(device => {
-            const reading = shellyReadings[device.id];
-            const state = reading?.state;
-            const isBluDist = device.type === "blu_distance";
-            const distValue = reading?.distance;
-            const isAlert = device.alertOn !== "never" && (isBluDist
-              ? (device.alertOn === "on" && distValue !== undefined && distValue < (device.minAlert || 50))
-              : state === (device.alertOn === "on" ? true : false));
-            const distInches = distValue !== undefined ? (distValue / 25.4).toFixed(1) : undefined;
-            const stateLabel = isBluDist
-              ? (distInches !== undefined ? distInches + '"' : "Unknown")
-              : (state === true ? "ON" : state === false ? "OFF" : "Unknown");
-            const stateColor = isBluDist
-              ? (distInches !== undefined && parseFloat(distInches) < (device.minAlert || 2) ? "#dc2626" : "#10b981")
-              : (state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af");
-            return (
-              <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Shelly Device Detail Modal */}
+          {selectedShellyDevice && (
+            <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} onClick={() => setSelectedShellyDevice(null)} />
+              <div style={{ position: "relative", background: "#fff", borderRadius: "20px 20px 0 0", padding: 24, maxHeight: "80vh", overflowY: "auto" }}>
+                <div style={{ width: 36, height: 4, background: "#e5e7eb", borderRadius: 2, margin: "0 auto 20px" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{device.name}</div>
-                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>ID: {device.deviceId} · Ch {device.channel} · {device.type}</div>
-                    {reading?.timestamp && <div style={{ fontSize: 11, color: "#9ca3af" }}>Last update: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
+                    <div style={{ fontWeight: 700, fontSize: 18, color: "#111827" }}>{selectedShellyDevice.name}</div>
+                    <div style={{ fontSize: 12, color: selectedShellyDevice.online ? "#10b981" : "#9ca3af", marginTop: 2 }}>
+                      {selectedShellyDevice.online ? "● Online" : "○ Offline"} · {selectedShellyDevice.caps?.label}
+                    </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: stateColor }}>{stateLabel}</div>
-                    {isAlert && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 700 }}>⚠️ Alert</div>}
+                  <div style={{ fontSize: 28, fontWeight: 800, color: selectedShellyDevice.reading?.state === true ? "#dc2626" : selectedShellyDevice.reading?.state === false ? "#10b981" : "#9ca3af" }}>
+                    {selectedShellyDevice.reading?.state === true ? "ON" : selectedShellyDevice.reading?.state === false ? "OFF" : "--"}
                   </div>
                 </div>
-                {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>⚠️ {device.name} is in alert state</div>}
-                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                  <button onClick={async () => { if (!window.confirm("Delete this device?")) return; await deleteDoc(doc(db, "locations", locId, "shellyDevices", device.id)); }}
-                    style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
+                <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 8 }}>Device Info</div>
+                  <div style={{ fontSize: 13, color: "#374151" }}>Type: {selectedShellyDevice.type}</div>
+                  <div style={{ fontSize: 13, color: "#374151" }}>ID: {selectedShellyDevice.id}</div>
+                  {selectedShellyDevice.reading?.timestamp && (
+                    <div style={{ fontSize: 13, color: "#374151" }}>Last update: {new Date(selectedShellyDevice.reading.timestamp).toLocaleString()}</div>
+                  )}
                 </div>
+                {selectedShellyDevice.caps?.inputs > 0 && (
+                  <div style={{ background: selectedShellyDevice.reading?.inputState ? "#fee2e2" : "#d1fae5", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 2 }}>Digital Input</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: selectedShellyDevice.reading?.inputState ? "#dc2626" : "#065f46" }}>
+                          {selectedShellyDevice.reading?.inputState ? "⚠️ ACTIVE" : "✓ INACTIVE"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+                          {selectedShellyDevice.reading?.inputState ? "Signal detected on SW terminal" : "No signal on SW terminal"}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 28, fontWeight: 800, color: selectedShellyDevice.reading?.inputState ? "#dc2626" : "#10b981" }}>
+                        {selectedShellyDevice.reading?.inputState === true ? "ON" : selectedShellyDevice.reading?.inputState === false ? "OFF" : "--"}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {selectedShellyDevice.caps?.relays > 0 && (
+                  <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 12 }}>Relay Control</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: selectedShellyDevice.reading?.state ? "#10b981" : "#6b7280" }}>
+                          Relay is {selectedShellyDevice.reading?.state ? "ON" : "OFF"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#9ca3af" }}>Tap to toggle</div>
+                      </div>
+                      <button onClick={() => toggleShellyRelay(selectedShellyDevice, selectedShellyDevice.reading?.state)} disabled={togglingShelly}
+                        style={{ background: selectedShellyDevice.reading?.state ? "#dc2626" : "#10b981", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: togglingShelly ? "not-allowed" : "pointer", opacity: togglingShelly ? 0.6 : 1 }}>
+                        {togglingShelly ? "..." : selectedShellyDevice.reading?.state ? "Turn OFF" : "Turn ON"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => setSelectedShellyDevice(null)}
+                  style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  Close
+                </button>
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {/* Manual devices still shown */}
+          {shellyDevices.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#6b7280", marginBottom: 10 }}>Manual Devices</div>
+              {shellyDevices.map(device => {
+                const reading = shellyReadings[device.id];
+                const state = reading?.state;
+                const isAlert = device.alertOn !== "never" && state === (device.alertOn === "on" ? true : false);
+                return (
+                  <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{device.name}</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af" }}>ID: {device.deviceId} · Ch {device.channel} · {device.type}</div>
+                        {reading?.timestamp && <div style={{ fontSize: 11, color: "#9ca3af" }}>Updated: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
+                        {state === true ? "ON" : state === false ? "OFF" : "--"}
+                      </div>
+                    </div>
+                    {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>⚠️ Alert: {device.name}</div>}
+                    <button onClick={async () => { if (!window.confirm("Delete?")) return; await deleteDoc(doc(db, "locations", locId, "shellyDevices", device.id)); }}
+                      style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -3832,6 +3880,168 @@ function SensorPushIntegration({ locations }) {
   );
 }
 
+function ShellyIntegration({ locations }) {
+  const { user } = useAuth();
+  const [authKey, setAuthKey] = useState("");
+  const [server, setServer] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [devices, setDevices] = useState([]);
+  const [assignments, setAssignments] = useState({});
+  const [hidden, setHidden] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [savedMsg, setSavedMsg] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid, "integrations", "shelly"));
+        if (snap.exists() && !snap.data().disconnected) {
+          const data = snap.data();
+          setConnected(true);
+          setAuthKey(data.authKey || "");
+          setServer(data.server || "");
+          // Load devices from Shelly Cloud
+          if (data.authKey && data.server) {
+            try {
+              const shellyProxy = httpsCallable(functions, "shellyCloudProxy");
+              const result = await shellyProxy({ authKey: data.authKey, server: data.server });
+              const rd = result.data;
+              if (rd.isok && rd.data?.devices) {
+                const deviceList = Object.values(rd.data.devices).map(d => ({
+                  id: d.id, name: d.name || d.id, type: d.type || "unknown", online: d.cloud_online || false
+                }));
+                setDevices(deviceList);
+                // Update stored devices
+                await updateDoc(doc(db, "users", user.uid, "integrations", "shelly"), { devices: deviceList });
+              } else {
+                setDevices(data.devices || []);
+              }
+            } catch(e) { setDevices(data.devices || []); }
+          }
+        }
+        const configSnap = await getDoc(doc(db, "users", user.uid, "prefs", "shellyConfig"));
+        if (configSnap.exists()) {
+          setAssignments(configSnap.data().assignments || {});
+          setHidden(configSnap.data().hidden || []);
+        }
+      } catch(e) {}
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const handleConnect = async () => {
+    if (!authKey.trim() || !server.trim()) return;
+    setConnecting(true);
+    try {
+      const shellyProxy = httpsCallable(functions, "shellyCloudProxy");
+      const result = await shellyProxy({ authKey: authKey.trim(), server: server.trim() });
+      const data = result.data;
+      if (data.isok || data.verified || (data.errors && data.errors.wrong_device_id)) {
+        // Load devices
+        let deviceList = [];
+        if (data.isok && data.data?.devices) {
+          deviceList = Object.values(data.data.devices).map(d => ({
+            id: d.id, name: d.name || d.id, type: d.type || "unknown", online: d.cloud_online || false
+          }));
+        }
+        const creds = { authKey: authKey.trim(), server: server.trim(), connectedAt: new Date().toISOString(), devices: deviceList };
+        await setDoc(doc(db, "users", user.uid, "integrations", "shelly"), creds);
+        setConnected(true);
+        setDevices(deviceList);
+      } else {
+        alert("Connection failed. Check your Auth Key and server URL.");
+      }
+    } catch(e) { alert("Error: " + e.message); }
+    setConnecting(false);
+  };
+
+  const handleDisconnect = async () => {
+    if (!window.confirm("Disconnect Shelly Cloud?")) return;
+    await updateDoc(doc(db, "users", user.uid, "integrations", "shelly"), { disconnected: true });
+    setConnected(false);
+    setDevices([]);
+  };
+
+  const saveConfig = async (newAssignments, newHidden) => {
+    await setDoc(doc(db, "users", user.uid, "prefs", "shellyConfig"), { assignments: newAssignments, hidden: newHidden });
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2000);
+  };
+
+  const visibleDevices = devices.filter(d => !hidden.includes(d.id));
+
+  if (loading) return <div style={{ color: "#9ca3af", padding: 20 }}>Loading...</div>;
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Shelly Cloud</div>
+          <div style={{ fontSize: 12, color: "#9ca3af" }}>Monitor Shelly relays and inputs</div>
+        </div>
+        {connected && <span style={{ background: "#d1fae5", color: "#065f46", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>Connected</span>}
+      </div>
+
+      {!connected ? (
+        <div>
+          <div style={{ fontSize: 12, color: "#6b7280", background: "#f8fafc", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <b>Find your Auth Key:</b> Shelly App → User Settings → Authorization cloud key
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Server URL <span style={{ fontWeight: 400 }}>(e.g. shelly-256-eu.shelly.cloud)</span></label>
+            <input value={server} onChange={e => setServer(e.target.value.replace("https://",""))} placeholder="shelly-256-eu.shelly.cloud"
+              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Auth Key</label>
+            <input value={authKey} onChange={e => setAuthKey(e.target.value)} placeholder="Paste your Auth Key"
+              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+          </div>
+          <button onClick={handleConnect} disabled={connecting || !authKey || !server}
+            style={{ background: authKey && server ? "#1a3352" : "#e5e7eb", color: authKey && server ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: authKey && server ? "pointer" : "not-allowed" }}>
+            {connecting ? "Connecting..." : "Connect Shelly Cloud"}
+          </button>
+        </div>
+      ) : (
+        <div>
+          {visibleDevices.length === 0 ? (
+            <div style={{ color: "#9ca3af", fontSize: 13, marginBottom: 12 }}>No devices found. Try refreshing.</div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 8 }}>Assign devices to locations:</div>
+              {visibleDevices.map(device => (
+                <div key={device.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f3f4f6" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{device.name}</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af" }}>{device.type}</div>
+                  </div>
+                  <select value={assignments[device.id] || ""} onChange={e => setAssignments(a => ({...a, [device.id]: e.target.value}))}
+                    style={{ padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 12, outline: "none", background: "#fff", color: "#111827", maxWidth: 180 }}>
+                    <option value="">No location</option>
+                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                  <button onClick={() => { const h = [...hidden, device.id]; setHidden(h); saveConfig(assignments, h); }}
+                    style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✕</button>
+                </div>
+              ))}
+              <button onClick={() => saveConfig(assignments, hidden)}
+                style={{ marginTop: 14, background: savedMsg ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                {savedMsg ? "Saved!" : "Save Assignments"}
+              </button>
+            </div>
+          )}
+          <button onClick={handleDisconnect} style={{ background: "none", color: "#ef4444", border: "none", fontSize: 12, cursor: "pointer", marginTop: 12, padding: 0, display: "block" }}>
+            Disconnect Shelly Cloud
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function SpSensorMini({ sensors, onNavigate, locId, uid }) {
   const user = { uid };
   const [spSensors, setSpSensors] = useState([]);
@@ -4087,31 +4297,9 @@ Changes saved!
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Integrations</div>
 <SensorPushIntegration locations={locations} />
+            <ShellyIntegration locations={locations} />
 </div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-<div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 8 }}>Coming Soon</div>
-<div style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.7 }}>
-  The following features are currently in development and will be available in a future update:
-</div>
-<div style={{ marginTop: 14 }}>
-  {[
-    { title: "Camera Integration", desc: "View your Reolink, Hikvision, or any IP camera system directly in WashLevel." },
-    { title: "Email Alerts & Notifications", desc: "Get notified by email when tasks are overdue, inventory is low, or equipment needs attention." },
-    { title: "Car Count Auto-Import", desc: "Automatically import daily car counts from your equipment via email." },
-    { title: "Task Templates", desc: "Create recurring task templates for daily, weekly, and monthly checklists." },
-    { title: "Dark Mode", desc: "Switch between light, dark, and system appearance modes." },
-    { title: "PDF Document Storage", desc: "Upload and store equipment manuals, service records, and documents." },
-  ].map(item => (
-    <div key={item.title} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
-      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0ea5e9", marginTop: 4, flexShrink: 0 }} />
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.title}</div>
-        <div style={{ fontSize: 12, color: "#9ca3af" }}>{item.desc}</div>
-      </div>
-    </div>
-  ))}
-</div>
-</div>
+
 </div>
 );
 }
@@ -5082,7 +5270,7 @@ return (
 )}
 {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
         {view === "carcounts" && <CarCounts locations={locations} />}
-{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} locations={locations} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); setEditTask(null); }} onAdd={() => {}} preset={taskPreset} user={user} editTask={editTask} />}
