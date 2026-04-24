@@ -584,92 +584,332 @@ boxShadow: open ? "4px 0 24px rgba(0,0,0,0.25)" : "none"
 );
 }
 
+function SensorTilesPanel({ locId, uid, onNavigate }) {
+  const [chemSensors, setChemSensors] = useState([]);
+  const [shellyDevices, setShellyDevices] = useState([]);
+  const [shellyReadings, setShellyReadings] = useState({});
+  const [spSensors, setSpSensors] = useState([]);
+  const [spReadings, setSpReadings] = useState({});
+  const [visibleSensors, setVisibleSensors] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+
+  useEffect(() => {
+    if (!locId) return;
+    const unsub = onSnapshot(collection(db, "locations", locId, "chemSensors"), snap => {
+      setChemSensors(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [locId]);
+
+  useEffect(() => {
+    if (!locId || !uid) return;
+    getDoc(doc(db, "users", uid, "integrations", "shelly")).then(snap => {
+      if (!snap.exists() || snap.data().disconnected) return;
+      const allDevices = snap.data().devices || [];
+      const assignments = snap.data().assignments || {};
+      const assigned = allDevices.filter(d => assignments[d.id] === locId || !assignments[d.id]);
+      setShellyDevices(assigned);
+    });
+    const unsub = onSnapshot(collection(db, "locations", locId, "shellyReadings"), snap => {
+      const r = {};
+      snap.docs.forEach(d => { r[d.id] = d.data(); });
+      setShellyReadings(r);
+    });
+    return () => unsub();
+  }, [locId, uid]);
+
+  useEffect(() => {
+    if (!uid || !locId) return;
+    getDoc(doc(db, "users", uid, "integrations", "sensorpush")).then(snap => {
+      if (!snap.exists() || snap.data().disconnected) return;
+      const { sensors: sensorList, assignments } = snap.data();
+      if (!sensorList) return;
+      const assigned = sensorList.filter(s => assignments?.[s.id] === locId);
+      setSpSensors(assigned);
+    });
+    const unsub = onSnapshot(doc(db, "sensors", locId), snap => {
+      if (snap.exists()) setSpReadings(snap.data());
+    });
+    return () => unsub();
+  }, [uid, locId]);
+
+  useEffect(() => {
+    if (!uid || !locId) return;
+    getDoc(doc(db, "users", uid, "prefs", "overviewSensors_" + locId)).then(snap => {
+      if (snap.exists()) setVisibleSensors(snap.data());
+    });
+  }, [uid, locId]);
+
+  const isVisible = (key) => {
+    if (!visibleSensors) return true;
+    return visibleSensors[key] !== false;
+  };
+
+  const toggleSensor = (key) => {
+    const updated = { ...(visibleSensors || {}), [key]: !isVisible(key) };
+    setVisibleSensors(updated);
+    if (uid && locId) setDoc(doc(db, "users", uid, "prefs", "overviewSensors_" + locId), updated);
+  };
+
+  const allSensors = [
+    ...chemSensors.map(s => ({ key: "chem_" + s.id, label: s.name || s.sensorId, type: "ChemLevel" })),
+    ...shellyDevices.map(s => ({ key: "shelly_" + s.id, label: s.name || s.id, type: "Shelly" })),
+    ...spSensors.map(s => ({ key: "sp_" + s.id, label: s.name, type: "SensorPush" })),
+  ];
+
+  const visibleChem = chemSensors.filter(s => isVisible("chem_" + s.id));
+  const visibleShelly = shellyDevices.filter(s => isVisible("shelly_" + s.id));
+  const visibleSp = spSensors.filter(s => isVisible("sp_" + s.id));
+  const hasAny = allSensors.length > 0;
+  const hasAnyVisible = visibleChem.length + visibleShelly.length + visibleSp.length > 0;
+
+  return (
+    <div>
+      {editMode && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.18)", maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Sensor Tiles</div>
+              <button onClick={() => setEditMode(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>Choose which sensors appear on the overview.</div>
+            {allSensors.length === 0 && (
+              <div style={{ textAlign: "center", padding: "20px 0", color: "#9ca3af", fontSize: 13 }}>No sensors configured yet. Add them in the Sensors tab.</div>
+            )}
+            {["ChemLevel", "Shelly", "SensorPush"].map(type => {
+              const group = allSensors.filter(s => s.type === type);
+              if (!group.length) return null;
+              return (
+                <div key={type} style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>{type}</div>
+                  {group.map(sensor => (
+                    <div key={sensor.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{sensor.label}</div>
+                      <div onClick={() => toggleSensor(sensor.key)}
+                        style={{ width: 44, height: 24, borderRadius: 12, background: isVisible(sensor.key) ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                        <div style={{ position: "absolute", top: 2, left: isVisible(sensor.key) ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            <button onClick={() => setEditMode(false)} style={{ marginTop: 8, width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Done</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+        Live Sensors
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: 99, fontWeight: 600 }}>LIVE</span>
+        {hasAny && (
+          <button onClick={() => setEditMode(true)} style={{ background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 7, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+        )}
+      </div>
+
+      {!hasAny && (
+        <div style={{ textAlign: "center", padding: "20px 10px" }}>
+          <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 10 }}>No sensors configured yet.</div>
+          <button onClick={() => onNavigate("sensors")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Set Up Sensors</button>
+        </div>
+      )}
+
+      {hasAny && !hasAnyVisible && (
+        <div style={{ textAlign: "center", padding: "16px 10px", color: "#9ca3af", fontSize: 13 }}>
+          No sensors selected. Tap Edit to choose which to show.
+        </div>
+      )}
+
+      {hasAnyVisible && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 10 }}>
+          {visibleChem.map(s => {
+            const val = s.lastReading ?? s.lastWeight ?? null;
+            const unit = s.unit || "PSI";
+            const min = s.minAlert ?? 0;
+            const max = s.maxAlert ?? 150;
+            const pct = val != null && max > 0 ? Math.min(100, Math.round((val / max) * 100)) : null;
+            const alert = val != null && (val < min || val > max);
+            return (
+              <div key={s.id} onClick={() => onNavigate("sensors")} style={{ background: alert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (alert ? "#fca5a5" : "#e5e7eb"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.sensorId}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: alert ? "#dc2626" : "#1a3352" }}>{val != null ? val : "--"}</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>{unit}</div>
+                {pct != null && <div style={{ marginTop: 6, height: 4, background: "#e5e7eb", borderRadius: 2 }}><div style={{ height: 4, width: pct + "%", background: alert ? "#ef4444" : "#8b5cf6", borderRadius: 2 }} /></div>}
+                <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>ChemLevel</div>
+              </div>
+            );
+          })}
+          {visibleShelly.map(s => {
+            const reading = shellyReadings[s.id] || {};
+            const online = reading.online;
+            const state = reading.state;
+            const power = reading.power;
+            return (
+              <div key={s.id} onClick={() => onNavigate("sensors")} style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.id}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: online === false ? "#9ca3af" : state ? "#10b981" : "#374151" }}>{online === false ? "Off" : state ? "ON" : "OFF"}</div>
+                {power != null && <div style={{ fontSize: 10, color: "#9ca3af" }}>{power}W</div>}
+                <div style={{ fontSize: 10, color: online === false ? "#ef4444" : "#9ca3af", marginTop: 4 }}>{online === false ? "Offline" : "Shelly"}</div>
+              </div>
+            );
+          })}
+          {visibleSp.map(s => (
+            <div key={s.id} onClick={() => onNavigate("sensors")} style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#0369a1", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "#1e40af" }}>{spReadings.spTempF != null ? spReadings.spTempF + "F" : "--"}</div>
+              <div style={{ fontSize: 10, color: "#9ca3af" }}>{spReadings.spHumidity != null ? spReadings.spHumidity + "% RH" : ""}</div>
+              <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>SensorPush</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Overview({ location, tasks, sensors, equipment, onNavigate, user }) {
-const done = tasks.filter(t => t.status === "done").length;
-const inprog = tasks.filter(t => t.status === "in-progress").length;
-const eqBad = equipment.filter(e => e.status !== "ok").length;
-const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
-const [todaySummary, setTodaySummary] = useState(null);
-const today = new Date().toISOString().split("T")[0];
+  const done = tasks.filter(t => t.status === "done").length;
+  const inprog = tasks.filter(t => t.status === "in-progress").length;
+  const eqBad = equipment.filter(e => e.status !== "ok").length;
+  const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+  const [todaySummary, setTodaySummary] = useState(null);
+  const today = new Date().toISOString().split("T")[0];
+  const [editMode, setEditMode] = useState(false);
 
-useEffect(() => {
-  if (!location?.id) return;
-  getDoc(doc(db, "locations", location.id, "daySummaries", today))
-    .then(snap => { if (snap.exists()) setTodaySummary(snap.data()); })
-    .catch(() => {});
-}, [location?.id, today]);
+  const ALL_TILES = [
+    { id: "cars",      label: "Cars Today",      type: "stat" },
+    { id: "tasksDone", label: "Tasks Done",       type: "stat" },
+    { id: "inprog",    label: "In Progress",      type: "stat" },
+    { id: "equip",     label: "Equip Alerts",     type: "stat" },
+    { id: "sensors",   label: "Live Sensors",     type: "panel" },
+    { id: "equipment", label: "Equipment Status", type: "panel" },
+    { id: "tasks",     label: "Open Tasks",       type: "panel" },
+  ];
 
-return (
-<div>
-<div style={{ marginBottom: 22 }}>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{location?.name} - Overview</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
-</div>
-<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#0ea5e9" /></div>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>
-<div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>
-</div>
-<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-<span>?</span> Live Sensors
-<span style={{ marginLeft: "auto", fontSize: 11, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: 99, fontWeight: 600 }}>LIVE</span>
-</div>
-{[
-{ label: "Soap Level", val: sensors?.soapLevel, c: "#8b5cf6" },
-{ label: "Rinse Aid", val: sensors?.rinseAid, c: "#0ea5e9" },
-{ label: "Wax Level", val: sensors?.waxLevel, c: "#f59e0b" },
-{ label: "Water Pressure", val: sensors?.waterPressure, c: "#10b981" },
-].map(s => (
-<div key={s.label} style={{ marginBottom: 14 }}>
-<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-<span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>{s.label}</span>
-<span style={{ fontSize: 13, fontWeight: 700, color: (s.val ?? 100) < 30 ? "#ef4444" : "#111827" }}>{s.val ?? "-"}%</span>
-</div>
-<Bar value={s.val ?? 0} color={s.c} />
-</div>
-))}
-          <SpSensorMini sensors={sensors} onNavigate={onNavigate} locId={location?.id} uid={user?.uid} />
-{sensors && <div style={{ marginTop: 6, padding: "10px 12px", background: "#f0f9ff", borderRadius: 8, fontSize: 12, color: "#0369a1" }}>Temp: <b>{sensors.tempF}?F</b> Conveyor: <b>{sensors.conveyorRPM} RPM</b></div>}
-</div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>Equipment Status</div>
-{equipment.length === 0 ? (
-  <div style={{ textAlign: "center", padding: "20px 10px" }}>
-    <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 10 }}>No equipment tracked yet.</div>
-    <button onClick={() => onNavigate("equipment")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add Equipment</button>
-  </div>
-) : equipment.map(eq => {
-const s = EQS[eq.status] || EQS.ok;
-return (
-<div key={eq.id} onClick={() => onNavigate("equipment")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e5e7eb"}`, marginBottom: 7, cursor: "pointer" }}
-  onMouseEnter={e => e.currentTarget.style.background = "#e0f2fe"}
-  onMouseLeave={e => e.currentTarget.style.background = eq.status !== "ok" ? (EQS[eq.status] || EQS.ok).bg + "80" : "#fafafa"}>
-<span style={{ fontWeight: 700, color: s.color, fontSize: 13, width: 16, textAlign: "center" }}>{s.icon}</span>
-<span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#374151" }}>{eq.name}</span>
-<span style={{ fontSize: 11, color: "#9ca3af" }}>{eq.nextService}</span>
-<Pill label={s.label} bg={s.bg} color={s.color} />
-</div>
-);
-})}
-</div>
-</div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, cursor: "pointer" }} onClick={() => onNavigate && onNavigate("tasks")}>
-<div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>? Open Tasks <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>View All →</span></div>
-{tasks.filter(t => t.status !== "done").slice(0, 6).map((t, i, arr) => (
-<div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none" }}>
-<div style={{ width: 8, height: 8, borderRadius: "50%", background: STS[t.status]?.dot, flexShrink: 0 }} />
-<span style={{ flex: 1, fontSize: 13, color: "#374151", fontWeight: 500 }}>{t.title}</span>
-<Pill label={t.priority} bg={PRI[t.priority]?.bg} color={PRI[t.priority]?.color} />
-<span style={{ fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap" }}>{t.due}</span>
-</div>
-))}
-{tasks.filter(t => t.status !== "done").length === 0 && <div style={{ textAlign: "center", color: "#10b981", fontWeight: 600, padding: "20px 0" }}>? All tasks complete!</div>}
-</div>
-</div>
-);
+  const defaultVisible = ALL_TILES.reduce((acc, t) => ({ ...acc, [t.id]: true }), {});
+  const [visible, setVisible] = useState(defaultVisible);
+
+  useEffect(() => {
+    if (!location?.id) return;
+    getDoc(doc(db, "locations", location.id, "daySummaries", today))
+      .then(snap => { if (snap.exists()) setTodaySummary(snap.data()); })
+      .catch(() => {});
+  }, [location?.id, today]);
+
+  useEffect(() => {
+    if (!user?.uid || !location?.id) return;
+    getDoc(doc(db, "users", user.uid, "prefs", "overviewTiles_" + location.id))
+      .then(snap => {
+        if (snap.exists()) setVisible({ ...defaultVisible, ...snap.data() });
+      })
+      .catch(() => {});
+  }, [user?.uid, location?.id]);
+
+  const saveVisible = async (updated) => {
+    setVisible(updated);
+    if (!user?.uid || !location?.id) return;
+    await setDoc(doc(db, "users", user.uid, "prefs", "overviewTiles_" + location.id), updated);
+  };
+
+  const toggleTile = (id) => saveVisible({ ...visible, [id]: !visible[id] });
+
+  return (
+    <div>
+      {editMode && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Customize Overview</div>
+              <button onClick={() => setEditMode(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af", lineHeight: 1 }}>x</button>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>Choose which tiles appear on your overview.</div>
+            {ALL_TILES.map(tile => (
+              <div key={tile.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: "1px solid #f3f4f6" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{tile.label}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "capitalize" }}>{tile.type}</div>
+                </div>
+                <div onClick={() => toggleTile(tile.id)}
+                  style={{ width: 44, height: 24, borderRadius: 12, background: visible[tile.id] ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                  <div style={{ position: "absolute", top: 2, left: visible[tile.id] ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                </div>
+              </div>
+            ))}
+            <button onClick={() => setEditMode(false)} style={{ marginTop: 20, width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Done</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{location?.name} - Overview</div>
+          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+        </div>
+        <button onClick={() => setEditMode(true)} style={{ background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", marginTop: 4 }}>
+          Edit Tiles
+        </button>
+      </div>
+
+      {[visible.cars, visible.tasksDone, visible.inprog, visible.equip].some(Boolean) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
+          {visible.cars      && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#0ea5e9" /></div>}
+          {visible.tasksDone && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>}
+          {visible.inprog    && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>}
+          {visible.equip     && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>}
+        </div>
+      )}
+
+      {(visible.sensors || visible.equipment) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
+          {visible.sensors && (
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+              <SensorTilesPanel locId={location?.id} uid={user?.uid} onNavigate={onNavigate} />
+            </div>
+          )}
+          {visible.equipment && (
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>Equipment Status</div>
+              {equipment.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px 10px" }}>
+                  <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 10 }}>No equipment tracked yet.</div>
+                  <button onClick={() => onNavigate("equipment")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add Equipment</button>
+                </div>
+              ) : equipment.map(eq => {
+                const s = EQS[eq.status] || EQS.ok;
+                return (
+                  <div key={eq.id} onClick={() => onNavigate("equipment")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e5e7eb"}`, marginBottom: 7, cursor: "pointer" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#e0f2fe"}
+                    onMouseLeave={e => e.currentTarget.style.background = eq.status !== "ok" ? (EQS[eq.status] || EQS.ok).bg + "80" : "#fafafa"}>
+                    <span style={{ fontWeight: 700, color: s.color, fontSize: 13, width: 16, textAlign: "center" }}>{s.icon}</span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#374151" }}>{eq.name}</span>
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>{eq.nextService}</span>
+                    <Pill label={s.label} bg={s.bg} color={s.color} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {visible.tasks && (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, cursor: "pointer" }} onClick={() => onNavigate && onNavigate("tasks")}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            Open Tasks <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>View All</span>
+          </div>
+          {tasks.filter(t => t.status !== "done").slice(0, 6).map((t, i, arr) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: STS[t.status]?.dot, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 13, color: "#374151", fontWeight: 500 }}>{t.title}</span>
+              <Pill label={t.priority} bg={PRI[t.priority]?.bg} color={PRI[t.priority]?.color} />
+              <span style={{ fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap" }}>{t.due}</span>
+            </div>
+          ))}
+          {tasks.filter(t => t.status !== "done").length === 0 && <div style={{ textAlign: "center", color: "#10b981", fontWeight: 600, padding: "20px 0" }}>All tasks complete!</div>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
