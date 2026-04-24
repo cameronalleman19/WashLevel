@@ -1586,11 +1586,43 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
     const next = { ...expanded, [eqId]: !expanded[eqId] };
     setExpanded(next);
     if (next[eqId] && !histories[eqId]) {
+      // Load equipment history entries
       const snap = await getDocs(collection(db, "locations", locId, "equipment", eqId, "history"));
-      const entries = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date > a.date ? 1 : -1);
-      setHistories(p => ({ ...p, [eqId]: entries }));
+      const entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Load completed tasks linked to this equipment
+      const tasksSnap = await getDocs(collection(db, "locations", locId, "tasks"));
+      const linkedTasks = tasksSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(t => t.equipmentId === eqId && (t.status === "done" || t.archived));
+
+      // For each completed task, load its history subcollection for notes/photos
+      const taskEntries = [];
+      for (const t of linkedTasks) {
+        const histSnap = await getDocs(collection(db, "locations", locId, "tasks", t.id, "history"));
+        const latestHist = histSnap.docs.map(d => d.data()).sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))[0];
+        taskEntries.push({
+          id: "task_" + t.id,
+          type: "task",
+          taskId: t.id,
+          date: t.completedAt ? t.completedAt.split("T")[0] : t.updatedAt?.split("T")[0] || "",
+          completedAt: t.completedAt || t.updatedAt,
+          note: latestHist?.note || t.note || "",
+          completedBy: t.completedBy || latestHist?.completedBy || "",
+          duration: latestHist?.duration || t.duration || null,
+          taskTitle: t.title,
+          category: t.category,
+          mediaUrls: t.mediaUrls || latestHist?.photos || [],
+          partsUsed: latestHist?.partsUsed || [],
+        });
+      }
+
+      const allEntries = [...entries, ...taskEntries].sort((a, b) => (b.completedAt || b.date || "").localeCompare(a.completedAt || a.date || ""));
+      setHistories(p => ({ ...p, [eqId]: allEntries }));
     }
   };
+
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
 
   const handleAdd = async () => {
     if (!newEq.name.trim()) return;
@@ -1695,6 +1727,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
         </div>
       )}
 
+      {selectedHistoryEntry && <TaskHistoryDetailModal entry={selectedHistoryEntry} onClose={() => setSelectedHistoryEntry(null)} />}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {equipment.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>
@@ -1821,33 +1854,40 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                   <div style={{ marginTop: 14 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Service History</div>
                     {eqHistory.length === 0 ? (
-                      <div style={{ fontSize: 12, color: "#9ca3af" }}>No history yet. History is recorded automatically when you update service dates or car counts.</div>
+                      <div style={{ fontSize: 12, color: "#9ca3af" }}>No history yet. History is recorded automatically when you update service dates, car counts, or complete linked tasks.</div>
                     ) : eqHistory.map(h => (
-                      <div key={h.id} style={{ padding: "8px 10px", background: "#f8fafc", borderRadius: 7, marginBottom: 6, fontSize: 12 }}>
+                      <div key={h.id} onClick={() => h.type === "task" ? setSelectedHistoryEntry(h) : null}
+                        style={{ padding: "8px 10px", background: h.type === "task" ? "#f0f9ff" : "#f8fafc", borderRadius: 7, marginBottom: 6, fontSize: 12, cursor: h.type === "task" ? "pointer" : "default", border: h.type === "task" ? "1px solid #bae6fd" : "1px solid transparent" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2, alignItems: "center" }}>
-                          <span style={{ fontWeight: 600, color: "#374151" }}>{h.type === "inspection" ? "Inspection" : "Service"} — {h.date}</span>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>
+                            {h.type === "task" ? (h.taskTitle || "Task") : h.type === "inspection" ? "Inspection" : "Service"} — {h.date || (h.completedAt ? new Date(h.completedAt).toLocaleDateString() : "")}
+                          </span>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {h.type === "inspection" && <span style={{ color: h.failCount > 0 ? "#dc2626" : (h.monitorCount > 0 ? "#d97706" : "#15803d"), fontWeight: 600 }}>
-  {h.failCount > 0 ? h.failCount + " failed" : h.monitorCount > 0 ? h.monitorCount + " to monitor" : "All passed"}
-</span>}
-                          {user?.role === "manager" && (
-                            <button onClick={async () => {
-                              if (!window.confirm("Delete this history entry?")) return;
-                              await deleteDoc(doc(db, "locations", locId, "equipment", eq.id, "history", h.id));
-                              setHistories(p => ({ ...p, [eq.id]: (p[eq.id] || []).filter(x => x.id !== h.id) }));
-                            }} style={{ background: "none", color: "#dc2626", border: "1.5px solid #dc2626", borderRadius: 6, padding: "3px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                              <TrashIcon />
-                            </button>
-                          )}
+                            {h.type === "task" && <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 6px", fontWeight: 600 }}>{h.category || "task"}</span>}
+                            {h.type === "inspection" && <span style={{ color: h.failCount > 0 ? "#dc2626" : (h.monitorCount > 0 ? "#d97706" : "#15803d"), fontWeight: 600 }}>
+                              {h.failCount > 0 ? h.failCount + " failed" : h.monitorCount > 0 ? h.monitorCount + " to monitor" : "All passed"}
+                            </span>}
+                            {user?.role === "manager" && h.type !== "task" && (
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!window.confirm("Delete this history entry?")) return;
+                                await deleteDoc(doc(db, "locations", locId, "equipment", eq.id, "history", h.id));
+                                setHistories(p => ({ ...p, [eq.id]: (p[eq.id] || []).filter(x => x.id !== h.id) }));
+                              }} style={{ background: "none", color: "#dc2626", border: "1.5px solid #dc2626", borderRadius: 6, padding: "3px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                                <TrashIcon />
+                              </button>
+                            )}
+                            {h.type === "task" && <span style={{ fontSize: 11, color: "#0369a1" }}>View</span>}
                           </div>
                         </div>
-                        <div style={{ color: "#6b7280" }}>{h.note || h.taskTitle || ""}</div>
+                        <div style={{ color: "#6b7280" }}>{h.completedBy ? "by " + h.completedBy : ""}{h.duration ? " · " + h.duration + " min" : ""}</div>
+                        {h.note && <div style={{ color: "#374151", marginTop: 2, fontStyle: "italic" }}>{h.note}</div>}
                         {h.type === "inspection" && h.items && (
                           <div style={{ marginTop: 4 }}>
                             {h.items.filter(i => i.result !== "good").map((item, idx) => (
                               <div key={idx} style={{ marginTop: 6 }}>
                                 <div style={{ fontSize: 11, color: item.result === "fail" ? "#dc2626" : "#d97706", fontWeight: 600 }}>
-                                  {item.result === "fail" ? "✗" : "⚠"} {item.label}{item.note ? ": " + item.note : ""}
+                                  {item.result === "fail" ? "x" : "!"} {item.label}{item.note ? ": " + item.note : ""}
                                 </div>
                                 {item.photoUrl && <img src={item.photoUrl} alt="inspection" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6, marginTop: 4, cursor: "pointer" }} onClick={() => window.open(item.photoUrl)} />}
                               </div>
@@ -3024,19 +3064,91 @@ function TimeClock({ locId, locationName, allLocations }) {
 }
 
 // ADD TASK MODAL
+function TaskHistoryDetailModal({ entry, onClose }) {
+  if (!entry) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{entry.taskTitle}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9ca3af" }}>x</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          {entry.completedAt && (
+            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Completed</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{new Date(entry.completedAt).toLocaleDateString()}</div>
+            </div>
+          )}
+          {entry.completedBy && (
+            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Completed By</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{entry.completedBy}</div>
+            </div>
+          )}
+          {entry.duration && (
+            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Duration</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{entry.duration} min</div>
+            </div>
+          )}
+          {entry.category && (
+            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Category</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", textTransform: "capitalize" }}>{entry.category}</div>
+            </div>
+          )}
+        </div>
+        {entry.note && (
+          <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
+            <div style={{ fontSize: 13, color: "#374151" }}>{entry.note}</div>
+          </div>
+        )}
+        {entry.partsUsed && entry.partsUsed.length > 0 && (
+          <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 6 }}>Parts Used</div>
+            {entry.partsUsed.map((p, i) => (
+              <div key={i} style={{ fontSize: 13, color: "#374151", marginBottom: 4 }}>{p.name} x{p.qty} {p.unit || ""}</div>
+            ))}
+          </div>
+        )}
+        {entry.mediaUrls && entry.mediaUrls.length > 0 && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 8 }}>Photos</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 8 }}>
+              {entry.mediaUrls.map((url, i) => (
+                <img key={i} src={url} alt="task photo" onClick={() => window.open(url)}
+                  style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />
+              ))}
+            </div>
+          </div>
+        )}
+        {!entry.note && (!entry.mediaUrls || entry.mediaUrls.length === 0) && (!entry.partsUsed || entry.partsUsed.length === 0) && (
+          <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 13, padding: "20px 0" }}>No notes or photos were added when this task was completed.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TaskHistoryModal({ tasks, onClose }) {
   const [sortBy, setSortBy] = useState("date");
   const [filterUser, setFilterUser] = useState("all");
 
+  const [filterEquipment, setFilterEquipment] = useState("all");
   const doneTasks = tasks.filter(t => t.status === "done" || t.archived);
   const users = ["all", ...new Set(doneTasks.map(t => t.completedBy).filter(Boolean))];
+  const equipmentNames = ["all", ...new Set(doneTasks.map(t => t.equipmentName || (t.equipmentId ? t.equipmentId : null)).filter(Boolean))];
 
   const filtered = doneTasks
     .filter(t => filterUser === "all" || t.completedBy === filterUser)
+    .filter(t => filterEquipment === "all" || t.equipmentId === filterEquipment || t.equipmentName === filterEquipment)
     .sort((a, b) => {
       if (sortBy === "date") return (b.completedAt || b.updatedAt || "").localeCompare(a.completedAt || a.updatedAt || "");
       if (sortBy === "user") return (a.completedBy || "").localeCompare(b.completedBy || "");
       if (sortBy === "category") return (a.category || "").localeCompare(b.category || "");
+      if (sortBy === "equipment") return (a.equipmentId || "").localeCompare(b.equipmentId || "");
       return 0;
     });
 
@@ -3056,10 +3168,15 @@ function TaskHistoryModal({ tasks, onClose }) {
               <option value="date">Sort: Date</option>
               <option value="user">Sort: User</option>
               <option value="category">Sort: Category</option>
+              <option value="equipment">Sort: Equipment</option>
             </select>
             <select value={filterUser} onChange={e => setFilterUser(e.target.value)}
               style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
               {users.map(u => <option key={u} value={u}>{u === "all" ? "All Users" : u}</option>)}
+            </select>
+            <select value={filterEquipment} onChange={e => setFilterEquipment(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              {equipmentNames.map(e => <option key={e} value={e}>{e === "all" ? "All Equipment" : e}</option>)}
             </select>
           </div>
         </div>
