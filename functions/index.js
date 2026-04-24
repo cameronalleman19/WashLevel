@@ -179,9 +179,31 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
     // Car counts (managers only)
     if (isManager && prefs.includeCounts !== false) {
       const countSnap = await db.collection("locations").doc(loc.id).collection("daySummaries").doc(dateStr).get();
-      const cars = countSnap.exists ? (countSnap.data().carsWashed || 0) : 0;
+      const summaryData = countSnap.exists ? countSnap.data() : {};
+      const cars = summaryData.carsWashed || 0;
       totalCars += cars;
-      html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars}</p>`;
+
+      // Check for per-equipment counts
+      const eqCountData = summaryData.equipment || {};
+      const hasEqCounts = Object.keys(eqCountData).length > 0;
+
+      if (hasEqCounts) {
+        // Load equipment names
+        const eqSnap = await db.collection("locations").doc(loc.id).collection("equipment")
+          .where("tracksCarCount", "==", true).get();
+        const eqMap = {};
+        eqSnap.docs.forEach(d => { eqMap[d.id] = d.data().name || d.id; });
+
+        html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars} total</p>`;
+        html += `<div style="margin: 4px 0 8px 16px;">`;
+        for (const [eqId, eqData] of Object.entries(eqCountData)) {
+          const eqName = eqMap[eqId] || eqId;
+          html += `<p style="margin: 2px 0; color: #6b7280; font-size: 13px;">${eqName}: <strong>${eqData.carsWashed || 0}</strong></p>`;
+        }
+        html += `</div>`;
+      } else {
+        html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars}</p>`;
+      }
     }
 
     // Tasks
