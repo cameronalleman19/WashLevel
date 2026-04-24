@@ -1218,6 +1218,72 @@ if (task.recurrence && !task.recurrence.includes("cars")) {
     note: "",
     attachments: [],
   });
+} else if (task.recurrence && task.recurrence.includes("cars") && task.equipmentId) {
+  // Car-based recurrence — schedule next task based on equipment car count
+  const carInterval = parseInt(task.recurrence.replace(/[^0-9]/g, "")) || 0;
+  if (carInterval > 0) {
+    try {
+      const eqDoc = await getDoc(doc(db, "locations", locId, "equipment", task.equipmentId));
+      const currentCars = eqDoc.exists() ? (eqDoc.data().carsCount || 0) : 0;
+      const nextTargetCars = currentCars + carInterval;
+      // Update equipment lastServiceCars so we can track progress
+      await updateDoc(doc(db, "locations", locId, "equipment", task.equipmentId), {
+        lastServiceCars: currentCars,
+        lastService: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        updatedAt: new Date().toISOString(),
+      });
+      const newId = "t" + Date.now();
+      await setDoc(doc(db, "locations", locId, "tasks", newId), {
+        ...task,
+        id: newId,
+        status: "pending",
+        completedAt: null,
+        completedBy: null,
+        startedAt: null,
+        archived: false,
+        archivedAt: null,
+        due: null,
+        nextCarsDue: nextTargetCars,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        note: "",
+        attachments: [],
+      });
+    } catch(e) { console.log("Car recurrence error:", e.message); }
+  }
+} else if (task.recurrence && task.recurrence.includes("cars") && task.equipmentId) {
+  // Car-based recurrence — schedule next task based on equipment car count
+  const carInterval = parseInt(task.recurrence.replace(/[^0-9]/g, "")) || 0;
+  if (carInterval > 0) {
+    try {
+      const eqDoc = await getDoc(doc(db, "locations", locId, "equipment", task.equipmentId));
+      const currentCars = eqDoc.exists() ? (eqDoc.data().carsCount || 0) : 0;
+      const nextTargetCars = currentCars + carInterval;
+      // Update equipment lastServiceCars so we can track progress
+      await updateDoc(doc(db, "locations", locId, "equipment", task.equipmentId), {
+        lastServiceCars: currentCars,
+        lastService: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        updatedAt: new Date().toISOString(),
+      });
+      const newId = "t" + Date.now();
+      await setDoc(doc(db, "locations", locId, "tasks", newId), {
+        ...task,
+        id: newId,
+        status: "pending",
+        completedAt: null,
+        completedBy: null,
+        startedAt: null,
+        archived: false,
+        archivedAt: null,
+        due: null,
+        nextCarsDue: nextTargetCars,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        note: "",
+        attachments: [],
+      });
+    } catch(e) { console.log("Car recurrence error:", e.message); }
+  }
 }
 } else if (locId) {
 const updates = { status: next, updatedAt: new Date().toISOString() };
@@ -1231,6 +1297,7 @@ onStatus(task.id, next);
 };
 
 const recurrenceLabel = task.recurrence ? "Repeats: " + task.recurrence : null;
+const carsDueLabel = task.nextCarsDue ? "Due at " + Number(task.nextCarsDue).toLocaleString() + " cars" : null;
 
 return (
 <div style={{ background: task.status === "done" ? "#fafafa" : "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, overflow: "hidden", opacity: task.status === "done" ? 0.72 : 1 }}>
@@ -1243,6 +1310,7 @@ return (
 <Pill label={task.priority} bg={PRI[task.priority]?.bg} color={PRI[task.priority]?.color} />
 <span style={{ fontSize: 11, color: "#9ca3af" }}>{task.due && task.due.includes("-") ? new Date(task.due + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : task.due}</span>
 {recurrenceLabel && <span style={{ fontSize: 11, color: "#6366f1", background: "#ede9fe", padding: "1px 7px", borderRadius: 99 }}>{recurrenceLabel}</span>}
+{carsDueLabel && <span style={{ fontSize: 11, color: "#d97706", background: "#fef3c7", padding: "1px 7px", borderRadius: 99 }}>{carsDueLabel}</span>}
             {task.due && task.due.includes("-") && task.status !== "done" && new Date(task.due + "T23:59:59") < new Date() && (
               <span style={{ fontSize: 11, color: "#dc2626", background: "#fee2e2", padding: "1px 7px", borderRadius: 99, fontWeight: 700 }}>Overdue</span>
             )}
@@ -3225,7 +3293,20 @@ const resolvedUserId = (assignTo && !["everyone","attendant","technician","manag
       });
       setSaving(false); onClose(); return;
     }
-    const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    // Calculate nextCarsDue if car-based recurrence and equipment selected
+    let nextCarsDue = null;
+    if (recurrence && recurrence.includes("cars") && equipmentId) {
+      const carInterval = parseInt(recurrence.replace(/[^0-9]/g, "")) || 0;
+      if (carInterval > 0) {
+        try {
+          const eqDoc = await getDoc(doc(db, "locations", locId, "equipment", equipmentId));
+          const currentCars = eqDoc.exists() ? (eqDoc.data().carsCount || 0) : 0;
+          nextCarsDue = currentCars + carInterval;
+        } catch(e) { console.log("nextCarsDue error:", e.message); }
+      }
+    }
+
+    const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, nextCarsDue, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
 // Notify assigned user via Firebase Function
 if (resolvedUserId) {
@@ -3373,34 +3454,51 @@ return (
   </div>
 )}
           <div style={{ marginBottom: 14 }}>
-              <select value={recurrence.startsWith("every") && !["every 100 cars","every 250 cars","every 500 cars","every 1000 cars","every 2500 cars","every 5000 cars"].includes(recurrence) ? "custom_cars" : recurrence} onChange={e => {
-  if (e.target.value === "custom_cars") { setRecurrence("custom_cars"); }
-  else { setRecurrence(e.target.value); setCustomCars(""); }
-}} style={sel}>
-<option value="">No recurrence</option>
-<option value="daily">Daily</option>
-<option value="weekly">Weekly</option>
-<option value="monthly">Monthly</option>
-<option value="quarterly">Quarterly</option>
-<option value="annually">Annually</option>
-<option value="every 500 cars">Every 500 cars</option>
-<option value="every 1000 cars">Every 1,000 cars</option>
-<option value="every 2500 cars">Every 2,500 cars</option>
-<option value="every 5000 cars">Every 5,000 cars</option>
-<option value="every 7500 cars">Every 7,500 cars</option>
-<option value="every 10000 cars">Every 10,000 cars</option>
-<option value="custom_cars">Custom car count...</option>
-</select>
-{(recurrence === "custom_cars" || (customCars && recurrence.includes("cars"))) && (
-  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-    <span style={{ fontSize: 13, color: "#374151" }}>Every</span>
-    <input type="number" min="1" value={customCars} onChange={e => {
-      setCustomCars(e.target.value);
-      setRecurrence(e.target.value ? "every " + e.target.value + " cars" : "custom_cars");
-    }} placeholder="e.g. 750" style={{ ...inp, width: 100, marginTop: 0, color: "#111827" }} />
-    <span style={{ fontSize: 13, color: "#374151" }}>cars</span>
-  </div>
-)}
+              {(() => {
+                const selectedEq = equipmentList.find(e => e.id === equipmentId);
+                const showCarOptions = selectedEq?.tracksCarCount === true;
+                // If car recurrence was set but equipment changed to non-tracking, clear it
+                return (
+                  <>
+                    <select value={recurrence.startsWith("every") && !["every 100 cars","every 250 cars","every 500 cars","every 1000 cars","every 2500 cars","every 5000 cars"].includes(recurrence) ? "custom_cars" : recurrence} onChange={e => {
+                      if (e.target.value === "custom_cars") { setRecurrence("custom_cars"); }
+                      else { setRecurrence(e.target.value); setCustomCars(""); }
+                    }} style={sel}>
+                      <option value="">No recurrence</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="annually">Annually</option>
+                      {showCarOptions && <>
+                        <option value="every 500 cars">Every 500 cars</option>
+                        <option value="every 1000 cars">Every 1,000 cars</option>
+                        <option value="every 2500 cars">Every 2,500 cars</option>
+                        <option value="every 5000 cars">Every 5,000 cars</option>
+                        <option value="every 7500 cars">Every 7,500 cars</option>
+                        <option value="every 10000 cars">Every 10,000 cars</option>
+                        <option value="custom_cars">Custom car count...</option>
+                      </>}
+                    </select>
+                    {!showCarOptions && equipmentId && (
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Car count recurrence is only available for equipment with car tracking enabled.</div>
+                    )}
+                    {!equipmentId && (
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Link to car-tracking equipment above to unlock car count recurrence.</div>
+                    )}
+                    {(recurrence === "custom_cars" || (customCars && recurrence.includes("cars"))) && showCarOptions && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                        <span style={{ fontSize: 13, color: "#374151" }}>Every</span>
+                        <input type="number" min="1" value={customCars} onChange={e => {
+                          setCustomCars(e.target.value);
+                          setRecurrence(e.target.value ? "every " + e.target.value + " cars" : "custom_cars");
+                        }} placeholder="e.g. 750" style={{ ...inp, width: 100, marginTop: 0, color: "#111827" }} />
+                        <span style={{ fontSize: 13, color: "#374151" }}>cars</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 </div>
 <div style={{ display: "flex", gap: 10 }}>
 <button type="submit" disabled={saving} style={{ flex: 1, background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
@@ -4752,10 +4850,24 @@ function CarCounts({ locations }) {
     const eqRef = doc(db, "locations", locId, "equipment", eqId);
     const eqDoc = await getDoc(eqRef);
     if (eqDoc.exists()) {
-      const prev = eqDoc.data().equipment?.[eqId]?.carsWashed || 0;
-      const diff = val - prev;
-      if (diff !== 0) {
-        await updateDoc(eqRef, { carsCount: Math.max(0, (eqDoc.data().carsCount || 0) + diff) });
+      const eqData = eqDoc.data();
+      // Get previous day's count for this equipment to calculate delta
+      const prevDaySnap = await getDoc(doc(db, "locations", locId, "daySummaries", selectedDate));
+      const prevVal = prevDaySnap.exists() ? (prevDaySnap.data().equipment?.[eqId]?.carsWashed || 0) : 0;
+      const delta = val - prevVal;
+      const newCarsCount = Math.max(0, (eqData.carsCount || 0) + delta);
+      await updateDoc(eqRef, { carsCount: newCarsCount, updatedAt: new Date().toISOString() });
+
+      // Check if any car-recurrence tasks for this equipment are now due
+      const tasksSnap = await getDocs(collection(db, "locations", locId, "tasks"));
+      const carTasks = tasksSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(t => t.equipmentId === eqId && t.nextCarsDue && t.status !== "done" && newCarsCount >= t.nextCarsDue);
+      for (const t of carTasks) {
+        await updateDoc(doc(db, "locations", locId, "tasks", t.id), {
+          due: new Date().toISOString().split("T")[0],
+          updatedAt: new Date().toISOString(),
+        });
       }
     }
 
