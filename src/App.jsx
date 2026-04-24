@@ -1657,8 +1657,10 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations }) {
           });
         });
       }
-      if (devices.length > 0 || data.verified) {
+      if (devices.length > 0) {
         setShellyCloudDevices(devices);
+        // Save updated device list to Firestore
+        setDoc(doc(db, "users", uid, "integrations", "shelly"), { devices }, { merge: true });
         setShellyOrder(prev => {
           // Keep existing order, add new devices at end
           const existing = prev.filter(id => devices.some(d => d.id === id));
