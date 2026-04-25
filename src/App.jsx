@@ -3656,6 +3656,7 @@ function Inventory({ locId, locationName }) {
   const [editingVendorId, setEditingVendorId] = useState(null);
   const [editVendorData, setEditVendorData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [expandedVendors, setExpandedVendors] = useState({});
 
   useEffect(() => {
     if (!locId) return;
@@ -3678,7 +3679,7 @@ function Inventory({ locId, locationName }) {
     setSaving(true);
     const id = "inv" + Date.now();
     await setDoc(doc(db, "locations", locId, "inventory", id), { ...newItem, id, createdAt: new Date().toISOString() });
-    setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0 });
+    setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0, vendorId: "" });
     setShowAdd(false);
     setSaving(false);
   };
@@ -3705,9 +3706,10 @@ function Inventory({ locId, locationName }) {
   };
 
   const CAT_GROUPS = ["chemicals", "parts", "vending supplies"];
+  const [expandedCats, setExpandedCats] = useState({ chemicals: true, parts: true, "vending supplies": true });
   const CAT_COLORS2 = { chemicals: "#8b5cf6", parts: "#3b82f6", "vending supplies": "#f59e0b" };
   const UNITS = ["gal", "L", "oz", "lbs", "units", "rolls", "boxes"];
-  const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, background: "#fafafa", outline: "none", width: "100%", boxSizing: "border-box", marginTop: 4 };
+  const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, background: "#fafafa", outline: "none", width: "100%", boxSizing: "border-box", marginTop: 4, color: "#111827" };
 
   return (
     <div>
@@ -3773,9 +3775,17 @@ function Inventory({ locId, locationName }) {
       {CAT_GROUPS.map(cat => {
         const group = items.filter(i => i.category === cat);
         if (!group.length) return null;
+        const isExpanded = expandedCats[cat] !== false;
         return (
-          <div key={cat} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: CAT_COLORS2[cat] || "#374151", marginBottom: 14, textTransform: "capitalize" }}>{cat}</div>
+          <div key={cat} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, marginBottom: 16, overflow: "hidden" }}>
+            <div onClick={() => setExpandedCats(p => ({...p, [cat]: !isExpanded}))}
+              style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: isExpanded ? "#fff" : "#f8fafc" }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: CAT_COLORS2[cat] || "#374151", textTransform: "capitalize" }}>
+                {cat} <span style={{ fontSize: 12, color: "#9ca3af", fontWeight: 400 }}>({group.length} item{group.length !== 1 ? "s" : ""})</span>
+              </div>
+              <span style={{ color: "#9ca3af", fontSize: 14 }}>{isExpanded ? "▲" : "▼"}</span>
+            </div>
+            {isExpanded && <div style={{ padding: "0 20px 16px" }}>
             {group.map(item => {
               const low = item.quantity <= item.lowThreshold;
               const isEditing = editingId === item.id;
@@ -3790,7 +3800,6 @@ function Inventory({ locId, locationName }) {
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Category</label>
                           <select value={editData.category || "chemicals"} onChange={e => setEditData(p => ({...p, category: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
                             <option value="chemicals">Chemicals</option>
-<option value="inspection">Inspection</option>
                             <option value="parts">Parts</option>
                             <option value="vending supplies">Vending Supplies</option>
                           </select>
@@ -3833,7 +3842,7 @@ function Inventory({ locId, locationName }) {
                           <span style={{ fontSize: 12, color: "#9ca3af" }}> {item.unit}</span>
                         </div>
                         <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-                        <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0 }); }} style={{ background: "#1a3352", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>
+                        <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); }} style={{ background: "#1a3352", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>
                         <button onClick={() => handleDelete(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Del</button>
                       </div>
                     </div>
@@ -3841,6 +3850,7 @@ function Inventory({ locId, locationName }) {
                 </div>
               );
             })}
+            </div>}
           </div>
         );
       })}
@@ -3953,7 +3963,32 @@ function Inventory({ locId, locationName }) {
                     {v.accountNumber && <span>Acct: {v.accountNumber}</span>}
                   </div>
                   {v.notes && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>{v.notes}</div>}
-                  <div style={{ fontSize: 11, color: "#6366f1", marginTop: 6, fontWeight: 600 }}>{items.filter(i => i.vendorId === v.id).length} items assigned</div>
+                  {(() => {
+                    const vendorItems = items.filter(i => i.vendorId === v.id);
+                    return (
+                      <div style={{ marginTop: 8 }}>
+                        <div onClick={() => setExpandedVendors(p => ({...p, [v.id]: !p[v.id]}))} style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                          {vendorItems.length} item{vendorItems.length !== 1 ? "s" : ""} assigned {vendorItems.length > 0 ? (expandedVendors[v.id] ? "▲" : "▼") : ""}
+                        </div>
+                        {expandedVendors[v.id] && vendorItems.length > 0 && (
+                          <div style={{ marginTop: 8, borderTop: "1px solid #f3f4f6", paddingTop: 8 }}>
+                            {vendorItems.map(item => (
+                              <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #f9fafb" }}>
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>{item.name}</div>
+                                  {item.partNumber && <div style={{ fontSize: 11, color: "#9ca3af" }}>Part #: {item.partNumber}</div>}
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: item.quantity <= (item.lowThreshold || 0) ? "#dc2626" : "#059669" }}>{item.quantity} {item.unit}</div>
+                                  {item.costPerUnit ? <div style={{ fontSize: 11, color: "#9ca3af" }}>${item.costPerUnit}/{item.unit}</div> : null}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
