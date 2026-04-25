@@ -590,7 +590,7 @@ boxShadow: open ? "4px 0 24px rgba(0,0,0,0.25)" : "none"
 );
 }
 
-function SensorTilesPanel({ locId, uid, onNavigate }) {
+function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
   const [chemSensors, setChemSensors] = useState([]);
   const [shellyDevices, setShellyDevices] = useState([]);
   const [shellyReadings, setShellyReadings] = useState({});
@@ -799,7 +799,7 @@ function SensorTilesPanel({ locId, uid, onNavigate }) {
               const pct = val != null && max > 0 ? Math.min(100, Math.round((val / max) * 100)) : null;
               const alert = val != null && (val < min || val > max);
               return (
-                <div key={sensor.key} onClick={() => onNavigate("sensors")} style={{ background: alert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (alert ? "#fca5a5" : "#e5e7eb"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("chemlevel") : onNavigate("sensors")} style={{ background: alert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (alert ? "#fca5a5" : "#e5e7eb"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.sensorId}</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: alert ? "#dc2626" : "#1a3352" }}>{val != null ? val : "--"}</div>
                   <div style={{ fontSize: 10, color: "#9ca3af" }}>{unit}</div>
@@ -815,7 +815,7 @@ function SensorTilesPanel({ locId, uid, onNavigate }) {
               const state = reading?.state;
               const isAlert = s.alertOn !== "never" && state === (s.alertOn === "on" ? true : false);
               return (
-                <div key={sensor.key} onClick={() => onNavigate("sensors")} style={{ background: isAlert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (isAlert ? "#fca5a5" : "#e5e7eb"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("shelly") : onNavigate("sensors")} style={{ background: isAlert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (isAlert ? "#fca5a5" : "#e5e7eb"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.id}</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
                     {state === true ? "ON" : state === false ? "OFF" : "--"}
@@ -831,7 +831,7 @@ function SensorTilesPanel({ locId, uid, onNavigate }) {
               const temp = spReadings["sp_" + s.id + "_tempF"];
               const hum = spReadings["sp_" + s.id + "_humidity"];
               return (
-                <div key={sensor.key} onClick={() => onNavigate("sensors")} style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("sensorpush") : onNavigate("sensors")} style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 11, color: "#0369a1", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: "#1e40af" }}>{temp != null ? temp + "F" : "--"}</div>
                   <div style={{ fontSize: 10, color: "#9ca3af" }}>{hum != null ? hum + "% RH" : ""}</div>
@@ -847,7 +847,7 @@ function SensorTilesPanel({ locId, uid, onNavigate }) {
   );
 }
 
-function Overview({ location, tasks, sensors, equipment, onNavigate, user }) {
+function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSensorNavigate }) {
   const done = tasks.filter(t => t.status === "done").length;
   const inprog = tasks.filter(t => t.status === "in-progress").length;
   const eqBad = equipment.filter(e => e.status !== "ok").length;
@@ -943,7 +943,7 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
           {visible.sensors && (
             <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-              <SensorTilesPanel locId={location?.id} uid={user?.uid} onNavigate={onNavigate} />
+              <SensorTilesPanel locId={location?.id} uid={user?.uid} onNavigate={onNavigate} onSensorNavigate={onSensorNavigate} />
             </div>
           )}
           {visible.equipment && (
@@ -2009,7 +2009,7 @@ function getShellyCapabilities(typeCode) {
   return { inputs: 1, relays: 1, power: false, distance: false, label: "Relay" };
 }
 
-function Sensors({ sensors, locationName, locId, onNavigate, uid, locations }) {
+function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, initialTab }) {
   const user = { uid };
   const s = sensors || {};
   const [spSensors, setSpSensors] = useState([]);
@@ -2019,7 +2019,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations }) {
   const [showAddChem, setShowAddChem] = useState(false);
   const [newChem, setNewChem] = useState({ name: "", type: "pressure", unit: "PSI", minAlert: 20, maxAlert: 150, sensorId: "" });
   const [savingChem, setSavingChem] = useState(false);
-  const [activeTab, setActiveTab] = useState("sensorpush");
+  const [activeTab, setActiveTab] = useState(initialTab || "sensorpush");
   const [shellyDevices, setShellyDevices] = useState([]);
   const [showAddShelly, setShowAddShelly] = useState(false);
   const [newShelly, setNewShelly] = useState({ name: "", deviceId: "", channel: 0, type: "input", alertOn: "on" });
@@ -3522,10 +3522,8 @@ return (
 <select value={category} onChange={e => setCategory(e.target.value)} style={sel}>
 <option value="cleaning">Cleaning</option>
 <option value="maintenance">Maintenance</option>
-<option value="equipment">Equipment</option>
 <option value="chemicals">Chemicals</option>
 <option value="inspection">Inspection</option>
-<option value="parts">Parts</option>
 </select>
 </div>
 <div>
@@ -4803,10 +4801,7 @@ const handleSave = async (locId) => {
 if (locId === "**new**") {
 const newId = "loc" + Date.now();
 const ownerId = user.isTeamMember ? user.ownerId : user.uid;
-const washWords = ["wash", "clean", "rinse", "foam", "shine", "scrub", "spray", "buff", "gloss", "suds"];
-const washWord = washWords[Math.floor(Math.random() * washWords.length)];
-const emailCode = washWord + Math.floor(1000 + Math.random() * 9000);
-await setDoc(doc(db, "locations", newId), { id: newId, name, address, zipCode, ownerId, emailCode });
+await setDoc(doc(db, "locations", newId), { id: newId, name, address, zipCode, ownerId });
 if (user.isTeamMember) {
   const newAllowed = [...(user.allowedLocations || []), newId];
   await updateDoc(doc(db, "users", user.uid), { allowedLocations: newAllowed });
@@ -4894,13 +4889,7 @@ Changes saved!
 <div style={{ flex: 1 }}>
 <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{loc.name}</div>
 <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{loc.address || "No address set"}</div>
-{loc.emailCode && (
-  <div style={{ fontSize: 11, color: "#0369a1", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-    <span>Location email: <b>{loc.emailCode}@washlevel.com</b></span>
-    <button onClick={() => navigator.clipboard.writeText(loc.emailCode + "@washlevel.com")}
-      style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Copy</button>
-  </div>
-)}
+
 {(locEquipment[loc.id] || []).map(eq => (
   <div key={eq.id} style={{ fontSize: 11, color: "#6366f1", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
     <span>{eq.name} email: <b>{eq.emailCode}@washlevel.com</b></span>
@@ -5945,6 +5934,7 @@ const [ready, setReady] = useState(false);
 const [showAddTask, setShowAddTask] = useState(false);
   const [editTask, setEditTask] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [sensorTab, setSensorTab] = useState("sensorpush");
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -6074,7 +6064,7 @@ return (
         </div>
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
-{locId !== "all" && view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} />}
+{locId !== "all" && view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} onSensorNavigate={(tab) => { setSensorTab(tab); setTimeout(() => setView("sensors"), 0); }} />}
 {view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
@@ -6085,7 +6075,7 @@ return (
 )}
 {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
         {view === "carcounts" && <CarCounts locations={locations} />}
-{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} locations={locations} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} locations={locations} initialTab={sensorTab} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); setEditTask(null); }} onAdd={() => {}} preset={taskPreset} user={user} editTask={editTask} />}
