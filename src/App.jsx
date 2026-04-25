@@ -1530,6 +1530,7 @@ return (
     {showHistory && (
   <TaskHistoryModal
     tasks={tasks}
+    locId={locId}
     onClose={() => setShowHistory(false)}
   />
 )}
@@ -3132,18 +3133,25 @@ function TaskHistoryDetailModal({ entry, onClose }) {
   );
 }
 
-function TaskHistoryModal({ tasks, onClose }) {
+function TaskHistoryModal({ tasks, onClose, locId }) {
   const [sortBy, setSortBy] = useState("date");
   const [filterUser, setFilterUser] = useState("all");
-
   const [filterEquipment, setFilterEquipment] = useState("all");
+  const [equipmentList, setEquipmentList] = useState([]);
+
+  useEffect(() => {
+    if (!locId) return;
+    getDocs(collection(db, "locations", locId, "equipment")).then(snap => {
+      setEquipmentList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, [locId]);
+
   const doneTasks = tasks.filter(t => t.status === "done" || t.archived);
   const users = ["all", ...new Set(doneTasks.map(t => t.completedBy).filter(Boolean))];
-  const equipmentNames = ["all", ...new Set(doneTasks.map(t => t.equipmentName || (t.equipmentId ? t.equipmentId : null)).filter(Boolean))];
 
   const filtered = doneTasks
     .filter(t => filterUser === "all" || t.completedBy === filterUser)
-    .filter(t => filterEquipment === "all" || t.equipmentId === filterEquipment || t.equipmentName === filterEquipment)
+    .filter(t => filterEquipment === "all" || t.equipmentId === filterEquipment)
     .sort((a, b) => {
       if (sortBy === "date") return (b.completedAt || b.updatedAt || "").localeCompare(a.completedAt || a.updatedAt || "");
       if (sortBy === "user") return (a.completedBy || "").localeCompare(b.completedBy || "");
@@ -3155,14 +3163,14 @@ function TaskHistoryModal({ tasks, onClose }) {
   const CAT_COLORS = { inspection: "#15803d", equipment: "#1d4ed8", cleaning: "#065f46", supplies: "#b45309", chemicals: "#5b21b6", maintenance: "#ef4444" };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 1000 }}>
-      <div style={{ background: "#fff", borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #e5e7eb" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Task History</div>
-            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>×</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>x</button>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", overflow: "visible" }}>
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
               style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
               <option value="date">Sort: Date</option>
@@ -3176,7 +3184,8 @@ function TaskHistoryModal({ tasks, onClose }) {
             </select>
             <select value={filterEquipment} onChange={e => setFilterEquipment(e.target.value)}
               style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
-              {equipmentNames.map(e => <option key={e} value={e}>{e === "all" ? "All Equipment" : e}</option>)}
+              <option value="all">All Equipment</option>
+              {equipmentList.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
           </div>
         </div>
@@ -3193,6 +3202,9 @@ function TaskHistoryModal({ tasks, onClose }) {
                     {t.completedBy && <span style={{ fontSize: 11, color: "#6b7280" }}>by {t.completedBy}</span>}
                     {t.completedAt && <span style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(t.completedAt).toLocaleDateString()}</span>}
                     {t.archived && <span style={{ fontSize: 10, fontWeight: 600, color: "#059669", background: "#d1fae5", padding: "2px 6px", borderRadius: 4 }}>Approved</span>}
+                    {t.equipmentId && equipmentList.find(e => e.id === t.equipmentId) && (
+                      <span style={{ fontSize: 10, fontWeight: 600, color: "#1d4ed8", background: "#dbeafe", padding: "2px 6px", borderRadius: 4 }}>{equipmentList.find(e => e.id === t.equipmentId).name}</span>
+                    )}
                   </div>
                 </div>
               </div>
