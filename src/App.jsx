@@ -177,8 +177,8 @@ const TrashIcon = () => (
 );
 
 const CAT = { supplies: { bg: "#fef3c7", color: "#b45309" }, equipment: { bg: "#dbeafe", color: "#1d4ed8" }, cleaning: { bg: "#d1fae5", color: "#065f46" }, chemicals: { bg: "#ede9fe", color: "#5b21b6" }, inspection: { bg: "#f0fdf4", color: "#15803d" } };
-const PRI = { high: { bg: "#fee2e2", color: "#991b1b" }, medium: { bg: "#fef3c7", color: "#92400e" }, low: { bg: "#f3f4f6", color: "#6b7280" } };
-const STS = { pending: { bg: "#f3f4f6", color: "#6b7280", dot: "#9ca3af", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, "on-hold": { bg: "#fce7f3", color: "#be185d", dot: "#ec4899", label: "On Hold" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
+const PRI = { high: { bg: "#fee2e2", color: "#991b1b" }, medium: { bg: "#fef3c7", color: "#92400e" }, low: { bg: "#f1f5f9", color: "#64748b" } };
+const STS = { pending: { bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, "on-hold": { bg: "#fce7f3", color: "#be185d", dot: "#ec4899", label: "On Hold" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
 const EQS = { ok: { bg: "#d1fae5", color: "#059669", icon: "?", label: "OK" }, warning: { bg: "#fef3c7", color: "#d97706", icon: "!", label: "Warning" }, error: { bg: "#fee2e2", color: "#dc2626", icon: "?", label: "Alert" } };
 
 //  RESPONSIVE HOOK
@@ -250,7 +250,7 @@ const Pill = ({ label, bg, color }) => (
 const Bar = ({ value, color = "#3b82f6", height = 6 }) => {
 const c = value < 25 ? "#ef4444" : value < 45 ? "#f59e0b" : color;
 return (
-<div style={{ height, background: "#e5e7eb", borderRadius: 99, overflow: "hidden" }}>
+<div style={{ height, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
 <div style={{ height: "100%", width: `${Math.min(value || 0, 100)}%`, background: c, borderRadius: 99 }} />
 </div>
 );
@@ -261,15 +261,22 @@ const i = name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 return <div style={{ width: size, height: size, borderRadius: "50%", background: color, color: "#fff", fontWeight: 700, fontSize: size * 0.35, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i}</div>;
 };
 
-const StatCard = ({ icon, label, value, sub, accent = "#3b82f6", alert = false }) => (
-
-  <div style={{ background: "#fff", border: alert ? "1.5px solid #fca5a5" : "1px solid #e5e7eb", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
-    <div style={{ width: 42, height: 42, borderRadius: 10, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
-    <div>
-      <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: alert ? "#dc2626" : "#111827", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{sub}</div>}
+const StatCard = ({ icon, label, value, sub, accent = "#00d4aa", alert = false }) => (
+  <div style={{
+    background: "#fff",
+    borderRadius: 14,
+    padding: "18px 20px",
+    boxShadow: alert ? "0 0 0 1.5px #fca5a5, 0 4px 16px rgba(0,0,0,0.06)" : "0 2px 12px rgba(0,0,0,0.06)",
+    display: "flex", alignItems: "center", gap: 14,
+    borderLeft: `3px solid ${alert ? "#ef4444" : accent}`,
+    transition: "box-shadow 0.15s",
+  }}>
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: alert ? "#dc2626" : "#0f1f35", lineHeight: 1, letterSpacing: "-0.5px" }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, fontWeight: 500 }}>{sub}</div>}
     </div>
+    {icon && <div style={{ width: 36, height: 36, borderRadius: 9, background: alert ? "#fef2f2" : `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icon}</div>}
   </div>
 );
 
@@ -378,14 +385,14 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
     setLoading(false);
   };
 
-  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa", color: "#111827" };
+  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa", color: "#0f1f35" };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <div style={{ width: "100%", maxWidth: 440, padding: "0 16px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#1a3352", borderRadius: 14, padding: "10px 22px" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#0f1f35", borderRadius: 14, padding: "10px 22px" }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
             <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
           </div>
@@ -396,8 +403,8 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
             {["login","signup"].map(t => (
               <button key={t} onClick={() => { setTab(t); setError(""); }}
                 style={{ flex: 1, padding: "14px 0", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
-                  background: tab === t ? "#fff" : "#f9fafb",
-                  color: tab === t ? "#1a3352" : "#9ca3af",
+                  background: tab === t ? "#fff" : "#f8fafc",
+                  color: tab === t ? "#0f1f35" : "#94a3b8",
                   borderBottom: tab === t ? "2px solid #1a3352" : "2px solid transparent" }}>
                 {t === "login" ? "Sign In" : "Create Account"}
               </button>
@@ -407,26 +414,26 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
             {tab === "login" ? (
               <div>
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Email</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Email</label>
                   <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Password</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Password</label>
                   <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="password" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} />
                 </div>
                 {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
-                <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
                   {loading ? "Signing in..." : "Sign In"}
                 </button>
                 {resetSent && <div style={{ background: "#d1fae5", color: "#065f46", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginTop: 12 }}>Password reset email sent! Check your inbox.</div>}
                 <div style={{ textAlign: "center", marginTop: 12 }}>
-                  <span onClick={handleForgotPassword} style={{ fontSize: 13, color: "#6b7280", cursor: "pointer", textDecoration: "underline" }}>
+                  <span onClick={handleForgotPassword} style={{ fontSize: 13, color: "#64748b", cursor: "pointer", textDecoration: "underline" }}>
                     {resetLoading ? "Sending..." : "Forgot password?"}
                   </span>
                 </div>
-                <div style={{ textAlign: "center", marginTop: 10, fontSize: 13, color: "#9ca3af" }}>
+                <div style={{ textAlign: "center", marginTop: 10, fontSize: 13, color: "#94a3b8" }}>
                   No account?{" "}
-                  <span onClick={() => setTab("signup")} style={{ color: "#1a3352", fontWeight: 600, cursor: "pointer" }}>Create one free</span>
+                  <span onClick={() => setTab("signup")} style={{ color: "#0f1f35", fontWeight: 600, cursor: "pointer" }}>Create one free</span>
                 </div>
               </div>
             ) : (
@@ -438,17 +445,17 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
                   </div>
                 )}
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Your Name</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Your Name</label>
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Alex Rivera" style={inp} />
                 </div>
                 {!inviteData && (
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Car Wash Name</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Car Wash Name</label>
                   <input value={bizName} onChange={e => setBizName(e.target.value)} placeholder="e.g. Sunny Car Wash" style={inp} />
                 </div>
                 )}
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Email</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Email</label>
                   <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp}
                     onBlur={async () => {
                       if (!email.includes("@")) return;
@@ -467,24 +474,24 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
                       setCheckingInvite(false);
                     }}
                   />
-                  {checkingInvite && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Checking invite...</div>}
+                  {checkingInvite && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Checking invite...</div>}
                 </div>
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Password</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Password</label>
                   <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="At least 6 characters" style={inp} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Confirm Password</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Confirm Password</label>
                   <input value={confirm} onChange={e => setConfirm(e.target.value)} type="password" placeholder="Repeat password" style={inp} onKeyDown={e => e.key === "Enter" && handleSignup()} />
                 </div>
                 {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
-                <button onClick={handleSignup} disabled={loading} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                <button onClick={handleSignup} disabled={loading} style={{ width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
                   {loading ? "Creating account..." : "Create Account"}
                 </button>
-                <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#9ca3af" }}>By creating an account you agree to our <a href="/terms.html" target="_blank" style={{ color: "#0ea5e9", textDecoration: "underline" }}>Terms of Service</a>.</div>
-                <div style={{ textAlign: "center", marginTop: 8, fontSize: 13, color: "#9ca3af" }}>
+                <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#94a3b8" }}>By creating an account you agree to our <a href="/terms.html" target="_blank" style={{ color: "#0ea5e9", textDecoration: "underline" }}>Terms of Service</a>.</div>
+                <div style={{ textAlign: "center", marginTop: 8, fontSize: 13, color: "#94a3b8" }}>
                   Already have an account?{" "}
-                  <span onClick={() => setTab("login")} style={{ color: "#1a3352", fontWeight: 600, cursor: "pointer" }}>Sign in</span>
+                  <span onClick={() => setTab("login")} style={{ color: "#0f1f35", fontWeight: 600, cursor: "pointer" }}>Sign in</span>
                 </div>
               </div>
             )}
@@ -535,18 +542,17 @@ return (
 <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
 )}
 <aside style={{
-width: 260, flexShrink: 0, background: "#1a3352", display: "flex", flexDirection: "column",
+width: 260, flexShrink: 0, background: "#0f1f35", display: "flex", flexDirection: "column",
 height: "100dvh", overflowY: "auto",
 position: "fixed", left: 0, top: 0, zIndex: 50,
 transform: open ? "translateX(0)" : "translateX(-100%)",
 transition: "transform 0.25s ease",
-boxShadow: open ? "4px 0 24px rgba(0,0,0,0.25)" : "none"
+boxShadow: open ? "6px 0 32px rgba(0,0,0,0.3)" : "none"
 }}>
-<div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-<span style={{ fontSize: 20 }}>?</span>
-<span style={{ color: "#fff", fontWeight: 700, fontSize: 17 }}>WashLevel</span>
-<span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px" }}>PRO</span>
+<div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+<span style={{ color: "#fff", fontWeight: 800, fontSize: 18, letterSpacing: "-0.3px" }}>WashLevel</span>
+<span style={{ background: "#00d4aa", color: "#0f1f35", fontSize: 9, fontWeight: 800, borderRadius: 4, padding: "2px 6px", letterSpacing: "0.05em" }}>PRO</span>
 </div>
 </div>
 <div style={{ padding: "14px 12px 8px" }}>
@@ -554,36 +560,37 @@ boxShadow: open ? "4px 0 24px rgba(0,0,0,0.25)" : "none"
 {isManager && (
 <button onClick={() => { setLocId("all"); setView("overview"); if(isMobile) onClose(); }}
   style={{ width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none",
-  background: locId === "all" ? "rgba(255,255,255,0.1)" : "transparent",
-  color: locId === "all" ? "#fff" : "rgba(255,255,255,0.5)",
-  cursor: "pointer", fontSize: 13, fontWeight: locId === "all" ? 600 : 400, marginBottom: 2,
-  display: "flex", alignItems: "center", gap: 8 }}>
-  <span style={{ fontSize: 12 }}>🌐</span> All Locations
+  background: locId === "all" ? "rgba(125,211,252,0.15)" : "transparent",
+  color: locId === "all" ? "#7dd3fc" : "rgba(255,255,255,0.5)",
+  cursor: "pointer", fontSize: 13, fontWeight: locId === "all" ? 700 : 400, marginBottom: 1,
+  borderLeft: locId === "all" ? "2px solid #7dd3fc" : "2px solid transparent",
+  display: "flex", alignItems: "center", gap: 8, transition: "all 0.15s" }}>
+  All Locations
 </button>
 )}
 {locs.map(l => (
-<button key={l.id} onClick={() => setLocId(l.id)} style={{ width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: locId === l.id ? "rgba(255,255,255,0.1)" : "transparent", color: locId === l.id ? "#fff" : "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 13, fontWeight: locId === l.id ? 600 : 400, marginBottom: 2, display: "flex", alignItems: "center", gap: 8 }}>
-<span style={{ width: 7, height: 7, borderRadius: "50%", background: locId === l.id ? "#34d399" : "rgba(255,255,255,0.15)", flexShrink: 0 }} />{l.name}
+<button key={l.id} onClick={() => setLocId(l.id)} style={{ width: "100%", textAlign: "left", padding: "9px 14px", borderRadius: 8, border: "none", background: locId === l.id ? "rgba(125,211,252,0.15)" : "transparent", color: locId === l.id ? "#7dd3fc" : "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 13, fontWeight: locId === l.id ? 700 : 400, marginBottom: 1, borderLeft: locId === l.id ? "2px solid #7dd3fc" : "2px solid transparent", display: "flex", alignItems: "center", gap: 8, transition: "all 0.15s" }}>
+{l.name}
 </button>
 ))}
 </div>
 <div style={{ padding: "6px 12px", flex: 1, borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 4 }}>
 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, marginTop: 10 }}>Menu</div>
 {nav.map(item => (
-<button key={item.id} onClick={() => { setView(item.id); if(isMobile) onClose(); }} style={{ width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 7, border: "none", background: view === item.id ? "#0ea5e9" : "transparent", color: view === item.id ? "#fff" : "rgba(255,255,255,0.55)", cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 600 : 400, marginBottom: 2 }}>
+<button key={item.id} onClick={() => { setView(item.id); if(isMobile) onClose(); }} style={{ width: "100%", textAlign: "left", padding: "9px 14px", borderRadius: 8, border: "none", background: view === item.id ? "rgba(125,211,252,0.15)" : "transparent", color: view === item.id ? "#7dd3fc" : "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 700 : 400, marginBottom: 1, borderLeft: view === item.id ? "2px solid #7dd3fc" : "2px solid transparent", transition: "all 0.15s" }}>
 {item.label}
 </button>
 ))}
 </div>
-<div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-<div onClick={() => { setView("settings"); if (typeof onClose === "function") onClose(); }} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
+<div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+<div onClick={() => { setView("settings"); if (typeof onClose === "function") onClose(); }} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer", padding: "6px 4px", borderRadius: 8 }}>
 <Avatar name={user?.name || user?.email || ""} color={RC[user?.role] || "#6366f1"} size={34} />
 <div style={{ minWidth: 0 }}>
 <div style={{ color: "#fff", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user?.name || user?.email}</div>
-<div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, textTransform: "capitalize" }}>{user?.role}</div>
+<div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, textTransform: "capitalize" }}>{user?.role}</div>
 </div>
 </div>
-<button onClick={logout} style={{ width: "100%", background: "rgba(255,255,255,0.07)", border: "none", color: "rgba(255,255,255,0.6)", borderRadius: 7, padding: "8px 0", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
+<button onClick={logout} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", borderRadius: 8, padding: "8px 0", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Sign Out</button>
 </div>
 </aside>
 </>
@@ -729,14 +736,14 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.18)", maxHeight: "80vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Sensor Tiles</div>
-              <button onClick={() => setEditMode(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>Sensor Tiles</div>
+              <button onClick={() => setEditMode(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
             </div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>Choose which sensors appear on the overview.</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Choose which sensors appear on the overview.</div>
             {allSensors.length === 0 && (
-              <div style={{ textAlign: "center", padding: "20px 0", color: "#9ca3af", fontSize: 13 }}>No sensors configured yet. Add them in the Sensors tab.</div>
+              <div style={{ textAlign: "center", padding: "20px 0", color: "#94a3b8", fontSize: 13 }}>No sensors configured yet. Add them in the Sensors tab.</div>
             )}
-            <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 12 }}>Use arrows to reorder. Toggle to show/hide.</div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 12 }}>Use arrows to reorder. Toggle to show/hide.</div>
             {allSensors.map((sensor, idx) => (
               <div key={sensor.key}
                 draggable
@@ -746,42 +753,42 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
                 style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
                   <button onClick={() => moveUp(sensor.key)} disabled={idx === 0}
-                    style={{ background: idx === 0 ? "#f3f4f6" : "#e5e7eb", border: "none", borderRadius: 4, width: 24, height: 24, cursor: idx === 0 ? "default" : "pointer", fontSize: 12, color: idx === 0 ? "#d1d5db" : "#374151", display: "flex", alignItems: "center", justifyContent: "center" }}>▲</button>
+                    style={{ background: idx === 0 ? "#f1f5f9" : "#e2e8f0", border: "none", borderRadius: 4, width: 24, height: 24, cursor: idx === 0 ? "default" : "pointer", fontSize: 12, color: idx === 0 ? "#d1d5db" : "#334155", display: "flex", alignItems: "center", justifyContent: "center" }}>▲</button>
                   <button onClick={() => moveDown(sensor.key)} disabled={idx === allSensors.length - 1}
-                    style={{ background: idx === allSensors.length - 1 ? "#f3f4f6" : "#e5e7eb", border: "none", borderRadius: 4, width: 24, height: 24, cursor: idx === allSensors.length - 1 ? "default" : "pointer", fontSize: 12, color: idx === allSensors.length - 1 ? "#d1d5db" : "#374151", display: "flex", alignItems: "center", justifyContent: "center" }}>▼</button>
+                    style={{ background: idx === allSensors.length - 1 ? "#f1f5f9" : "#e2e8f0", border: "none", borderRadius: 4, width: 24, height: 24, cursor: idx === allSensors.length - 1 ? "default" : "pointer", fontSize: 12, color: idx === allSensors.length - 1 ? "#d1d5db" : "#334155", display: "flex", alignItems: "center", justifyContent: "center" }}>▼</button>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{sensor.label}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{sensor.type}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{sensor.label}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{sensor.type}</div>
                 </div>
                 <div onClick={() => toggleSensor(sensor.key)}
-                  style={{ width: 44, height: 24, borderRadius: 12, background: isVisible(sensor.key) ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                  style={{ width: 44, height: 24, borderRadius: 12, background: isVisible(sensor.key) ? "#0f1f35" : "#e2e8f0", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
                   <div style={{ position: "absolute", top: 2, left: isVisible(sensor.key) ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                 </div>
               </div>
             ))}
-            <button onClick={() => setEditMode(false)} style={{ marginTop: 8, width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Done</button>
+            <button onClick={() => setEditMode(false)} style={{ marginTop: 8, width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Done</button>
           </div>
         </div>
       )}
 
-      <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
         Live Sensors
         <span style={{ marginLeft: "auto", fontSize: 11, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: 99, fontWeight: 600 }}>LIVE</span>
         {hasAny && (
-          <button onClick={() => setEditMode(true)} style={{ background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 7, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+          <button onClick={() => setEditMode(true)} style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e5e7eb", borderRadius: 7, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit</button>
         )}
       </div>
 
       {!hasAny && (
         <div style={{ textAlign: "center", padding: "20px 10px" }}>
-          <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 10 }}>No sensors configured yet.</div>
-          <button onClick={() => onNavigate("sensors")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Set Up Sensors</button>
+          <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 10 }}>No sensors configured yet.</div>
+          <button onClick={() => onNavigate("sensors")} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Set Up Sensors</button>
         </div>
       )}
 
       {hasAny && !hasAnyVisible && (
-        <div style={{ textAlign: "center", padding: "16px 10px", color: "#9ca3af", fontSize: 13 }}>
+        <div style={{ textAlign: "center", padding: "16px 10px", color: "#94a3b8", fontSize: 13 }}>
           No sensors selected. Tap Edit to choose which to show.
         </div>
       )}
@@ -799,12 +806,12 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
               const pct = val != null && max > 0 ? Math.min(100, Math.round((val / max) * 100)) : null;
               const alert = val != null && (val < min || val > max);
               return (
-                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("chemlevel") : onNavigate("sensors")} style={{ background: alert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (alert ? "#fca5a5" : "#e5e7eb"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
-                  <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.sensorId}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: alert ? "#dc2626" : "#1a3352" }}>{val != null ? val : "--"}</div>
-                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{unit}</div>
-                  {pct != null && <div style={{ marginTop: 6, height: 4, background: "#e5e7eb", borderRadius: 2 }}><div style={{ height: 4, width: pct + "%", background: alert ? "#ef4444" : "#8b5cf6", borderRadius: 2 }} /></div>}
-                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>ChemLevel</div>
+                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("chemlevel") : onNavigate("sensors")} style={{ background: alert ? "#fef2f2" : "#f4f6f8", border: "1px solid " + (alert ? "#fca5a5" : "#e2e8f0"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.sensorId}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: alert ? "#dc2626" : "#0f1f35" }}>{val != null ? val : "--"}</div>
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>{unit}</div>
+                  {pct != null && <div style={{ marginTop: 6, height: 4, background: "#e2e8f0", borderRadius: 2 }}><div style={{ height: 4, width: pct + "%", background: alert ? "#ef4444" : "#8b5cf6", borderRadius: 2 }} /></div>}
+                  <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>ChemLevel</div>
                 </div>
               );
             }
@@ -815,13 +822,13 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
               const state = reading?.state;
               const isAlert = s.alertOn !== "never" && state === (s.alertOn === "on" ? true : false);
               return (
-                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("shelly") : onNavigate("sensors")} style={{ background: isAlert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (isAlert ? "#fca5a5" : "#e5e7eb"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
-                  <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.id}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
+                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("shelly") : onNavigate("sensors")} style={{ background: isAlert ? "#fef2f2" : "#f4f6f8", border: "1px solid " + (isAlert ? "#fca5a5" : "#e2e8f0"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.id}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#94a3b8" }}>
                     {state === true ? "ON" : state === false ? "OFF" : "--"}
                   </div>
-                  {reading?.timestamp && <div style={{ fontSize: 10, color: "#9ca3af" }}>{new Date(reading.timestamp).toLocaleTimeString()}</div>}
-                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>Shelly</div>
+                  {reading?.timestamp && <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(reading.timestamp).toLocaleTimeString()}</div>}
+                  <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Shelly</div>
                 </div>
               );
             }
@@ -834,8 +841,8 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
                 <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("sensorpush") : onNavigate("sensors")} style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 11, color: "#0369a1", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: "#1e40af" }}>{temp != null ? temp + "F" : "--"}</div>
-                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{hum != null ? hum + "% RH" : ""}</div>
-                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>SensorPush</div>
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>{hum != null ? hum + "% RH" : ""}</div>
+                  <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>SensorPush</div>
                 </div>
               );
             }
@@ -899,41 +906,41 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Customize Overview</div>
-              <button onClick={() => setEditMode(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af", lineHeight: 1 }}>x</button>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>Customize Overview</div>
+              <button onClick={() => setEditMode(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>x</button>
             </div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>Choose which tiles appear on your overview.</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Choose which tiles appear on your overview.</div>
             {ALL_TILES.map(tile => (
               <div key={tile.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: "1px solid #f3f4f6" }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{tile.label}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "capitalize" }}>{tile.type}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{tile.label}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", textTransform: "capitalize" }}>{tile.type}</div>
                 </div>
                 <div onClick={() => toggleTile(tile.id)}
-                  style={{ width: 44, height: 24, borderRadius: 12, background: visible[tile.id] ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                  style={{ width: 44, height: 24, borderRadius: 12, background: visible[tile.id] ? "#0f1f35" : "#e2e8f0", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
                   <div style={{ position: "absolute", top: 2, left: visible[tile.id] ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                 </div>
               </div>
             ))}
-            <button onClick={() => setEditMode(false)} style={{ marginTop: 20, width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Done</button>
+            <button onClick={() => setEditMode(false)} style={{ marginTop: 20, width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Done</button>
           </div>
         </div>
       )}
 
-      <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{location?.name} - Overview</div>
-          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#0f1f35", letterSpacing: "-0.4px" }}>{location?.name}</div>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3, fontWeight: 500 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
         </div>
-        <button onClick={() => setEditMode(true)} style={{ background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", marginTop: 4 }}>
+        <button onClick={() => setEditMode(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", marginTop: 4, letterSpacing: "0.01em" }}>
           Edit Tiles
         </button>
       </div>
 
       {[visible.cars, visible.tasksDone, visible.inprog, visible.equip].some(Boolean) && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
-          {visible.cars      && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#0ea5e9" /></div>}
-          {visible.tasksDone && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#10b981" /></div>}
+          {visible.cars      && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#00d4aa" /></div>}
+          {visible.tasksDone && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#00d4aa" /></div>}
           {visible.inprog    && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>}
           {visible.equip     && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>}
         </div>
@@ -942,27 +949,27 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
       {(visible.sensors || visible.equipment) && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
           {visible.sensors && (
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
               <SensorTilesPanel locId={location?.id} uid={user?.uid} onNavigate={onNavigate} onSensorNavigate={onSensorNavigate} />
             </div>
           )}
           {visible.equipment && (
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14 }}>Equipment Status</div>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: "#0f1f35", marginBottom: 14, letterSpacing: "-0.2px" }}>Equipment Status</div>
               {equipment.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "20px 10px" }}>
-                  <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 10 }}>No equipment tracked yet.</div>
-                  <button onClick={() => onNavigate("equipment")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add Equipment</button>
+                  <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 10 }}>No equipment tracked yet.</div>
+                  <button onClick={() => onNavigate("equipment")} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add Equipment</button>
                 </div>
               ) : equipment.map(eq => {
                 const s = EQS[eq.status] || EQS.ok;
                 return (
-                  <div key={eq.id} onClick={() => onNavigate("equipment")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e5e7eb"}`, marginBottom: 7, cursor: "pointer" }}
+                  <div key={eq.id} onClick={() => onNavigate("equipment")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e2e8f0"}`, marginBottom: 7, cursor: "pointer" }}
                     onMouseEnter={e => e.currentTarget.style.background = "#e0f2fe"}
                     onMouseLeave={e => e.currentTarget.style.background = eq.status !== "ok" ? (EQS[eq.status] || EQS.ok).bg + "80" : "#fafafa"}>
                     <span style={{ fontWeight: 700, color: s.color, fontSize: 13, width: 16, textAlign: "center" }}>{s.icon}</span>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#374151" }}>{eq.name}</span>
-                    <span style={{ fontSize: 11, color: "#9ca3af" }}>{eq.nextService}</span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#334155" }}>{eq.name}</span>
+                    <span style={{ fontSize: 11, color: "#94a3b8" }}>{eq.nextService}</span>
                     <Pill label={s.label} bg={s.bg} color={s.color} />
                   </div>
                 );
@@ -973,16 +980,16 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
       )}
 
       {visible.tasks && (
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, cursor: "pointer" }} onClick={() => onNavigate && onNavigate("tasks")}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            Open Tasks <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>View All</span>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 20, cursor: "pointer", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }} onClick={() => onNavigate && onNavigate("tasks")}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: "#0f1f35", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", letterSpacing: "-0.2px" }}>
+            Open Tasks <span style={{ fontSize: 12, color: "#00d4aa", fontWeight: 700 }}>View All →</span>
           </div>
           {tasks.filter(t => t.status !== "done").slice(0, 6).map((t, i, arr) => (
             <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none" }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: STS[t.status]?.dot, flexShrink: 0 }} />
-              <span style={{ flex: 1, fontSize: 13, color: "#374151", fontWeight: 500 }}>{t.title}</span>
+              <span style={{ flex: 1, fontSize: 13, color: "#334155", fontWeight: 500 }}>{t.title}</span>
               <Pill label={t.priority} bg={PRI[t.priority]?.bg} color={PRI[t.priority]?.color} />
-              <span style={{ fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap" }}>{t.due}</span>
+              <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>{t.due}</span>
             </div>
           ))}
           {tasks.filter(t => t.status !== "done").length === 0 && <div style={{ textAlign: "center", color: "#10b981", fontWeight: 600, padding: "20px 0" }}>All tasks complete!</div>}
@@ -1070,16 +1077,16 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 16 }}>
       <div style={{ background: "#fff", borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Complete Task</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+          <div style={{ fontWeight: 700, fontSize: 17, color: "#0f1f35" }}>Complete Task</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
         </div>
-        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16, padding: "8px 12px", background: "#f0fdf4", borderRadius: 8 }}>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16, padding: "8px 12px", background: "#f0fdf4", borderRadius: 8 }}>
           Completing: <b style={{ color: "#059669" }}>{task.title}</b>
         </div>
 
         {/* Photo upload */}
         <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Completion Photos</label>
+          <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Completion Photos</label>
           <input type="file" accept="image/*,video/*" multiple onChange={handlePhoto} style={{ fontSize: 12 }} />
           {photos.length > 0 && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
@@ -1090,16 +1097,16 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
 
         {/* Parts used */}
         <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Parts / Materials Used</label>
+          <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Parts / Materials Used</label>
           <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search by name or part number..." style={{ ...inp, marginBottom: 8 }} />
           <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 8 }}>
             {filtered.length === 0 ? (
-              <div style={{ padding: 12, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>No inventory items found</div>
+              <div style={{ padding: 12, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>No inventory items found</div>
             ) : filtered.map(item => (
               <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid #f3f4f6" }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{item.name}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "#0f1f35" }}>{item.name}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>
                     {item.partNumber && <span style={{ marginRight: 8 }}>#{item.partNumber}</span>}
                     {item.costPerUnit ? <span>${item.costPerUnit}/{item.unit}</span> : null}
                     <span style={{ marginLeft: 8 }}>Stock: {item.quantity} {item.unit}</span>
@@ -1113,7 +1120,7 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
                     placeholder="0"
                     style={{ width: 60, padding: "4px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none" }}
                   />
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>{item.unit}</span>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>{item.unit}</span>
                 </div>
               </div>
             ))}
@@ -1132,7 +1139,7 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
           <button onClick={handleComplete} disabled={saving} style={{ flex: 1, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             {saving ? "Saving..." : "Mark Complete"}
           </button>
-          <button onClick={onClose} style={{ flex: 1, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
         </div>
       </div>
     </div>
@@ -1168,7 +1175,7 @@ const handleFileUpload = async (file) => {
 const st = STS[task.status] || STS.pending;
 const next = task.status === "pending" ? "in-progress" : task.status === "in-progress" ? "done" : "pending";
 const nextLabel = task.status === "pending" ? "Start" : task.status === "in-progress" ? "Complete" : "Reopen";
-const btnC = task.status === "pending" ? "#6366f1" : task.status === "in-progress" ? "#059669" : "#9ca3af";
+const btnC = task.status === "pending" ? "#6366f1" : task.status === "in-progress" ? "#059669" : "#94a3b8";
 
 const loadHistory = async () => {
 if (!locId) return;
@@ -1310,11 +1317,11 @@ return (
 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", cursor: "pointer" }} onClick={() => setOpen(!open)}>
 <div style={{ width: 9, height: 9, borderRadius: "50%", background: st.dot, flexShrink: 0 }} />
 <div style={{ flex: 1, minWidth: 0 }}>
-<div style={{ fontWeight: 600, fontSize: 13.5, color: task.status === "done" ? "#9ca3af" : "#111827", textDecoration: task.status === "done" ? "line-through" : "none", overflowWrap: "anywhere" }}>{task.title}</div>
+<div style={{ fontWeight: 600, fontSize: 13.5, color: task.status === "done" ? "#94a3b8" : "#0f1f35", textDecoration: task.status === "done" ? "line-through" : "none", overflowWrap: "anywhere" }}>{task.title}</div>
 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
 <Pill label={task.category} bg={CAT[task.category]?.bg} color={CAT[task.category]?.color} />
 <Pill label={task.priority} bg={PRI[task.priority]?.bg} color={PRI[task.priority]?.color} />
-<span style={{ fontSize: 11, color: "#9ca3af" }}>{task.due && task.due.includes("-") ? new Date(task.due + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : task.due}</span>
+<span style={{ fontSize: 11, color: "#94a3b8" }}>{task.due && task.due.includes("-") ? new Date(task.due + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : task.due}</span>
 {recurrenceLabel && <span style={{ fontSize: 11, color: "#6366f1", background: "#ede9fe", padding: "1px 7px", borderRadius: 99 }}>{recurrenceLabel}</span>}
 {carsDueLabel && <span style={{ fontSize: 11, color: "#d97706", background: "#fef3c7", padding: "1px 7px", borderRadius: 99 }}>{carsDueLabel}</span>}
             {task.due && task.due.includes("-") && task.status !== "done" && new Date(task.due + "T23:59:59") < new Date() && (
@@ -1341,7 +1348,7 @@ return (
   }} style={{ background: "#d1fae5", color: "#065f46", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Approve</button>
 )}
 {user?.role === "manager" && (
-  <button onClick={e => { e.stopPropagation(); onEdit && onEdit(task); }} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Edit</button>
+  <button onClick={e => { e.stopPropagation(); onEdit && onEdit(task); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Edit</button>
 )}
 {user?.role === "manager" && (
   <button onClick={async (e) => {
@@ -1363,7 +1370,7 @@ return (
 </div>
 {open && (
 <div style={{ padding: "12px 14px 14px", borderTop: "1px solid #f3f4f6", background: "#fafbfc" }}>
-<div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
+<div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: "#64748b", marginBottom: 10 }}>
 <span><b>Shift:</b> {task.shift}</span>
 <span><b>Status:</b> <Pill label={st.label} bg={st.bg} color={st.color} /></span>
 {task.equipmentId && equipment && <span><b>Equipment:</b> {equipment.find(e => e.id === task.equipmentId)?.name || task.equipmentId}</span>}
@@ -1372,7 +1379,7 @@ return (
 {task.duration != null && <span><b>Duration:</b> {task.duration} min</span>}
 </div>
 <div style={{ marginBottom: 10 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Notes</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Notes</label>
 <textarea
 value={note}
 onChange={e => setNote(e.target.value)}
@@ -1383,10 +1390,10 @@ style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", border
 />
           </div>
           <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Attachments</label>
-            {attachments.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>No attachments yet</div>}
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Attachments</label>
+            {attachments.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>No attachments yet</div>}
             {attachments.map((a, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#f9fafb", borderRadius: 8, padding: 8 }}>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#f8fafc", borderRadius: 8, padding: 8 }}>
                 {a.type?.startsWith("image/") ? (
                   <img src={a.url} alt={a.name} onClick={() => window.open(a.url)}
                     style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, cursor: "pointer", flexShrink: 0 }} />
@@ -1397,8 +1404,8 @@ style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", border
                   </a>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
-                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{new Date(a.uploadedAt).toLocaleDateString()}</div>
+                  <div style={{ fontSize: 11, color: "#334155", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(a.uploadedAt).toLocaleDateString()}</div>
                 </div>
                 {user?.role === "manager" && (
                   <button onClick={async () => {
@@ -1414,7 +1421,7 @@ style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", border
                 )}
               </div>
             ))}
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: uploading ? "not-allowed" : "pointer", fontSize: 12, color: uploading ? "#9ca3af" : "#0369a1", fontWeight: 600, background: "#f0f9ff", padding: "6px 12px", borderRadius: 8, border: "1px solid #bae6fd" }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: uploading ? "not-allowed" : "pointer", fontSize: 12, color: uploading ? "#94a3b8" : "#0369a1", fontWeight: 600, background: "#f0f9ff", padding: "6px 12px", borderRadius: 8, border: "1px solid #bae6fd" }}>
               {uploading ? "Uploading..." : "Add photo or file"}
               <input type="file" accept="image/*,application/pdf" style={{ display: "none" }}
                 onChange={e => { if (e.target.files[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} disabled={uploading} />
@@ -1424,7 +1431,7 @@ style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", border
           </div>
           
 <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-<button onClick={loadHistory} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#6b7280", cursor: "pointer" }}>
+<button onClick={loadHistory} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#64748b", cursor: "pointer" }}>
 View History
 </button>
 {task.status === "in-progress" && onSelectMaterials && (
@@ -1435,17 +1442,17 @@ View History
 </div>
 {showHistory && (
 <div style={{ marginTop: 12 }}>
-<div style={{ fontWeight: 600, fontSize: 12, color: "#374151", marginBottom: 8 }}>Task History</div>
+<div style={{ fontWeight: 600, fontSize: 12, color: "#334155", marginBottom: 8 }}>Task History</div>
 {history.length === 0 ? (
-<div style={{ fontSize: 12, color: "#9ca3af" }}>No history yet.</div>
+<div style={{ fontSize: 12, color: "#94a3b8" }}>No history yet.</div>
 ) : history.map(h => (
 <div key={h.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, padding: "8px 12px", marginBottom: 6, fontSize: 12 }}>
 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-<span style={{ fontWeight: 600, color: "#374151" }}>{h.date}</span>
-<span style={{ color: "#9ca3af" }}>{h.duration != null ? h.duration + " min" : ""}</span>
+<span style={{ fontWeight: 600, color: "#334155" }}>{h.date}</span>
+<span style={{ color: "#94a3b8" }}>{h.duration != null ? h.duration + " min" : ""}</span>
 </div>
-<div style={{ color: "#6b7280" }}><b>By:</b> {h.completedBy}</div>
-{h.note && <div style={{ color: "#374151", marginTop: 4, fontStyle: "italic" }}>{h.note}</div>}
+<div style={{ color: "#64748b" }}><b>By:</b> {h.completedBy}</div>
+{h.note && <div style={{ color: "#334155", marginTop: 4, fontStyle: "italic" }}>{h.note}</div>}
 </div>
 ))}
 </div>
@@ -1493,28 +1500,28 @@ const done = mine.filter(t => t.status === "done").length;
 const pct = mine.length ? Math.round(done / mine.length * 100) : 0;
 
 const chip = (val, cur, set, label) => (
-<button onClick={() => set(val)} style={{ padding: "5px 12px", borderRadius: 99, border: "1px solid #e5e7eb", background: cur === val ? "#1a3352" : "#fff", color: cur === val ? "#fff" : "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}>{label}</button>
+<button onClick={() => set(val)} style={{ padding: "5px 12px", borderRadius: 99, border: "1px solid #e5e7eb", background: cur === val ? "#0f1f35" : "#fff", color: cur === val ? "#fff" : "#334155", fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}>{label}</button>
 );
 
 return (
 <div>
 <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
 <div>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>"Tasks"</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>"Tasks"</div>
+<div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
 </div>
-<button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, WebkitAppearance: "none" }}>+ Add Task</button>
-<button onClick={() => setShowHistory(true)} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Task History</button>
+<button onClick={onAddTask} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, WebkitAppearance: "none" }}>+ Add Task</button>
+<button onClick={() => setShowHistory(true)} style={{ background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Task History</button>
 </div>
 <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-  <select value={fStatus} onChange={e => setFS(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#374151", background: "#fff", cursor: "pointer", outline: "none" }}>
+  <select value={fStatus} onChange={e => setFS(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", cursor: "pointer", outline: "none" }}>
     <option value="all">All Status</option>
     <option value="pending">Pending</option>
     <option value="in-progress">In Progress</option>
     <option value="done">Done</option>
     <option value="overdue">Overdue</option>
   </select>
-  <select value={fCat} onChange={e => setFC(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#374151", background: "#fff", cursor: "pointer", outline: "none" }}>
+  <select value={fCat} onChange={e => setFC(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", cursor: "pointer", outline: "none" }}>
     <option value="all">All Types</option>
     <option value="cleaning">Cleaning</option>
     <option value="equipment">Equipment</option>
@@ -1528,9 +1535,9 @@ return (
     {filtered.length === 0 ? (
       <div style={{ textAlign: "center", padding: "40px 20px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 6 }}>No tasks yet</div>
-        <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
-        <button onClick={onAddTask} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>No tasks yet</div>
+        <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
+        <button onClick={onAddTask} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
     ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} />)}
     {showHistory && (
@@ -1549,7 +1556,7 @@ return (
     onComplete={() => setInspectionTask(null)}
   />
 )}
-{false && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No tasks match your filters.</div>}
+{false && <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>No tasks match your filters.</div>}
   </div>
 </div>
 
@@ -1587,7 +1594,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
 
   const [histories, setHistories] = useState({});
 
-  const inp = { width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff", color: "#111827" };
+  const inp = { width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff", color: "#0f1f35" };
 
   const toggleExpand = async (eqId) => {
     const next = { ...expanded, [eqId]: !expanded[eqId] };
@@ -1693,33 +1700,33 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
     <div>
       <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Equipment</div>
-          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Equipment</div>
+          <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Equipment</button>
+        <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Equipment</button>
       </div>
 
       {showAdd && (
-        <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+        <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 16, padding: 20, marginBottom: 18 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 14 }}>New Equipment</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 14 }}>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Name</label><input value={newEq.name} onChange={e => setNewEq(p => ({...p, name: e.target.value}))} placeholder="e.g. Conveyor Belt" style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Status</label>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Name</label><input value={newEq.name} onChange={e => setNewEq(p => ({...p, name: e.target.value}))} placeholder="e.g. Conveyor Belt" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Status</label>
               <select value={newEq.status} onChange={e => setNewEq(p => ({...p, status: e.target.value}))} style={inp}>
                 <option value="ok">OK</option><option value="warning">Warning</option><option value="error">Alert</option>
               </select>
             </div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Last Service Date</label><input value={newEq.lastService} onChange={e => setNewEq(p => ({...p, lastService: e.target.value}))} placeholder="e.g. Mar 15, 2026" style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Car Count at Last Service</label><input type="number" value={newEq.lastServiceCars} onChange={e => setNewEq(p => ({...p, lastServiceCars: parseInt(e.target.value)||0}))} placeholder="0" style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Next Service Date</label><input value={newEq.nextService} onChange={e => setNewEq(p => ({...p, nextService: e.target.value}))} placeholder="e.g. Apr 15, 2026" style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Next Service at Cars</label><input type="number" value={newEq.nextServiceCars} onChange={e => setNewEq(p => ({...p, nextServiceCars: parseInt(e.target.value)||0}))} placeholder="e.g. 50000" style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Current Car Count</label><input type="number" value={newEq.carsCount} onChange={e => setNewEq(p => ({...p, carsCount: parseInt(e.target.value)||0}))} placeholder="0" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Last Service Date</label><input value={newEq.lastService} onChange={e => setNewEq(p => ({...p, lastService: e.target.value}))} placeholder="e.g. Mar 15, 2026" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Car Count at Last Service</label><input type="number" value={newEq.lastServiceCars} onChange={e => setNewEq(p => ({...p, lastServiceCars: parseInt(e.target.value)||0}))} placeholder="0" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Next Service Date</label><input value={newEq.nextService} onChange={e => setNewEq(p => ({...p, nextService: e.target.value}))} placeholder="e.g. Apr 15, 2026" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Next Service at Cars</label><input type="number" value={newEq.nextServiceCars} onChange={e => setNewEq(p => ({...p, nextServiceCars: parseInt(e.target.value)||0}))} placeholder="e.g. 50000" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Current Car Count</label><input type="number" value={newEq.carsCount} onChange={e => setNewEq(p => ({...p, carsCount: parseInt(e.target.value)||0}))} placeholder="0" style={inp} /></div>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, cursor: "pointer" }}>
-            <input type="checkbox" checked={newEq.tracksCarCount} onChange={e => setNewEq(p => ({...p, tracksCarCount: e.target.checked}))} style={{ width: 16, height: 16, accentColor: "#1a3352" }} />
+            <input type="checkbox" checked={newEq.tracksCarCount} onChange={e => setNewEq(p => ({...p, tracksCarCount: e.target.checked}))} style={{ width: 16, height: 16, accentColor: "#0f1f35" }} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Track car count for this equipment</div>
-              <div style={{ fontSize: 11, color: "#9ca3af" }}>Generates a dedicated email address for automated car count logging</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>Track car count for this equipment</div>
+              <div style={{ fontSize: 11, color: "#94a3b8" }}>Generates a dedicated email address for automated car count logging</div>
             </div>
           </label>
           {newEq.tracksCarCount && (
@@ -1728,8 +1735,8 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
             </div>
           )}
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleAdd} disabled={saving} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add"}</button>
-            <button onClick={() => setShowAdd(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            <button onClick={handleAdd} disabled={saving} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add"}</button>
+            <button onClick={() => setShowAdd(false)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       )}
@@ -1739,9 +1746,9 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
         {equipment.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔧</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 6 }}>No equipment added yet</div>
-            <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>Track your car wash equipment, service schedules, and maintenance history.</div>
-            <button onClick={() => setShowAdd(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Equipment</button>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>No equipment added yet</div>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Track your car wash equipment, service schedules, and maintenance history.</div>
+            <button onClick={() => setShowAdd(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Equipment</button>
           </div>
         ) : equipment.map(eq => {
           const s = EQS[eq.status] || EQS.ok;
@@ -1754,29 +1761,29 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
           const carsUntilService = eq.nextServiceCars && eq.carsCount ? Math.max(0, eq.nextServiceCars - eq.carsCount).toLocaleString() : null;
 
           return (
-            <div key={eq.id} style={{ background: "#fff", border: `1.5px solid ${eq.status !== "ok" ? s.color + "60" : "#e5e7eb"}`, borderRadius: 12, overflow: "hidden" }}>
+            <div key={eq.id} style={{ background: "#fff", border: `1.5px solid ${eq.status !== "ok" ? s.color + "60" : "#e2e8f0"}`, borderRadius: 12, overflow: "hidden" }}>
               {/* Header */}
               <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => toggleExpand(eq.id)}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{eq.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{eq.name}</div>
                     <Pill label={s.label} bg={s.bg} color={s.color} />
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6, fontSize: 12, color: "#6b7280" }}>
-                    <div style={{ background: "#f8fafc", borderRadius: 6, padding: "6px 10px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6, fontSize: 12, color: "#64748b" }}>
+                    <div style={{ background: "#f4f6f8", borderRadius: 6, padding: "6px 10px" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Last Service</div>
-                      <div style={{ fontWeight: 600, color: "#374151" }}>{eq.lastService || "-"}</div>
-                      {eq.lastServiceCars ? <div style={{ color: "#9ca3af" }}>at {Number(eq.lastServiceCars).toLocaleString()} cars</div> : null}
+                      <div style={{ fontWeight: 600, color: "#334155" }}>{eq.lastService || "-"}</div>
+                      {eq.lastServiceCars ? <div style={{ color: "#94a3b8" }}>at {Number(eq.lastServiceCars).toLocaleString()} cars</div> : null}
                     </div>
-                    <div style={{ background: "#f8fafc", borderRadius: 6, padding: "6px 10px" }}>
+                    <div style={{ background: "#f4f6f8", borderRadius: 6, padding: "6px 10px" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Next Service</div>
-                      <div style={{ fontWeight: 600, color: eq.nextService === "Overdue" ? "#ef4444" : "#374151" }}>{eq.nextService || "-"}</div>
-                      {eq.nextServiceCars ? <div style={{ color: "#9ca3af" }}>or at {Number(eq.nextServiceCars).toLocaleString()} cars</div> : null}
+                      <div style={{ fontWeight: 600, color: eq.nextService === "Overdue" ? "#ef4444" : "#334155" }}>{eq.nextService || "-"}</div>
+                      {eq.nextServiceCars ? <div style={{ color: "#94a3b8" }}>or at {Number(eq.nextServiceCars).toLocaleString()} cars</div> : null}
                     </div>
-                    <div style={{ background: "#f8fafc", borderRadius: 6, padding: "6px 10px" }}>
+                    <div style={{ background: "#f4f6f8", borderRadius: 6, padding: "6px 10px" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Total Cars</div>
-                      <div style={{ fontWeight: 600, color: "#374151" }}>{(eq.carsCount || 0).toLocaleString()}</div>
-                      {carsSinceService && <div style={{ color: "#9ca3af" }}>{carsSinceService} since last service</div>}
+                      <div style={{ fontWeight: 600, color: "#334155" }}>{(eq.carsCount || 0).toLocaleString()}</div>
+                      {carsSinceService && <div style={{ color: "#94a3b8" }}>{carsSinceService} since last service</div>}
                     </div>
                     {carsUntilService && (
                       <div style={{ background: Number(carsUntilService.replace(/,/g,"")) < 1000 ? "#fee2e2" : "#f0fdf4", borderRadius: 6, padding: "6px 10px" }}>
@@ -1794,42 +1801,42 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
-                  <button onClick={e => { e.stopPropagation(); setEditingId(isEditing ? null : eq.id); setEditData({ status: eq.status, lastService: eq.lastService||"", lastServiceCars: eq.lastServiceCars||0, nextService: eq.nextService||"", nextServiceCars: eq.nextServiceCars||0, carsCount: eq.carsCount||0, note: eq.note||"", tracksCarCount: eq.tracksCarCount||false }); }} style={{ background: "#f3f4f6", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#374151", fontWeight: 600 }}>Edit</button>
+                  <button onClick={e => { e.stopPropagation(); setEditingId(isEditing ? null : eq.id); setEditData({ status: eq.status, lastService: eq.lastService||"", lastServiceCars: eq.lastServiceCars||0, nextService: eq.nextService||"", nextServiceCars: eq.nextServiceCars||0, carsCount: eq.carsCount||0, note: eq.note||"", tracksCarCount: eq.tracksCarCount||false }); }} style={{ background: "#f1f5f9", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#334155", fontWeight: 600 }}>Edit</button>
                   <button onClick={e => { e.stopPropagation(); onCreateTask && onCreateTask(eq); }} style={{ background: "#ede9fe", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#6366f1", fontWeight: 600 }}>+ Task</button>
                   <button onClick={e => { e.stopPropagation(); handleDelete(eq.id); }} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Delete</button>
                 </div>
-                <span style={{ color: "#9ca3af", fontSize: 12 }}>{isExpanded ? "v" : ">"}</span>
+                <span style={{ color: "#94a3b8", fontSize: 12 }}>{isExpanded ? "v" : ">"}</span>
               </div>
 
               {/* Edit form */}
               {isEditing && (
                 <div style={{ padding: "0 20px 16px", borderTop: "1px solid #f3f4f6", background: "#fafbfc" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, marginTop: 14, marginBottom: 12 }}>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Status</label>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Status</label>
                       <select value={editData.status} onChange={e => setEditData(p => ({...p, status: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
                         <option value="ok">OK</option><option value="warning">Warning</option><option value="error">Alert</option>
                       </select>
                     </div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Current Car Count</label><input type="number" value={editData.carsCount} onChange={e => setEditData(p => ({...p, carsCount: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Last Service Date</label><input value={editData.lastService} onChange={e => setEditData(p => ({...p, lastService: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Car Count at Last Service</label><input type="number" value={editData.lastServiceCars} onChange={e => setEditData(p => ({...p, lastServiceCars: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Next Service Date</label><input value={editData.nextService} onChange={e => setEditData(p => ({...p, nextService: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Next Service at Cars</label><input type="number" value={editData.nextServiceCars} onChange={e => setEditData(p => ({...p, nextServiceCars: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Current Car Count</label><input type="number" value={editData.carsCount} onChange={e => setEditData(p => ({...p, carsCount: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Last Service Date</label><input value={editData.lastService} onChange={e => setEditData(p => ({...p, lastService: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Car Count at Last Service</label><input type="number" value={editData.lastServiceCars} onChange={e => setEditData(p => ({...p, lastServiceCars: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Next Service Date</label><input value={editData.nextService} onChange={e => setEditData(p => ({...p, nextService: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Next Service at Cars</label><input type="number" value={editData.nextServiceCars} onChange={e => setEditData(p => ({...p, nextServiceCars: parseInt(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
                   </div>
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Notes</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Notes</label>
                     <textarea value={editData.note} onChange={e => setEditData(p => ({...p, note: e.target.value}))} rows={2} style={{ ...inp, resize: "vertical", fontFamily: "inherit", fontSize: 12, padding: "6px 8px" }} />
                   </div>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, cursor: "pointer" }}>
-                    <input type="checkbox" checked={editData.tracksCarCount || false} onChange={e => setEditData(p => ({...p, tracksCarCount: e.target.checked}))} style={{ width: 16, height: 16, accentColor: "#1a3352" }} />
+                    <input type="checkbox" checked={editData.tracksCarCount || false} onChange={e => setEditData(p => ({...p, tracksCarCount: e.target.checked}))} style={{ width: 16, height: 16, accentColor: "#0f1f35" }} />
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>Track car count for this equipment</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{eq.emailCode ? "Email: " + eq.emailCode + "@washlevel.com" : "Will generate a dedicated email address"}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#0f1f35" }}>Track car count for this equipment</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{eq.emailCode ? "Email: " + eq.emailCode + "@washlevel.com" : "Will generate a dedicated email address"}</div>
                     </div>
                   </label>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => handleSaveEdit(eq.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
-                    <button onClick={() => setEditingId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => handleSaveEdit(eq.id)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                    <button onClick={() => setEditingId(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -1837,21 +1844,21 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
               {/* Expanded details */}
               {isExpanded && !isEditing && (<>
                 <div style={{ padding: "0 20px 20px", borderTop: "1px solid #f3f4f6" }}>
-                  {eq.note && <div style={{ marginTop: 12, fontSize: 13, color: "#374151", fontStyle: "italic" }}>{eq.note}</div>}
+                  {eq.note && <div style={{ marginTop: 12, fontSize: 13, color: "#334155", fontStyle: "italic" }}>{eq.note}</div>}
 
 
 
                   {/* Linked tasks */}
                   {linkedTasks.length > 0 && (
                     <div style={{ marginTop: 14 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Linked Tasks ({linkedTasks.length})</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>Linked Tasks ({linkedTasks.length})</div>
                       {linkedTasks.map(t => (
                         <div key={t.id} onClick={() => onNavigate && onNavigate("tasks")} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", fontSize: 12, borderBottom: "1px solid #f3f4f6", cursor: "pointer" }}
   onMouseEnter={e => e.currentTarget.style.background="#f0f9ff"}
   onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: STS[t.status]?.dot || "#9ca3af", flexShrink: 0 }} />
-                          <span style={{ flex: 1, color: "#374151" }}>{t.title}</span>
-                          <Pill label={STS[t.status]?.label || t.status} bg={STS[t.status]?.bg || "#f3f4f6"} color={STS[t.status]?.color || "#6b7280"} />
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: STS[t.status]?.dot || "#94a3b8", flexShrink: 0 }} />
+                          <span style={{ flex: 1, color: "#334155" }}>{t.title}</span>
+                          <Pill label={STS[t.status]?.label || t.status} bg={STS[t.status]?.bg || "#f1f5f9"} color={STS[t.status]?.color || "#64748b"} />
                         </div>
                       ))}
                     </div>
@@ -1859,14 +1866,14 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
 
                   {/* History */}
                   <div style={{ marginTop: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Service History</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>Service History</div>
                     {eqHistory.length === 0 ? (
-                      <div style={{ fontSize: 12, color: "#9ca3af" }}>No history yet. History is recorded automatically when you update service dates, car counts, or complete linked tasks.</div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>No history yet. History is recorded automatically when you update service dates, car counts, or complete linked tasks.</div>
                     ) : eqHistory.map(h => (
                       <div key={h.id} onClick={() => h.type === "task" ? setSelectedHistoryEntry(h) : null}
-                        style={{ padding: "8px 10px", background: h.type === "task" ? "#f0f9ff" : "#f8fafc", borderRadius: 7, marginBottom: 6, fontSize: 12, cursor: h.type === "task" ? "pointer" : "default", border: h.type === "task" ? "1px solid #bae6fd" : "1px solid transparent" }}>
+                        style={{ padding: "8px 10px", background: h.type === "task" ? "#f0f9ff" : "#f4f6f8", borderRadius: 7, marginBottom: 6, fontSize: 12, cursor: h.type === "task" ? "pointer" : "default", border: h.type === "task" ? "1px solid #bae6fd" : "1px solid transparent" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2, alignItems: "center" }}>
-                          <span style={{ fontWeight: 600, color: "#374151" }}>
+                          <span style={{ fontWeight: 600, color: "#334155" }}>
                             {h.type === "task" ? (h.taskTitle || "Task") : h.type === "inspection" ? "Inspection" : "Service"} — {h.date || (h.completedAt ? new Date(h.completedAt).toLocaleDateString() : "")}
                           </span>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1887,8 +1894,8 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                             {h.type === "task" && <span style={{ fontSize: 11, color: "#0369a1" }}>View</span>}
                           </div>
                         </div>
-                        <div style={{ color: "#6b7280" }}>{h.completedBy ? "by " + h.completedBy : ""}{h.duration ? " · " + h.duration + " min" : ""}</div>
-                        {h.note && <div style={{ color: "#374151", marginTop: 2, fontStyle: "italic" }}>{h.note}</div>}
+                        <div style={{ color: "#64748b" }}>{h.completedBy ? "by " + h.completedBy : ""}{h.duration ? " · " + h.duration + " min" : ""}</div>
+                        {h.note && <div style={{ color: "#334155", marginTop: 2, fontStyle: "italic" }}>{h.note}</div>}
                         {h.type === "inspection" && h.items && (
                           <div style={{ marginTop: 4 }}>
                             {h.items.filter(i => i.result !== "good").map((item, idx) => (
@@ -1907,10 +1914,10 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                 </div>
 
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #f3f4f6" }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>Manuals & Documents</div>
-                  {files.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>No files uploaded yet</div>}
+                  <div style={{ fontWeight: 600, fontSize: 13, color: "#334155", marginBottom: 10 }}>Manuals & Documents</div>
+                  {files.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>No files uploaded yet</div>}
                   {files.map((f, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#f9fafb", borderRadius: 8, padding: 8 }}>
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#f8fafc", borderRadius: 8, padding: 8 }}>
                       {f.type?.startsWith("image/") ? (
                         <img src={f.url} alt={f.name} onClick={() => window.open(f.url)}
                           style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, cursor: "pointer", flexShrink: 0 }} />
@@ -1937,16 +1944,16 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                               setEqFiles(p => ({ ...p, [eq.id]: updated }));
                               await updateDoc(doc(db, "locations", locId, "equipment", eq.id), { files: updated });
                               setEditingFileName(null);
-                            }} style={{ fontSize: 11, background: "#1a3352", color: "#fff", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Save</button>
+                            }} style={{ fontSize: 11, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Save</button>
                           </div>
                         ) : (
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
                             <button onClick={() => { setEditingFileName(eq.id + "_" + i); setFileNameEdit(f.name); }}
-                              style={{ fontSize: 10, color: "#6b7280", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>Edit</button>
+                              style={{ fontSize: 10, color: "#64748b", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>Edit</button>
                           </div>
                         )}
-                        <div style={{ fontSize: 10, color: "#9ca3af" }}>{new Date(f.uploadedAt).toLocaleDateString()}</div>
+                        <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(f.uploadedAt).toLocaleDateString()}</div>
                       </div>
                       {user?.role === "manager" && (
                         <button onClick={async () => {
@@ -1959,7 +1966,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                       )}
                     </div>
                   ))}
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: eqUploading[eq.id] ? "not-allowed" : "pointer", fontSize: 12, color: eqUploading[eq.id] ? "#9ca3af" : "#0369a1", fontWeight: 600, background: "#f0f9ff", padding: "6px 12px", borderRadius: 8, border: "1px solid #bae6fd" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: eqUploading[eq.id] ? "not-allowed" : "pointer", fontSize: 12, color: eqUploading[eq.id] ? "#94a3b8" : "#0369a1", fontWeight: 600, background: "#f0f9ff", padding: "6px 12px", borderRadius: 8, border: "1px solid #bae6fd" }}>
                     {eqUploading[eq.id] ? "Uploading..." : "Add photo or PDF"}
                     <input type="file" accept="image/*,application/pdf" style={{ display: "none" }}
                       onChange={e => { if (e.target.files[0]) handleEqFileUpload(eq.id, e.target.files[0]); e.target.value = ""; }}
@@ -1971,7 +1978,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
             </div>
           );
         })}
-        {equipment.length === 0 && !showAdd && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No equipment yet. Tap + Add Equipment to get started.</div>}
+        {equipment.length === 0 && !showAdd && <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>No equipment yet. Tap + Add Equipment to get started.</div>}
       </div>
     </div>
   );
@@ -2332,36 +2339,36 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
     <div>
       <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Sensor Dashboard</div>
-          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Sensor Dashboard</div>
+          <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
-        {activeTab === "shelly" && <button onClick={() => setShowAddShelly(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Device</button>}
-        {activeTab === "chemlevel" && <button onClick={() => setShowAddChem(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Sensor</button>}
+        {activeTab === "shelly" && <button onClick={() => setShowAddShelly(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Device</button>}
+        {activeTab === "chemlevel" && <button onClick={() => setShowAddChem(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Sensor</button>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setActiveTab("sensorpush")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "sensorpush" ? "#1a3352" : "#f3f4f6", color: activeTab === "sensorpush" ? "#fff" : "#6b7280" }}>SensorPush</button>
-        <button onClick={() => setActiveTab("chemlevel")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "chemlevel" ? "#1a3352" : "#f3f4f6", color: activeTab === "chemlevel" ? "#fff" : "#6b7280" }}>ChemLevel</button>
-        <button onClick={() => setActiveTab("shelly")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "shelly" ? "#1a3352" : "#f3f4f6", color: activeTab === "shelly" ? "#fff" : "#6b7280" }}>Shelly</button>
+        <button onClick={() => setActiveTab("sensorpush")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "sensorpush" ? "#0f1f35" : "#f1f5f9", color: activeTab === "sensorpush" ? "#fff" : "#64748b" }}>SensorPush</button>
+        <button onClick={() => setActiveTab("chemlevel")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "chemlevel" ? "#0f1f35" : "#f1f5f9", color: activeTab === "chemlevel" ? "#fff" : "#64748b" }}>ChemLevel</button>
+        <button onClick={() => setActiveTab("shelly")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "shelly" ? "#0f1f35" : "#f1f5f9", color: activeTab === "shelly" ? "#fff" : "#64748b" }}>Shelly</button>
       </div>
 
       {activeTab === "chemlevel" && (
         <div>
           {showAddChem && (
-            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 16, padding: 20, marginBottom: 16 }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add ChemLevel Sensor</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Sensor Name</label>
-                  <input value={newChem.name} onChange={e => setNewChem(p => ({...p, name: e.target.value}))} placeholder="e.g. City Water Pressure" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Sensor Name</label>
+                  <input value={newChem.name} onChange={e => setNewChem(p => ({...p, name: e.target.value}))} placeholder="e.g. City Water Pressure" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Sensor ID</label>
-                  <input value={newChem.sensorId} onChange={e => setNewChem(p => ({...p, sensorId: e.target.value}))} placeholder="e.g. pressure1" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Sensor ID</label>
+                  <input value={newChem.sensorId} onChange={e => setNewChem(p => ({...p, sensorId: e.target.value}))} placeholder="e.g. pressure1" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Type</label>
-                  <select value={newChem.type} onChange={e => setNewChem(p => ({...p, type: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Type</label>
+                  <select value={newChem.type} onChange={e => setNewChem(p => ({...p, type: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}>
                     <option value="pressure">Pressure</option>
                     <option value="flow">Flow Rate</option>
                     <option value="level">Chemical Level</option>
@@ -2369,16 +2376,16 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Unit</label>
-                  <input value={newChem.unit} onChange={e => setNewChem(p => ({...p, unit: e.target.value}))} placeholder="PSI" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Unit</label>
+                  <input value={newChem.unit} onChange={e => setNewChem(p => ({...p, unit: e.target.value}))} placeholder="PSI" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Min Alert</label>
-                  <input type="number" value={newChem.minAlert} onChange={e => setNewChem(p => ({...p, minAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Min Alert</label>
+                  <input type="number" value={newChem.minAlert} onChange={e => setNewChem(p => ({...p, minAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Max Alert</label>
-                  <input type="number" value={newChem.maxAlert} onChange={e => setNewChem(p => ({...p, maxAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Max Alert</label>
+                  <input type="number" value={newChem.maxAlert} onChange={e => setNewChem(p => ({...p, maxAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -2389,17 +2396,17 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                   setNewChem({ name: "", type: "pressure", unit: "PSI", minAlert: 20, maxAlert: 150, sensorId: "" });
                   setShowAddChem(false);
                   setSavingChem(false);
-                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingChem ? "Saving..." : "Add Sensor"}</button>
-                <button onClick={() => setShowAddChem(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingChem ? "Saving..." : "Add Sensor"}</button>
+                <button onClick={() => setShowAddChem(false)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
               </div>
             </div>
           )}
           {chemSensors.length === 0 && !showAddChem && (
-            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+            <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📡</div>
-              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>No ChemLevel sensors yet</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#334155", marginBottom: 4 }}>No ChemLevel sensors yet</div>
               <div style={{ fontSize: 13 }}>Add a sensor above then upload firmware to your ESP32</div>
-              <div style={{ marginTop: 16, background: "#f8fafc", borderRadius: 10, padding: 16, textAlign: "left", fontFamily: "monospace", fontSize: 12, color: "#374151" }}>
+              <div style={{ marginTop: 16, background: "#f4f6f8", borderRadius: 10, padding: 16, textAlign: "left", fontFamily: "monospace", fontSize: 12, color: "#334155" }}>
                 <div style={{ fontWeight: 700, marginBottom: 8, fontFamily: "sans-serif" }}>Arduino endpoint:</div>
                 POST https://us-central1-washlevel-c16d9.cloudfunctions.net/ingestSensorReading<br/>
                 {"{"}"sensorId": "pressure1", "locationId": "{locId}", "value": 87.5, "unit": "PSI", "secret": "chemlevel2025"{"}"}
@@ -2410,21 +2417,21 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
             const isAlert = sensor.value < sensor.minAlert || sensor.value > sensor.maxAlert;
             const pct = Math.min(100, Math.max(0, ((sensor.value - 0) / (sensor.maxAlert * 1.2)) * 100));
             return (
-              <div key={sensor.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 14 }}>
+              <div key={sensor.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{sensor.name || sensor.sensorId}</div>
-                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>ID: {sensor.sensorId} · {sensor.type} · Last update: {sensor.timestamp ? new Date(sensor.timestamp).toLocaleTimeString() : "never"}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{sensor.name || sensor.sensorId}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>ID: {sensor.sensorId} · {sensor.type} · Last update: {sensor.timestamp ? new Date(sensor.timestamp).toLocaleTimeString() : "never"}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: isAlert ? "#dc2626" : "#1a3352" }}>{sensor.value ?? "--"}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>{sensor.unit}</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: isAlert ? "#dc2626" : "#0f1f35" }}>{sensor.value ?? "--"}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>{sensor.unit}</div>
                   </div>
                 </div>
-                <div style={{ background: "#f3f4f6", borderRadius: 999, height: 8, overflow: "hidden" }}>
+                <div style={{ background: "#f1f5f9", borderRadius: 999, height: 8, overflow: "hidden" }}>
                   <div style={{ width: pct + "%", height: "100%", background: isAlert ? "#dc2626" : "#22c55e", borderRadius: 999, transition: "width 0.5s" }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
                   <span>Min alert: {sensor.minAlert} {sensor.unit}</span>
                   <span>Max alert: {sensor.maxAlert} {sensor.unit}</span>
                 </div>
@@ -2439,15 +2446,15 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
       {activeTab === "shelly" && (
         <div>
           {!shellyCloud ? (
-            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+            <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>🔌</div>
-              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>Shelly not connected</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#334155", marginBottom: 4 }}>Shelly not connected</div>
               <div style={{ fontSize: 13 }}>Connect your Shelly Cloud account in Settings → Integrations</div>
             </div>
           ) : shellyCloudDevices.filter(d => !hiddenShellyDevices.includes(d.id) && (shellyAssignments[d.id] === locId || !shellyAssignments[d.id])).length === 0 ? (
-            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+            <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>🔌</div>
-              <div style={{ fontWeight: 600, fontSize: 15, color: "#374151", marginBottom: 4 }}>No devices assigned to this location</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#334155", marginBottom: 4 }}>No devices assigned to this location</div>
               <div style={{ fontSize: 13 }}>Assign devices in Settings → Integrations → Shelly Cloud</div>
             </div>
           ) : (
@@ -2461,15 +2468,15 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                 const caps = getShellyCapabilities(device.type);
                 const isAlert = state === true && caps.inputs > 0;
                 return (
-                  <div key={device.id} onClick={() => setSelectedShellyDevice({...device, reading, caps})} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, cursor: "pointer" }}>
-                    <div style={{ fontSize: 12, color: device.online === true ? "#10b981" : device.online === false ? "#ef4444" : "#9ca3af", marginBottom: 4 }}>
+                  <div key={device.id} onClick={() => setSelectedShellyDevice({...device, reading, caps})} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 16, padding: 16, cursor: "pointer" }}>
+                    <div style={{ fontSize: 12, color: device.online === true ? "#10b981" : device.online === false ? "#ef4444" : "#94a3b8", marginBottom: 4 }}>
                       {device.online === true ? "● Online" : device.online === false ? "● Offline" : "○ Checking..."} · {caps.label}
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 8 }}>{device.name}</div>
-                    <div style={{ fontSize: 26, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35", marginBottom: 8 }}>{device.name}</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#94a3b8" }}>
                       {state === true ? "ON" : state === false ? "OFF" : "--"}
                     </div>
-                    {reading?.timestamp && <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>Updated: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
+                    {reading?.timestamp && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>Updated: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
                     {isAlert && <div style={{ marginTop: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600 }}>⚠️ Alert</div>}
                   </div>
                 );
@@ -2481,35 +2488,35 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
             <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
               <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} onClick={() => setSelectedShellyDevice(null)} />
               <div style={{ position: "relative", background: "#fff", borderRadius: "20px 20px 0 0", padding: 24, maxHeight: "80vh", overflowY: "auto" }}>
-                <div style={{ width: 36, height: 4, background: "#e5e7eb", borderRadius: 2, margin: "0 auto 20px" }} />
+                <div style={{ width: 36, height: 4, background: "#e2e8f0", borderRadius: 2, margin: "0 auto 20px" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 18, color: "#111827" }}>{selectedShellyDevice.name}</div>
-                    <div style={{ fontSize: 12, color: selectedShellyDevice.online ? "#10b981" : "#9ca3af", marginTop: 2 }}>
+                    <div style={{ fontWeight: 700, fontSize: 18, color: "#0f1f35" }}>{selectedShellyDevice.name}</div>
+                    <div style={{ fontSize: 12, color: selectedShellyDevice.online ? "#10b981" : "#94a3b8", marginTop: 2 }}>
                       {selectedShellyDevice.online ? "● Online" : "○ Offline"} · {selectedShellyDevice.caps?.label}
                     </div>
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: selectedShellyDevice.reading?.state === true ? "#dc2626" : selectedShellyDevice.reading?.state === false ? "#10b981" : "#9ca3af" }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: selectedShellyDevice.reading?.state === true ? "#dc2626" : selectedShellyDevice.reading?.state === false ? "#10b981" : "#94a3b8" }}>
                     {selectedShellyDevice.reading?.state === true ? "ON" : selectedShellyDevice.reading?.state === false ? "OFF" : "--"}
                   </div>
                 </div>
-                <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 8 }}>Device Info</div>
-                  <div style={{ fontSize: 13, color: "#374151" }}>Type: {selectedShellyDevice.type}</div>
-                  <div style={{ fontSize: 13, color: "#374151" }}>ID: {selectedShellyDevice.id}</div>
+                <div style={{ background: "#f4f6f8", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>Device Info</div>
+                  <div style={{ fontSize: 13, color: "#334155" }}>Type: {selectedShellyDevice.type}</div>
+                  <div style={{ fontSize: 13, color: "#334155" }}>ID: {selectedShellyDevice.id}</div>
                   {selectedShellyDevice.reading?.timestamp && (
-                    <div style={{ fontSize: 13, color: "#374151" }}>Last update: {new Date(selectedShellyDevice.reading.timestamp).toLocaleString()}</div>
+                    <div style={{ fontSize: 13, color: "#334155" }}>Last update: {new Date(selectedShellyDevice.reading.timestamp).toLocaleString()}</div>
                   )}
                 </div>
                 {selectedShellyDevice.caps?.inputs > 0 && (
                   <div style={{ background: selectedShellyDevice.reading?.inputState ? "#fee2e2" : "#d1fae5", borderRadius: 10, padding: 14, marginBottom: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 2 }}>Digital Input</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 2 }}>Digital Input</div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: selectedShellyDevice.reading?.inputState ? "#dc2626" : "#065f46" }}>
                           {selectedShellyDevice.reading?.inputState ? "⚠️ ACTIVE" : "✓ INACTIVE"}
                         </div>
-                        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
                           {selectedShellyDevice.reading?.inputState ? "Signal detected on SW terminal" : "No signal on SW terminal"}
                         </div>
                       </div>
@@ -2520,14 +2527,14 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                   </div>
                 )}
                 {selectedShellyDevice.caps?.relays > 0 && (
-                  <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 12 }}>Relay Control</div>
+                  <div style={{ background: "#f4f6f8", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 12 }}>Relay Control</div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: selectedShellyDevice.reading?.state ? "#10b981" : "#6b7280" }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: selectedShellyDevice.reading?.state ? "#10b981" : "#64748b" }}>
                           Relay is {selectedShellyDevice.reading?.state ? "ON" : "OFF"}
                         </div>
-                        <div style={{ fontSize: 12, color: "#9ca3af" }}>Tap to toggle</div>
+                        <div style={{ fontSize: 12, color: "#94a3b8" }}>Tap to toggle</div>
                       </div>
                       <button onClick={() => toggleShellyRelay(selectedShellyDevice, selectedShellyDevice.reading?.state)} disabled={togglingShelly}
                         style={{ background: selectedShellyDevice.reading?.state ? "#dc2626" : "#10b981", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: togglingShelly ? "not-allowed" : "pointer", opacity: togglingShelly ? 0.6 : 1 }}>
@@ -2537,7 +2544,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                   </div>
                 )}
                 <button onClick={() => setSelectedShellyDevice(null)}
-                  style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                   Close
                 </button>
               </div>
@@ -2547,20 +2554,20 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
           {/* Manual devices still shown */}
           {shellyDevices.length > 0 && (
             <div style={{ marginTop: 20 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: "#6b7280", marginBottom: 10 }}>Manual Devices</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#64748b", marginBottom: 10 }}>Manual Devices</div>
               {shellyDevices.map(device => {
                 const reading = shellyReadings[device.id];
                 const state = reading?.state;
                 const isAlert = device.alertOn !== "never" && state === (device.alertOn === "on" ? true : false);
                 return (
-                  <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10 }}>
+                  <div key={device.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{device.name}</div>
-                        <div style={{ fontSize: 11, color: "#9ca3af" }}>ID: {device.deviceId} · Ch {device.channel} · {device.type}</div>
-                        {reading?.timestamp && <div style={{ fontSize: 11, color: "#9ca3af" }}>Updated: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{device.name}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>ID: {device.deviceId} · Ch {device.channel} · {device.type}</div>
+                        {reading?.timestamp && <div style={{ fontSize: 11, color: "#94a3b8" }}>Updated: {new Date(reading.timestamp).toLocaleTimeString()}</div>}
                       </div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#9ca3af" }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: state === true ? "#dc2626" : state === false ? "#10b981" : "#94a3b8" }}>
                         {state === true ? "ON" : state === false ? "OFF" : "--"}
                       </div>
                     </div>
@@ -2577,7 +2584,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
 
       {activeTab === "sensorpush" && spSensors.length > 0 && (
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>SensorPush Sensors</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35", marginBottom: 12 }}>SensorPush Sensors</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 13, marginBottom: 16 }}>
             {spSensors.map(sp => {
               const lr = latestReadings[sp.id];
@@ -2585,43 +2592,43 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
               const hum = lr?.humidity ?? s.spHumidity;
               return (
                 <div key={sp.id} onClick={() => loadHistory(sp.id, timeRange)}
-                  style={{ background: selectedSensor === sp.id ? "#eff6ff" : "#fff", border: selectedSensor === sp.id ? "2px solid #3b82f6" : "1px solid #e5e7eb", borderRadius: 12, padding: 16, cursor: "pointer" }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 10 }}>{sp.name}</div>
+                  style={{ background: selectedSensor === sp.id ? "#eff6ff" : "#fff", border: selectedSensor === sp.id ? "2px solid #3b82f6" : "1px solid #e5e7eb", borderRadius: 16, padding: 16, cursor: "pointer" }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35", marginBottom: 10 }}>{sp.name}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div style={{ background: "#eff6ff", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#3b82f6" }}>{temp != null ? temp + "F" : "--"}</div>
-                      <div style={{ fontSize: 10, color: "#6b7280" }}>Temperature</div>
+                      <div style={{ fontSize: 10, color: "#64748b" }}>Temperature</div>
                     </div>
                     <div style={{ background: "#ecfeff", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#0891b2" }}>{hum != null ? hum + "%" : "--"}</div>
-                      <div style={{ fontSize: 10, color: "#6b7280" }}>Humidity</div>
+                      <div style={{ fontSize: 10, color: "#64748b" }}>Humidity</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 8, textAlign: "center" }}>Tap for history</div>
+                  <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 8, textAlign: "center" }}>Tap for history</div>
                 </div>
               );
             })}
           </div>
 
           {selectedSensor && (
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{selSensor?.name}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{selSensor?.name}</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {["1h","6h","24h","7d"].map(r => (
                     <button key={r} onClick={() => { setTimeRange(r); loadHistory(selectedSensor, r); }}
                       style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, border: "none", borderRadius: 6,
-                        background: timeRange === r ? "#1a3352" : "#f3f4f6",
-                        color: timeRange === r ? "#fff" : "#6b7280", cursor: "pointer" }}>
+                        background: timeRange === r ? "#0f1f35" : "#f1f5f9",
+                        color: timeRange === r ? "#fff" : "#64748b", cursor: "pointer" }}>
                       {r === "7d" ? "1W" : r}
                     </button>
                   ))}
                 </div>
               </div>
               {loadingHistory ? (
-                <div style={{ textAlign: "center", padding: "30px 0", color: "#9ca3af", fontSize: 13 }}>Loading history...</div>
+                <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", fontSize: 13 }}>Loading history...</div>
               ) : selHistory.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "30px 0", color: "#9ca3af", fontSize: 13 }}>No data available</div>
+                <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", fontSize: 13 }}>No data available</div>
               ) : (
                 <div>
                   {["temp","hum"].map(chartType => {
@@ -2646,7 +2653,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                           )}
                         </div>
                         <div style={{ display: "flex", gap: 6, overflowX: "hidden" }}>
-                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontSize: 9, color: "#9ca3af", width: 28, textAlign: "right", paddingBottom: 2, flexShrink: 0 }}>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontSize: 9, color: "#94a3b8", width: 28, textAlign: "right", paddingBottom: 2, flexShrink: 0 }}>
                             <span>{maxV}{unit}</span><span>{midV}{unit}</span><span>{minV}{unit}</span>
                           </div>
                           <div style={{ flex: 1 }}>
@@ -2666,7 +2673,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                                 );
                               })}
                             </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#9ca3af", marginTop: 3 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
                               <span>{new Date(selHistory[0]?.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                               <span style={{ fontWeight: 600 }}>Time</span>
                               <span>Now</span>
@@ -2838,8 +2845,8 @@ function TimeClock({ locId, locationName, allLocations }) {
 
   const tabStyle = (t) => ({
     flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
-    background: activeTab === t ? "#fff" : "#f9fafb",
-    color: activeTab === t ? "#1a3352" : "#9ca3af",
+    background: activeTab === t ? "#fff" : "#f8fafc",
+    color: activeTab === t ? "#0f1f35" : "#94a3b8",
     borderBottom: activeTab === t ? "2px solid #1a3352" : "2px solid transparent"
   });
 
@@ -2848,11 +2855,11 @@ function TimeClock({ locId, locationName, allLocations }) {
   return (
     <div>
       <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Time Clock</div>
-        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Time Clock</div>
+        <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
       </div>
 
-      <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb", marginBottom: 20, background: "#f9fafb", borderRadius: "10px 10px 0 0", overflow: "hidden" }}>
+      <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb", marginBottom: 20, background: "#f8fafc", borderRadius: "10px 10px 0 0", overflow: "hidden" }}>
         <button style={tabStyle("clock")} onClick={() => setActiveTab("clock")}>My Clock</button>
         <button style={tabStyle("history")} onClick={() => setActiveTab("history")}>My History</button>
         {isManager && <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>Team</button>}
@@ -2862,34 +2869,34 @@ function TimeClock({ locId, locationName, allLocations }) {
       {activeTab === "clock" && (
         <div>
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 18, textAlign: "center" }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Today's Shift</div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: isClockedIn ? "#059669" : isClockedOut ? "#374151" : "#111827", marginBottom: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Today's Shift</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: isClockedIn ? "#059669" : isClockedOut ? "#334155" : "#0f1f35", marginBottom: 4 }}>
               {isClockedIn ? "Clocked In" : isClockedOut ? "Shift Complete" : "Not Clocked In"}
             </div>
             {clockState?.mainClockIn && (
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}>
+              <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>
                 In: {fmt(clockState.mainClockIn)}{clockState.mainClockOut && <span> | Out: {fmt(clockState.mainClockOut)}</span>}
               </div>
             )}
             {isClockedIn && <div style={{ fontSize: 22, fontWeight: 700, color: "#0ea5e9", marginBottom: 12 }}>{elapsed(clockState.mainClockIn, null)} elapsed</div>}
-            {isClockedOut && <div style={{ fontSize: 18, fontWeight: 700, color: "#374151", marginBottom: 12 }}>Total: {elapsed(clockState.mainClockIn, clockState.mainClockOut)}</div>}
+            {isClockedOut && <div style={{ fontSize: 18, fontWeight: 700, color: "#334155", marginBottom: 12 }}>Total: {elapsed(clockState.mainClockIn, clockState.mainClockOut)}</div>}
             <button onClick={handleMainClock} style={{ background: isClockedIn ? "#ef4444" : "#059669", color: "#fff", border: "none", borderRadius: 10, padding: "14px 40px", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
               {isClockedIn ? "Clock Out" : isClockedOut ? "Start New Shift" : "Clock In"}
             </button>
           </div>
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 6 }}>Location Billing</div>
-            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Track time at each location separately.</div>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 6 }}>Location Billing</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 16 }}>Track time at each location separately.</div>
             {allLocations.map(loc => {
               const lc = locClocks[loc.id] || {};
               const active = lc.in && !lc.out;
               const done = lc.in && lc.out;
               return (
                 <div key={loc.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, background: active ? "#f0fdf4" : "#fafafa" }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "#10b981" : done ? "#9ca3af" : "#e5e7eb", flexShrink: 0 }} />
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: active ? "#10b981" : done ? "#94a3b8" : "#e2e8f0", flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{loc.name}</div>
-                    {lc.in && <div style={{ fontSize: 11, color: "#6b7280" }}>In: {fmt(lc.in)}{lc.out ? " | Out: " + fmt(lc.out) + " | " + elapsed(lc.in, lc.out) : " | " + elapsed(lc.in, null) + " elapsed"}</div>}
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "#0f1f35" }}>{loc.name}</div>
+                    {lc.in && <div style={{ fontSize: 11, color: "#64748b" }}>In: {fmt(lc.in)}{lc.out ? " | Out: " + fmt(lc.out) + " | " + elapsed(lc.in, lc.out) : " | " + elapsed(lc.in, null) + " elapsed"}</div>}
                   </div>
                   <button onClick={() => handleLocClock(loc.id)} style={{ background: active ? "#fee2e2" : "#f0fdf4", color: active ? "#dc2626" : "#059669", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                     {active ? "Stop" : done ? "Restart" : "Start"}
@@ -2902,30 +2909,30 @@ function TimeClock({ locId, locationName, allLocations }) {
       )}
 
       {activeTab === "history" && (
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>My Hours</div>
-          <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>All time: <b>{totalHours(history)}</b></div>
-          {Object.keys(historyByMonth).length === 0 && <div style={{ color: "#9ca3af", fontSize: 13 }}>No history yet.</div>}
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>My Hours</div>
+          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>All time: <b>{totalHours(history)}</b></div>
+          {Object.keys(historyByMonth).length === 0 && <div style={{ color: "#94a3b8", fontSize: 13 }}>No history yet.</div>}
           {Object.entries(historyByMonth).map(([month, entries]) => {
             const monthLabel = new Date(month + "-01T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" });
             return (
               <div key={month} style={{ marginBottom: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a3352" }}>{monthLabel}</div>
-                  <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>{totalHours(entries)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35" }}>{monthLabel}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{totalHours(entries)}</div>
                 </div>
                 {entries.map(e => (
                   <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{fmtDate(e.date)}</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "In progress"}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{fmtDate(e.date)}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "In progress"}</div>
                       {e.editedBy && (
                         <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 2 }}>
                           Edited by manager on {e.editedAt ? new Date(e.editedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " at " + new Date(e.editedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "unknown date"}
                         </div>
                       )}
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3352" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35" }}>
                       {e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : elapsed(e.mainClockIn, null)}
                     </div>
                   </div>
@@ -2939,38 +2946,38 @@ function TimeClock({ locId, locationName, allLocations }) {
       {activeTab === "team" && isManager && (
         <div>
           {editEntry && (
-            <div style={{ background: "#fff", border: "2px solid #1a3352", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 12 }}>Edit Entry — {editEntry.name} — {fmtDate(editEntry.date)}</div>
+            <div style={{ background: "#fff", border: "2px solid #1a3352", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 12 }}>Edit Entry — {editEntry.name} — {fmtDate(editEntry.date)}</div>
               <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Clock In</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Clock In</label>
                   <input type="time" value={editIn} onChange={e => setEditIn(e.target.value)}
                     style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Clock Out</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Clock Out</label>
                   <input type="time" value={editOut} onChange={e => setEditOut(e.target.value)}
                     style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={handleSaveEdit} disabled={savingEdit} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : "Save Changes"}</button>
-                <button onClick={() => setEditEntry(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button onClick={handleSaveEdit} disabled={savingEdit} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : "Save Changes"}</button>
+                <button onClick={() => setEditEntry(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
               </div>
             </div>
           )}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Team Hours</div>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Team Hours</div>
             {(() => {
               const byDate = teamHistory.reduce((acc, e) => { if (!acc[e.date]) acc[e.date] = []; acc[e.date].push(e); return acc; }, {});
               return Object.entries(byDate).map(([date, entries]) => (
                 <div key={date} style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", marginBottom: 8 }}>{fmtDate(date)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{fmtDate(date)}</div>
                   {entries.map(e => (
-                    <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f9fafb", borderRadius: 8, marginBottom: 6 }}>
+                    <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: 8, marginBottom: 6 }}>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{e.name || e.uid?.slice(0,8)}</div>
-                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "Still clocked in"}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{e.name || e.uid?.slice(0,8)}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "Still clocked in"}</div>
                         {e.editedBy && (
                           <div style={{ fontSize: 10, color: "#f59e0b" }}>
                             Edited {e.editedAt ? new Date(e.editedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(e.editedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
@@ -2978,14 +2985,14 @@ function TimeClock({ locId, locationName, allLocations }) {
                         )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: e.mainClockOut ? "#1a3352" : "#059669" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: e.mainClockOut ? "#0f1f35" : "#059669" }}>
                           {e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : elapsed(e.mainClockIn, null)}
                         </div>
                         <button onClick={() => {
                           setEditEntry(e);
                           setEditIn(e.mainClockIn ? new Date(e.mainClockIn).toTimeString().slice(0,5) : "");
                           setEditOut(e.mainClockOut ? new Date(e.mainClockOut).toTimeString().slice(0,5) : "");
-                        }} style={{ background: "#f3f4f6", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Edit</button>
+                        }} style={{ background: "#f1f5f9", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#334155" }}>Edit</button>
                       </div>
                     </div>
                   ))}
@@ -2998,10 +3005,10 @@ function TimeClock({ locId, locationName, allLocations }) {
 
       {activeTab === "payroll" && (user?.role === "owner" || (isManager && user?.payrollAccess)) && (
         <div>
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Payroll Settings</div>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Payroll Settings</div>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Pay Period</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Pay Period</label>
               <select value={payrollSettings.period} onChange={e => savePayrollSettings({ ...payrollSettings, period: e.target.value })}
                 style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff" }}>
                 <option value="weekly">Weekly</option>
@@ -3013,11 +3020,11 @@ function TimeClock({ locId, locationName, allLocations }) {
               </select>
             </div>
           </div>
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Payroll Report</div>
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Payroll Report</div>
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 16 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Period Start Date</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Period Start Date</label>
                 <input type="date" value={payrollPeriodStart} onChange={e => { setPayrollPeriodStart(e.target.value); setShowReport(false); }}
                   style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
               </div>
@@ -3034,12 +3041,12 @@ function TimeClock({ locId, locationName, allLocations }) {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url; a.download = "payroll_" + payrollPeriodStart + ".txt"; a.click();
-              }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
                 Download
               </button>
             </div>
             {showReport && payrollPeriodStart && Object.keys(payrollByEmployee).length === 0 && (
-              <div style={{ color: "#9ca3af", fontSize: 13 }}>No entries found for this period.</div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>No entries found for this period.</div>
             )}
             {showReport && Object.entries(payrollByEmployee).map(([uid, emp]) => {
               const hrs = totalHrsNum(emp.entries);
@@ -3047,17 +3054,17 @@ function TimeClock({ locId, locationName, allLocations }) {
               return (
                 <div key={uid} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{emp.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{emp.name}</div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: isOT ? "#f59e0b" : "#1a3352" }}>{hrs.toFixed(2)} hrs</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: isOT ? "#f59e0b" : "#0f1f35" }}>{hrs.toFixed(2)} hrs</div>
                       {isOT && <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>Overtime: {(hrs - 40).toFixed(2)} hrs over 40</div>}
                     </div>
                   </div>
                   {emp.entries.map(e => (
                     <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f3f4f6", fontSize: 13 }}>
-                      <span style={{ color: "#6b7280" }}>{fmtDate(e.date)}</span>
-                      <span style={{ color: "#9ca3af" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "—"}</span>
-                      <span style={{ fontWeight: 600, color: "#111827" }}>{e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : "—"}</span>
+                      <span style={{ color: "#64748b" }}>{fmtDate(e.date)}</span>
+                      <span style={{ color: "#94a3b8" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "—"}</span>
+                      <span style={{ fontWeight: 600, color: "#0f1f35" }}>{e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : "—"}</span>
                     </div>
                   ))}
                 </div>
@@ -3077,52 +3084,52 @@ function TaskHistoryDetailModal({ entry, onClose }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 16 }}>
       <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{entry.taskTitle}</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9ca3af" }}>x</button>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>{entry.taskTitle}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>x</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
           {entry.completedAt && (
-            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Completed</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{new Date(entry.completedAt).toLocaleDateString()}</div>
+            <div style={{ background: "#f4f6f8", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 2 }}>Completed</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{new Date(entry.completedAt).toLocaleDateString()}</div>
             </div>
           )}
           {entry.completedBy && (
-            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Completed By</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{entry.completedBy}</div>
+            <div style={{ background: "#f4f6f8", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 2 }}>Completed By</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{entry.completedBy}</div>
             </div>
           )}
           {entry.duration && (
-            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Duration</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{entry.duration} min</div>
+            <div style={{ background: "#f4f6f8", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 2 }}>Duration</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{entry.duration} min</div>
             </div>
           )}
           {entry.category && (
-            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 }}>Category</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", textTransform: "capitalize" }}>{entry.category}</div>
+            <div style={{ background: "#f4f6f8", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 2 }}>Category</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35", textTransform: "capitalize" }}>{entry.category}</div>
             </div>
           )}
         </div>
         {entry.note && (
-          <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px", marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
-            <div style={{ fontSize: 13, color: "#374151" }}>{entry.note}</div>
+          <div style={{ background: "#f4f6f8", borderRadius: 8, padding: "12px", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
+            <div style={{ fontSize: 13, color: "#334155" }}>{entry.note}</div>
           </div>
         )}
         {entry.partsUsed && entry.partsUsed.length > 0 && (
-          <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px", marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 6 }}>Parts Used</div>
+          <div style={{ background: "#f4f6f8", borderRadius: 8, padding: "12px", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Parts Used</div>
             {entry.partsUsed.map((p, i) => (
-              <div key={i} style={{ fontSize: 13, color: "#374151", marginBottom: 4 }}>{p.name} x{p.qty} {p.unit || ""}</div>
+              <div key={i} style={{ fontSize: 13, color: "#334155", marginBottom: 4 }}>{p.name} x{p.qty} {p.unit || ""}</div>
             ))}
           </div>
         )}
         {entry.mediaUrls && entry.mediaUrls.length > 0 && (
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 8 }}>Photos</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Photos</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 8 }}>
               {entry.mediaUrls.map((url, i) => (
                 <img key={i} src={url} alt="task photo" onClick={() => window.open(url)}
@@ -3132,7 +3139,7 @@ function TaskHistoryDetailModal({ entry, onClose }) {
           </div>
         )}
         {!entry.note && (!entry.mediaUrls || entry.mediaUrls.length === 0) && (!entry.partsUsed || entry.partsUsed.length === 0) && (
-          <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 13, padding: "20px 0" }}>No notes or photos were added when this task was completed.</div>
+          <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "20px 0" }}>No notes or photos were added when this task was completed.</div>
         )}
       </div>
     </div>
@@ -3173,23 +3180,23 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
       <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Task History</div>
-            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>x</button>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#0f1f35" }}>Task History</div>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#94a3b8", cursor: "pointer" }}>x</button>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", overflow: "visible" }}>
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#334155", background: "#f8fafc" }}>
               <option value="date">Sort: Date</option>
               <option value="user">Sort: User</option>
               <option value="category">Sort: Category</option>
               <option value="equipment">Sort: Equipment</option>
             </select>
             <select value={filterUser} onChange={e => setFilterUser(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#334155", background: "#f8fafc" }}>
               {users.map(u => <option key={u} value={u}>{u === "all" ? "All Users" : u}</option>)}
             </select>
             <select value={filterEquipment} onChange={e => setFilterEquipment(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#334155", background: "#f8fafc" }}>
               <option value="all">All Equipment</option>
               {equipmentList.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
@@ -3197,16 +3204,16 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
         </div>
         <div style={{ overflowY: "auto", padding: "12px 20px 24px" }}>
           {filtered.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 14, padding: 40 }}>No completed tasks yet</div>
+            <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 14, padding: 40 }}>No completed tasks yet</div>
           ) : filtered.map(t => (
             <div key={t.id} style={{ padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: t.archived ? "#9ca3af" : "#111827", textDecoration: t.archived ? "line-through" : "none" }}>{t.title}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: t.archived ? "#94a3b8" : "#0f1f35", textDecoration: t.archived ? "line-through" : "none" }}>{t.title}</div>
                   <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: CAT_COLORS[t.category] || "#6b7280", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4 }}>{t.category}</span>
-                    {t.completedBy && <span style={{ fontSize: 11, color: "#6b7280" }}>by {t.completedBy}</span>}
-                    {t.completedAt && <span style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(t.completedAt).toLocaleDateString()}</span>}
+                    <span style={{ fontSize: 10, fontWeight: 600, color: CAT_COLORS[t.category] || "#64748b", background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>{t.category}</span>
+                    {t.completedBy && <span style={{ fontSize: 11, color: "#64748b" }}>by {t.completedBy}</span>}
+                    {t.completedAt && <span style={{ fontSize: 11, color: "#94a3b8" }}>{new Date(t.completedAt).toLocaleDateString()}</span>}
                     {t.archived && <span style={{ fontSize: 10, fontWeight: 600, color: "#059669", background: "#d1fae5", padding: "2px 6px", borderRadius: 4 }}>Approved</span>}
                     {t.equipmentId && equipmentList.find(e => e.id === t.equipmentId) && (
                       <span style={{ fontSize: 10, fontWeight: 600, color: "#1d4ed8", background: "#dbeafe", padding: "2px 6px", borderRadius: 4 }}>{equipmentList.find(e => e.id === t.equipmentId).name}</span>
@@ -3309,8 +3316,8 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
     return (
       <button type="button" onClick={() => setResult(id, val)} style={{
         flex: 1, padding: "8px 4px", borderRadius: 8, border: "2px solid",
-        borderColor: active ? color : "#e5e7eb", background: active ? bg : "#fff",
-        color: active ? color : "#9ca3af", fontWeight: 700, fontSize: 12, cursor: "pointer"
+        borderColor: active ? color : "#e2e8f0", background: active ? bg : "#fff",
+        color: active ? color : "#94a3b8", fontWeight: 700, fontSize: 12, cursor: "pointer"
       }}>{label}</button>
     );
   };
@@ -3319,17 +3326,17 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
       <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", overflowY: "auto", padding: "24px 20px 32px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>{task.title}</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>×</button>
+          <div style={{ fontWeight: 700, fontSize: 17, color: "#0f1f35" }}>{task.title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#94a3b8", cursor: "pointer" }}>×</button>
         </div>
-        <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 20 }}>Inspection • {items.length} items</div>
+        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>Inspection • {items.length} items</div>
 
         {items.map(item => {
           const cur = items.find(i => i.id === item.id);
           const needsNote = cur?.result === "monitor" || cur?.result === "fail";
           return (
-            <div key={item.id} style={{ background: "#f9fafb", borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "#111827", marginBottom: 10 }}>{item.label}</div>
+            <div key={item.id} style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35", marginBottom: 10 }}>{item.label}</div>
               <div style={{ display: "flex", gap: 8, marginBottom: needsNote ? 10 : 0 }}>
                 <RBtn id={item.id} val="good" label="✓ Good" color="#15803d" bg="#f0fdf4" />
                 <RBtn id={item.id} val="monitor" label="⚠ Monitor" color="#d97706" bg="#fffbeb" />
@@ -3339,7 +3346,7 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
                 <div>
                   <textarea value={cur.note} onChange={e => setNote(item.id, e.target.value)}
                     placeholder={cur.result === "fail" ? "Describe what failed..." : "Add notes..."}
-                    rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 8, color: "#111827" }} />
+                    rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 8, color: "#0f1f35" }} />
                   <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "#0369a1", fontWeight: 600 }}>
                     📷 {cur.photoUrl ? "Photo attached ✓" : "Attach photo"}
                     <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
@@ -3360,8 +3367,8 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
 
         <button onClick={handleSubmit} disabled={!allRated || saving} style={{
           width: "100%", padding: 14,
-          background: !allRated ? "#e5e7eb" : failCount > 0 ? "#dc2626" : "#1a3352",
-          color: !allRated ? "#9ca3af" : "#fff",
+          background: !allRated ? "#e2e8f0" : failCount > 0 ? "#dc2626" : "#0f1f35",
+          color: !allRated ? "#94a3b8" : "#fff",
           border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15,
           cursor: !allRated ? "not-allowed" : "pointer"
         }}>
@@ -3501,24 +3508,24 @@ setSaving(false);
 onClose();
 };
 
-const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fafafa", marginTop: 4, color: "#111827" };
+const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fafafa", marginTop: 4, color: "#0f1f35" };
 const sel = { ...inp, cursor: "pointer" };
 
 return (
 <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
 <div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", overflowY: "auto", maxHeight: "90vh" }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-<div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Add New Task</div>
-<button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+<div style={{ fontWeight: 700, fontSize: 17, color: "#0f1f35" }}>Add New Task</div>
+<button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
 </div>
 <form onSubmit={handleSubmit}>
 <div style={{ marginBottom: 14 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Task Title</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Task Title</label>
 <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Restock soap dispensers" required style={inp} />
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 14 }}>
 <div>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Category</label>
 <select value={category} onChange={e => setCategory(e.target.value)} style={sel}>
 <option value="cleaning">Cleaning</option>
 <option value="maintenance">Maintenance</option>
@@ -3527,7 +3534,7 @@ return (
 </select>
 </div>
 <div>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Priority</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Priority</label>
 <select value={priority} onChange={e => setPriority(e.target.value)} style={sel}>
 <option value="high">High</option>
 <option value="medium">Medium</option>
@@ -3537,7 +3544,7 @@ return (
 </div>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
 <div>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Assigned To</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Assigned To</label>
 <select value={assignTo} onChange={e => {
   const val = e.target.value;
   setAssignTo(val);
@@ -3556,12 +3563,12 @@ return (
 </select>
 </div>
 <div>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Due Date</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Due Date</label>
 <input type="date" value={due} onChange={e => setDue(e.target.value)} style={inp} />
 </div>
 </div>
 <div style={{ marginBottom: 14 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Link to Equipment (optional)</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Link to Equipment (optional)</label>
             <select value={equipmentId} onChange={e => setEquipmentId(e.target.value)} style={sel}>
               <option value="">None</option>
               {equipmentList.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
@@ -3569,21 +3576,21 @@ return (
           </div>
 {category === "inspection" && (
   <div style={{ marginBottom: 14 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Checklist Items</label>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 8 }}>Checklist Items</label>
     {checklistItems.map(item => (
-      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f9fafb", borderRadius: 8, padding: "6px 10px" }}>
-        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{item.label}</span>
-        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}>×</button>
+      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f8fafc", borderRadius: 8, padding: "6px 10px" }}>
+        <span style={{ flex: 1, fontSize: 13, color: "#334155" }}>{item.label}</span>
+        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16 }}>×</button>
       </div>
     ))}
     <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
       <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
         onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCheckItem())}
-        placeholder="Add checklist item..." style={{ ...inp, flex: 1, marginTop: 0, color: "#111827" }} />
+        placeholder="Add checklist item..." style={{ ...inp, flex: 1, marginTop: 0, color: "#0f1f35" }} />
       <button type="button" onClick={addCheckItem}
-        style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>+</button>
+        style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>+</button>
     </div>
-    {checklistItems.length === 0 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>Add items to inspect</div>}
+    {checklistItems.length === 0 && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>Add items to inspect</div>}
   </div>
 )}
           <div style={{ marginBottom: 14 }}>
@@ -3614,19 +3621,19 @@ return (
                       </>}
                     </select>
                     {!showCarOptions && equipmentId && (
-                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Car count recurrence is only available for equipment with car tracking enabled.</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Car count recurrence is only available for equipment with car tracking enabled.</div>
                     )}
                     {!equipmentId && (
-                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Link to car-tracking equipment above to unlock car count recurrence.</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Link to car-tracking equipment above to unlock car count recurrence.</div>
                     )}
                     {(recurrence === "custom_cars" || (customCars && recurrence.includes("cars"))) && showCarOptions && (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-                        <span style={{ fontSize: 13, color: "#374151" }}>Every</span>
+                        <span style={{ fontSize: 13, color: "#334155" }}>Every</span>
                         <input type="number" min="1" value={customCars} onChange={e => {
                           setCustomCars(e.target.value);
                           setRecurrence(e.target.value ? "every " + e.target.value + " cars" : "custom_cars");
-                        }} placeholder="e.g. 750" style={{ ...inp, width: 100, marginTop: 0, color: "#111827" }} />
-                        <span style={{ fontSize: 13, color: "#374151" }}>cars</span>
+                        }} placeholder="e.g. 750" style={{ ...inp, width: 100, marginTop: 0, color: "#0f1f35" }} />
+                        <span style={{ fontSize: 13, color: "#334155" }}>cars</span>
                       </div>
                     )}
                   </>
@@ -3634,10 +3641,10 @@ return (
               })()}
 </div>
 <div style={{ display: "flex", gap: 10 }}>
-<button type="submit" disabled={saving} style={{ flex: 1, background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+<button type="submit" disabled={saving} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
 {saving ? "Adding..." : "Add Task"}
 </button>
-<button type="button" onClick={onClose} style={{ flex: 1, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+<button type="button" onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
 </div>
 </form>
 </div>
@@ -3714,25 +3721,25 @@ function Inventory({ locId, locationName, user }) {
   const [expandedCats, setExpandedCats] = useState({ chemicals: true, parts: true, "vending supplies": true });
   const CAT_COLORS2 = { chemicals: "#8b5cf6", parts: "#3b82f6", "vending supplies": "#f59e0b" };
   const UNITS = ["gal", "L", "oz", "lbs", "units", "rolls", "boxes"];
-  const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, background: "#fafafa", outline: "none", width: "100%", boxSizing: "border-box", marginTop: 4, color: "#111827" };
+  const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, background: "#fafafa", outline: "none", width: "100%", boxSizing: "border-box", marginTop: 4, color: "#0f1f35" };
 
   return (
     <div>
       <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Inventory</div>
-          <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Inventory</div>
+          <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
-        {activeTab === "vendors" && <button onClick={() => setShowAddVendor(true)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
-        {activeTab === "inventory" && <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>}
+        {activeTab === "vendors" && <button onClick={() => setShowAddVendor(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
+        {activeTab === "inventory" && <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {["inventory", "reorder", "vendors"].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
-            background: activeTab === tab ? "#1a3352" : "#f3f4f6",
-            color: activeTab === tab ? "#fff" : "#6b7280" }}>
+            background: activeTab === tab ? "#0f1f35" : "#f1f5f9",
+            color: activeTab === tab ? "#fff" : "#64748b" }}>
             {tab === "inventory" ? "All Items" : tab === "reorder" ? "Reorder List" : "Vendors"}
           </button>
         ))}
@@ -3741,12 +3748,12 @@ function Inventory({ locId, locationName, user }) {
       {activeTab === "inventory" && <>
 
       {showAdd && (
-        <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+        <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 16, padding: 20, marginBottom: 18 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 14 }}>New Inventory Item</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 14 }}>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Item Name</label><input value={newItem.name} onChange={e => setNewItem(p => ({...p, name: e.target.value}))} placeholder="e.g. Tire Shine" style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Part Number</label><input value={newItem.partNumber} onChange={e => setNewItem(p => ({...p, partNumber: e.target.value}))} placeholder="e.g. SHP-4421" style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Category</label>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Item Name</label><input value={newItem.name} onChange={e => setNewItem(p => ({...p, name: e.target.value}))} placeholder="e.g. Tire Shine" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={newItem.partNumber} onChange={e => setNewItem(p => ({...p, partNumber: e.target.value}))} placeholder="e.g. SHP-4421" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Category</label>
               <select value={newItem.category} onChange={e => setNewItem(p => ({...p, category: e.target.value}))} style={inp}>
                 <option value="chemicals">Chemicals</option>
 <option value="inspection">Inspection</option>
@@ -3754,19 +3761,19 @@ function Inventory({ locId, locationName, user }) {
                 <option value="vending supplies">Vending Supplies</option>
               </select>
             </div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Quantity</label><input type="number" value={newItem.quantity} onChange={e => setNewItem(p => ({...p, quantity: parseFloat(e.target.value)||0}))} style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Unit</label>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Quantity</label><input type="number" value={newItem.quantity} onChange={e => setNewItem(p => ({...p, quantity: parseFloat(e.target.value)||0}))} style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Unit</label>
               <select value={newItem.unit} onChange={e => setNewItem(p => ({...p, unit: e.target.value}))} style={inp}>
                 {UNITS.map(u => <option key={u} value={u}>{u.charAt(0).toUpperCase()+u.slice(1)}</option>)}
               </select>
             </div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Vendor</label><select value={newItem.vendorId || ""} onChange={e => setNewItem(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label><input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Reorder At (qty)</label><input type="number" value={newItem.reorderAt || ""} onChange={e => setNewItem(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} placeholder="e.g. 5" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={newItem.vendorId || ""} onChange={e => setNewItem(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Reorder At (qty)</label><input type="number" value={newItem.reorderAt || ""} onChange={e => setNewItem(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} placeholder="e.g. 5" style={inp} /></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleAdd} disabled={saving} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add Item"}</button>
-            <button onClick={() => setShowAdd(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            <button onClick={handleAdd} disabled={saving} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add Item"}</button>
+            <button onClick={() => setShowAdd(false)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       )}
@@ -3784,11 +3791,11 @@ function Inventory({ locId, locationName, user }) {
         return (
           <div key={cat} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, marginBottom: 16, overflow: "hidden" }}>
             <div onClick={() => setExpandedCats(p => ({...p, [cat]: !isExpanded}))}
-              style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: isExpanded ? "#fff" : "#f8fafc" }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: CAT_COLORS2[cat] || "#374151", textTransform: "capitalize" }}>
-                {cat} <span style={{ fontSize: 12, color: "#9ca3af", fontWeight: 400 }}>({group.length} item{group.length !== 1 ? "s" : ""})</span>
+              style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: isExpanded ? "#fff" : "#f4f6f8" }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: CAT_COLORS2[cat] || "#334155", textTransform: "capitalize" }}>
+                {cat} <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 400 }}>({group.length} item{group.length !== 1 ? "s" : ""})</span>
               </div>
-              <span style={{ color: "#9ca3af", fontSize: 14 }}>{isExpanded ? "▲" : "▼"}</span>
+              <span style={{ color: "#94a3b8", fontSize: 14 }}>{isExpanded ? "▲" : "▼"}</span>
             </div>
             {isExpanded && <div style={{ padding: "0 20px 16px" }}>
             {group.map(item => {
@@ -3797,39 +3804,39 @@ function Inventory({ locId, locationName, user }) {
               return (
                 <div key={item.id} style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: 12, marginBottom: 12 }}>
                   {isEditing ? (
-                    <div style={{ background: "#f8fafc", borderRadius: 8, padding: 14 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>Editing: {item.name}</div>
+                    <div style={{ background: "#f4f6f8", borderRadius: 8, padding: 14 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "#334155", marginBottom: 10 }}>Editing: {item.name}</div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Category</label>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Category</label>
                           <select value={editData.category || "chemicals"} onChange={e => setEditData(p => ({...p, category: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
                             <option value="chemicals">Chemicals</option>
                             <option value="parts">Parts</option>
                             <option value="vending supplies">Vending Supplies</option>
                           </select>
                         </div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Quantity</label><input type="number" value={editData.quantity || 0} onChange={e => setEditData(p => ({...p, quantity: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Unit</label>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Quantity</label><input type="number" value={editData.quantity || 0} onChange={e => setEditData(p => ({...p, quantity: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Unit</label>
                           <select value={editData.unit || "gal"} onChange={e => setEditData(p => ({...p, unit: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
                             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                           </select>
                         </div>
-                        <div><label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fff", color: "#111827" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => handleSaveEdit(item.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-                        <button onClick={() => setEditingId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={() => handleSaveEdit(item.id)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                        <button onClick={() => setEditingId(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{item.name}</div>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "#0f1f35" }}>{item.name}</div>
                         {item.partNumber && <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, marginTop: 1 }}>Part #: {item.partNumber}</div>}
-                        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>
                           {item.costPerUnit ? <span>${item.costPerUnit}/{item.unit} </span> : null}
                           {item.reorderAt ? <span> Reorder at: {item.reorderAt}</span> : null}
                         </div>
@@ -3841,13 +3848,13 @@ function Inventory({ locId, locationName, user }) {
                         )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <button onClick={() => handleUpdate(item.id, Math.max(0, item.quantity - 1))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
+                        <button onClick={() => handleUpdate(item.id, Math.max(0, item.quantity - 1))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f1f5f9", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
                         <div style={{ textAlign: "center", minWidth: 65 }}>
-                          <span style={{ fontWeight: 700, fontSize: 16, color: low ? "#ef4444" : "#111827" }}>{item.quantity}</span>
-                          <span style={{ fontSize: 12, color: "#9ca3af" }}> {item.unit}</span>
+                          <span style={{ fontWeight: 700, fontSize: 16, color: low ? "#ef4444" : "#0f1f35" }}>{item.quantity}</span>
+                          <span style={{ fontSize: 12, color: "#94a3b8" }}> {item.unit}</span>
                         </div>
-                        <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-                        <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); }} style={{ background: "#1a3352", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>
+                        <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f1f5f9", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                        <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); }} style={{ background: "#0f1f35", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>
                         <button onClick={() => handleDelete(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Del</button>
                       </div>
                     </div>
@@ -3859,14 +3866,14 @@ function Inventory({ locId, locationName, user }) {
           </div>
         );
       })}
-      {items.length === 0 && !showAdd && <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>No inventory items yet. Tap + Add Item to get started.</div>}
+      {items.length === 0 && !showAdd && <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>No inventory items yet. Tap + Add Item to get started.</div>}
       </>}
 
       {activeTab === "reorder" && (
         <div>
           {(() => {
             const lowItems = items.filter(i => i.reorderAt > 0 && i.quantity <= i.reorderAt);
-            if (lowItems.length === 0) return <div style={{ textAlign: "center", color: "#9ca3af", padding: 40 }}>No items need reordering right now.</div>;
+            if (lowItems.length === 0) return <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No items need reordering right now.</div>;
             const byVendor = {};
             lowItems.forEach(item => {
               const v = vendors.find(v => v.id === item.vendorId);
@@ -3875,12 +3882,12 @@ function Inventory({ locId, locationName, user }) {
               byVendor[key].items.push(item);
             });
             return Object.values(byVendor).map((group, gi) => (
-              <div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: "#1a3352", marginBottom: 4 }}>
+              <div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>
                   {group.vendor ? group.vendor.name : "No Vendor Assigned"}
                 </div>
                 {group.vendor && (
-                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, display: "flex", gap: 16, flexWrap: "wrap" }}>
                     {group.vendor.phone && <span>{group.vendor.phone}</span>}
                     {group.vendor.email && <span>{group.vendor.email}</span>}
                     {group.vendor.accountNumber && <span>Acct: {group.vendor.accountNumber}</span>}
@@ -3889,8 +3896,8 @@ function Inventory({ locId, locationName, user }) {
                 {group.items.map(item => (
                   <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid #f3f4f6" }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.name}</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af" }}>Have: {item.quantity} {item.unit} — Reorder at: {item.reorderAt}{item.partNumber ? " | #" + item.partNumber : ""}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{item.name}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>Have: {item.quantity} {item.unit} — Reorder at: {item.reorderAt}{item.partNumber ? " | #" + item.partNumber : ""}</div>
                     </div>
                     <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, background: "#fee2e2", padding: "3px 8px", borderRadius: 6 }}>LOW</div>
                   </div>
@@ -3904,19 +3911,19 @@ function Inventory({ locId, locationName, user }) {
       {activeTab === "vendors" && (
         <div>
           {showAddVendor && (
-            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 16, padding: 20, marginBottom: 16 }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add Vendor</div>
               {[["name","Vendor Name *","text"],["phone","Phone","tel"],["email","Email","email"],["website","Website","text"],["accountNumber","Account #","text"]].map(([field,label,type]) => (
                 <div key={field} style={{ marginBottom: 10 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>{label}</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>{label}</label>
                   <input type={type} value={newVendor[field]} onChange={e => setNewVendor(p => ({...p, [field]: e.target.value}))}
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
                 </div>
               ))}
               <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Notes</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Notes</label>
                 <textarea value={newVendor.notes} onChange={e => setNewVendor(p => ({...p, notes: e.target.value}))}
-                  rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "none", color: "#111827" }} />
+                  rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "none", color: "#0f1f35" }} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={async () => {
@@ -3927,47 +3934,47 @@ function Inventory({ locId, locationName, user }) {
                   setNewVendor({ name: "", phone: "", email: "", website: "", accountNumber: "", notes: "" });
                   setShowAddVendor(false);
                   setSavingVendor(false);
-                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingVendor ? "Saving..." : "Save Vendor"}</button>
-                <button onClick={() => setShowAddVendor(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingVendor ? "Saving..." : "Save Vendor"}</button>
+                <button onClick={() => setShowAddVendor(false)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
               </div>
             </div>
           )}
-          {!showAddVendor && vendors.length === 0 && <div style={{ textAlign: "center", color: "#9ca3af", padding: 40 }}>No vendors yet. Click + Add Vendor to get started.</div>}
+          {!showAddVendor && vendors.length === 0 && <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No vendors yet. Click + Add Vendor to get started.</div>}
           {vendors.map(v => (
-            <div key={v.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+            <div key={v.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 12 }}>
               {editingVendorId === v.id ? (
                 <div>
                   {[["name","Vendor Name","text"],["phone","Phone","tel"],["email","Email","email"],["website","Website","text"],["accountNumber","Account #","text"]].map(([field,label,type]) => (
                     <div key={field} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 2 }}>{label}</label>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 2 }}>{label}</label>
                       <input type={type} value={editVendorData[field] || ""} onChange={e => setEditVendorData(p => ({...p, [field]: e.target.value}))}
-                        style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+                        style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
                     </div>
                   ))}
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                     <button onClick={async () => {
                       await updateDoc(doc(db, "users", ownerId, "vendors", v.id), { ...editVendorData, updatedAt: new Date().toISOString() });
                       setEditingVendorId(null);
-                    }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
-                    <button onClick={() => setEditingVendorId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                    <button onClick={() => setEditingVendorId(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 7, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                   </div>
                 </div>
               ) : (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: "#1a3352" }}>{v.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{v.name}</div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => { setEditingVendorId(v.id); setEditVendorData({...v}); }} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => { setEditingVendorId(v.id); setEditVendorData({...v}); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Edit</button>
                       <button onClick={async () => { if (!window.confirm("Delete vendor?")) return; await deleteDoc(doc(db, "users", ownerId, "vendors", v.id)); }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 12, color: "#64748b", display: "flex", gap: 16, flexWrap: "wrap" }}>
                     {v.phone && <span>{v.phone}</span>}
                     {v.email && <span>{v.email}</span>}
                     {v.website && <a href={v.website} target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}>{v.website}</a>}
                     {v.accountNumber && <span>Acct: {v.accountNumber}</span>}
                   </div>
-                  {v.notes && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>{v.notes}</div>}
+                  {v.notes && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 6 }}>{v.notes}</div>}
                   {(() => {
                     const vendorItems = items.filter(i => i.vendorId === v.id);
                     return (
@@ -3980,12 +3987,12 @@ function Inventory({ locId, locationName, user }) {
                             {vendorItems.map(item => (
                               <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #f9fafb" }}>
                                 <div>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>{item.name}</div>
-                                  {item.partNumber && <div style={{ fontSize: 11, color: "#9ca3af" }}>Part #: {item.partNumber}</div>}
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#0f1f35" }}>{item.name}</div>
+                                  {item.partNumber && <div style={{ fontSize: 11, color: "#94a3b8" }}>Part #: {item.partNumber}</div>}
                                 </div>
                                 <div style={{ textAlign: "right" }}>
                                   <div style={{ fontSize: 12, fontWeight: 600, color: item.quantity <= (item.lowThreshold || 0) ? "#dc2626" : "#059669" }}>{item.quantity} {item.unit}</div>
-                                  {item.costPerUnit ? <div style={{ fontSize: 11, color: "#9ca3af" }}>${item.costPerUnit}/{item.unit}</div> : null}
+                                  {item.costPerUnit ? <div style={{ fontSize: 11, color: "#94a3b8" }}>${item.costPerUnit}/{item.unit}</div> : null}
                                 </div>
                               </div>
                             ))}
@@ -4039,19 +4046,19 @@ return (
 <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
 <div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "80vh", overflowY: "auto" }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-<div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Materials Used</div>
-<button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
+<div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>Materials Used</div>
+<button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
 </div>
-<div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Task: <b>{task?.title}</b></div>
+<div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Task: <b>{task?.title}</b></div>
 {items.length === 0 ? (
-<div style={{ color: "#9ca3af", fontSize: 13 }}>No inventory items found. Add items in the Inventory section first.</div>
+<div style={{ color: "#94a3b8", fontSize: 13 }}>No inventory items found. Add items in the Inventory section first.</div>
 ) : items.map(item => (
 <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
 <div style={{ flex: 1 }}>
 <div style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</div>
-<div style={{ fontSize: 12, color: "#9ca3af" }}>Available: {item.quantity} {item.unit}</div>
+<div style={{ fontSize: 12, color: "#94a3b8" }}>Available: {item.quantity} {item.unit}</div>
 </div>
-<div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6b7280" }}>
+<div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#64748b" }}>
 <span>Used:</span>
 <input type="number" min="0" max={item.quantity} value={selected[item.id] || ""} onChange={e => handleQty(item.id, e.target.value)} placeholder="0" style={inp} />
 <span>{item.unit}</span>
@@ -4059,8 +4066,8 @@ return (
 </div>
 ))}
 <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-<button onClick={handleSave} disabled={saving} style={{ flex: 1, background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{saving ? "Saving..." : "Deduct from Inventory"}</button>
-<button onClick={onClose} style={{ flex: 1, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+<button onClick={handleSave} disabled={saving} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{saving ? "Saving..." : "Deduct from Inventory"}</button>
+<button onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
 </div>
 </div>
 </div>
@@ -4175,21 +4182,21 @@ const selWeather = selectedDate ? weather[selectedDate] : null;
 return (
 <div>
 <div style={{ marginBottom: 22 }}>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Calendar</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{locationName}</div>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Calendar</div>
+<div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
 </div>
 
   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
     {/* Calendar grid */}
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <button onClick={prevMonth} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 14 }}>{"<"}</button>
-        <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{monthName}</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>{monthName}</div>
         <button onClick={nextMonth} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 14 }}>{">"}</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 8 }}>
         {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
-          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#9ca3af", padding: "4px 0" }}>{d}</div>
+          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#94a3b8", padding: "4px 0" }}>{d}</div>
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
@@ -4204,8 +4211,8 @@ return (
           return (
             <button key={d} onClick={() => handleSelectDate(ds)} style={{
               aspectRatio: "1", borderRadius: 8, border: isSelected ? "2px solid #1a3352" : "1px solid transparent",
-              background: isToday ? "#1a3352" : isSelected ? "#e0e7ff" : hasSummary ? "#f0fdf4" : "#fafafa",
-              color: isToday ? "#fff" : "#111827",
+              background: isToday ? "#0f1f35" : isSelected ? "#e0e7ff" : hasSummary ? "#f0fdf4" : "#fafafa",
+              color: isToday ? "#fff" : "#0f1f35",
               cursor: "pointer", fontSize: 13, fontWeight: isToday || isSelected ? 700 : 400,
               display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2,
               padding: "4px 2px",
@@ -4219,20 +4226,20 @@ return (
     </div>
 
     {/* Day summary panel */}
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
       {!location?.zipCode && (
     <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
       No zip code set for this location. Add one in Settings to enable weather data.
     </div>
   )}
   {!selectedDate ? (
-        <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>
+        <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>&#128197;</div>
           Select a date to view summary
         </div>
       ) : (
         <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>
             {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
           </div>
           {selWeather && (
@@ -4249,19 +4256,19 @@ return (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>{summary.carsWashed}</div>
-                <div style={{ fontSize: 11, color: "#6b7280" }}>Cars Washed</div>
+                <div style={{ fontSize: 11, color: "#64748b" }}>Cars Washed</div>
               </div>
               <div style={{ background: "#ede9fe", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#7c3aed" }}>{summary.tasksDone}/{summary.tasksTotal}</div>
-                <div style={{ fontSize: 11, color: "#6b7280" }}>Tasks Done</div>
+                <div style={{ fontSize: 11, color: "#64748b" }}>Tasks Done</div>
               </div>
             </div>
           )}
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Notes / Issues</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Notes / Issues</label>
             <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="Add notes about this day..." style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 12, resize: "vertical", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </div>
-          <button onClick={handleSaveNote} disabled={savingNote} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingNote ? "Saving..." : "Save Notes"}</button>
+          <button onClick={handleSaveNote} disabled={savingNote} style={{ width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingNote ? "Saving..." : "Save Notes"}</button>
         </div>
       )}
     </div>
@@ -4281,8 +4288,8 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
   return (
     <div>
       <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>All Locations Overview</div>
-        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>All Locations Overview</div>
+        <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
       </div>
 
       {/* Total stats */}
@@ -4305,9 +4312,9 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
           const overdue = locTasks.filter(t => t.status !== "done" && t.due && t.due.includes("-") && new Date(t.due + "T23:59:59") < new Date()).length;
 
           return (
-            <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20 }}>
+            <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{loc.name}</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>{loc.name}</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {alerts > 0 && <span style={{ background: "#fee2e2", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{alerts} alert{alerts > 1 ? "s" : ""}</span>}
                   {overdue > 0 && <span style={{ background: "#fef3c7", color: "#d97706", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{overdue} overdue</span>}
@@ -4316,18 +4323,18 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
                 <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
                   <div style={{ fontSize: 22, fontWeight: 800, color: "#0369a1" }}>{locSensors.carsToday || 0}</div>
-                  <div style={{ fontSize: 11, color: "#6b7280" }}>Cars Today</div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>Cars Today</div>
                 </div>
                 <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
                   <div style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>{pct}%</div>
-                  <div style={{ fontSize: 11, color: "#6b7280" }}>Tasks Done</div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>Tasks Done</div>
                 </div>
               </div>
               <div style={{ marginBottom: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
                   <span>Task Progress</span><span>{done}/{locTasks.length}</span>
                 </div>
-                <div style={{ height: 6, background: "#e5e7eb", borderRadius: 99 }}>
+                <div style={{ height: 6, background: "#e2e8f0", borderRadius: 99 }}>
                   <div style={{ height: "100%", width: pct + "%", background: pct === 100 ? "#10b981" : "#6366f1", borderRadius: 99 }} />
                 </div>
               </div>
@@ -4336,11 +4343,11 @@ function MultiLocOverview({ locations, tasks, sensors, equipment, onNavigate }) 
                 { label: "Rinse Aid", val: locSensors.rinseAid, c: "#0ea5e9" },
               ].map(s => s.val != null && (
                 <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                  <span style={{ fontSize: 11, color: "#6b7280", width: 50 }}>{s.label}</span>
-                  <div style={{ flex: 1, height: 4, background: "#e5e7eb", borderRadius: 99 }}>
+                  <span style={{ fontSize: 11, color: "#64748b", width: 50 }}>{s.label}</span>
+                  <div style={{ flex: 1, height: 4, background: "#e2e8f0", borderRadius: 99 }}>
                     <div style={{ height: "100%", width: s.val + "%", background: s.val < 30 ? "#ef4444" : s.c, borderRadius: 99 }} />
                   </div>
-                  <span style={{ fontSize: 11, color: s.val < 30 ? "#ef4444" : "#6b7280", fontWeight: 600, width: 28 }}>{s.val}%</span>
+                  <span style={{ fontSize: 11, color: s.val < 30 ? "#ef4444" : "#64748b", fontWeight: 600, width: 28 }}>{s.val}%</span>
                 </div>
               ))}
             </div>
@@ -4445,53 +4452,53 @@ function SensorPushIntegration({ locations }) {
     setTimeout(() => setSavedMsg(false), 2000);
   };
 
-  const inp = { width: "100%", padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#111827", background: "#fff", boxSizing: "border-box", marginTop: 6 };
+  const inp = { width: "100%", padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#0f1f35", background: "#fff", boxSizing: "border-box", marginTop: 6 };
 
-  if (loadingConfig) return <div style={{ padding: 20, color: "#9ca3af", fontSize: 13 }}>Loading...</div>;
+  if (loadingConfig) return <div style={{ padding: 20, color: "#94a3b8", fontSize: 13 }}>Loading...</div>;
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>SensorPush</div>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>SensorPush</div>
         {connected && <span style={{ background: "#d1fae5", color: "#065f46", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99 }}>Connected</span>}
       </div>
-      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Temperature and humidity sensors</div>
+      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 16 }}>Temperature and humidity sensors</div>
       {!connected ? (
         <div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>SensorPush Email</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>SensorPush Email</label>
             <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com" style={inp} />
           </div>
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Password</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Password</label>
             <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="password" style={inp} />
           </div>
           {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
-          <button onClick={handleConnect} disabled={connecting} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" }}>
+          <button onClick={handleConnect} disabled={connecting} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" }}>
             {connecting ? "Connecting..." : "Connect SensorPush"}
           </button>
         </div>
       ) : (
         <div>
-          <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
             Connected as <strong>{email}</strong>. Assign sensors to locations below.
           </div>
-          {sensors.length === 0 && <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 12 }}>No sensors found on your account.</div>}
+          {sensors.length === 0 && <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 12 }}>No sensors found on your account.</div>}
           {sensors.map(s => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "10px 12px", background: "#f9fafb", borderRadius: 8 }}>
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "10px 12px", background: "#f8fafc", borderRadius: 8 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{s.name}</div>
-                <div style={{ fontSize: 11, color: "#9ca3af" }}>{s.id}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{s.name}</div>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.id}</div>
               </div>
               <select value={assignments[s.id] || ""} onChange={e => setAssignments(p => ({ ...p, [s.id]: e.target.value }))}
-                style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 12, outline: "none", color: "#374151", background: "#fff" }}>
+                style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 12, outline: "none", color: "#334155", background: "#fff" }}>
                 <option value="">Unassigned</option>
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
           ))}
           {sensors.length > 0 && (
-            <button onClick={handleSaveAssignments} disabled={saving} style={{ background: savedMsg ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%", marginTop: 8 }}>
+            <button onClick={handleSaveAssignments} disabled={saving} style={{ background: savedMsg ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%", marginTop: 8 }}>
               {saving ? "Saving..." : savedMsg ? "Saved!" : "Save Assignments"}
             </button>
           )}
@@ -4594,53 +4601,53 @@ function ShellyIntegration({ locations }) {
 
   const visibleDevices = devices.filter(d => !hidden.includes(d.id));
 
-  if (loading) return <div style={{ color: "#9ca3af", padding: 20 }}>Loading...</div>;
+  if (loading) return <div style={{ color: "#94a3b8", padding: 20 }}>Loading...</div>;
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Shelly Cloud</div>
-          <div style={{ fontSize: 12, color: "#9ca3af" }}>Monitor Shelly relays and inputs</div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>Shelly Cloud</div>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>Monitor Shelly relays and inputs</div>
         </div>
         {connected && <span style={{ background: "#d1fae5", color: "#065f46", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>Connected</span>}
       </div>
 
       {!connected ? (
         <div>
-          <div style={{ fontSize: 12, color: "#6b7280", background: "#f8fafc", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "#64748b", background: "#f4f6f8", borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <b>Find your Auth Key:</b> Shelly App → User Settings → Authorization cloud key
           </div>
           <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Server URL <span style={{ fontWeight: 400 }}>(e.g. shelly-256-eu.shelly.cloud)</span></label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Server URL <span style={{ fontWeight: 400 }}>(e.g. shelly-256-eu.shelly.cloud)</span></label>
             <input value={server} onChange={e => setServer(e.target.value.replace("https://",""))} placeholder="shelly-256-eu.shelly.cloud"
-              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Auth Key</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Auth Key</label>
             <input value={authKey} onChange={e => setAuthKey(e.target.value)} placeholder="Paste your Auth Key"
-              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
           </div>
           <button onClick={handleConnect} disabled={connecting || !authKey || !server}
-            style={{ background: authKey && server ? "#1a3352" : "#e5e7eb", color: authKey && server ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: authKey && server ? "pointer" : "not-allowed" }}>
+            style={{ background: authKey && server ? "#0f1f35" : "#e2e8f0", color: authKey && server ? "#fff" : "#94a3b8", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: authKey && server ? "pointer" : "not-allowed" }}>
             {connecting ? "Connecting..." : "Connect Shelly Cloud"}
           </button>
         </div>
       ) : (
         <div>
           {visibleDevices.length === 0 ? (
-            <div style={{ color: "#9ca3af", fontSize: 13, marginBottom: 12 }}>No devices found. Try refreshing.</div>
+            <div style={{ color: "#94a3b8", fontSize: 13, marginBottom: 12 }}>No devices found. Try refreshing.</div>
           ) : (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 8 }}>Assign devices to locations:</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>Assign devices to locations:</div>
               {visibleDevices.map(device => (
                 <div key={device.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f3f4f6" }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{device.name}</div>
-                    <div style={{ fontSize: 11, color: "#9ca3af" }}>{device.type}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{device.name}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{device.type}</div>
                   </div>
                   <select value={assignments[device.id] || ""} onChange={e => setAssignments(a => ({...a, [device.id]: e.target.value}))}
-                    style={{ padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 12, outline: "none", background: "#fff", color: "#111827", maxWidth: 180 }}>
+                    style={{ padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 7, fontSize: 12, outline: "none", background: "#fff", color: "#0f1f35", maxWidth: 180 }}>
                     <option value="">No location</option>
                     {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
@@ -4649,7 +4656,7 @@ function ShellyIntegration({ locations }) {
                 </div>
               ))}
               <button onClick={() => saveConfig(assignments, hidden)}
-                style={{ marginTop: 14, background: savedMsg ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                style={{ marginTop: 14, background: savedMsg ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 {savedMsg ? "Saved!" : "Save Assignments"}
               </button>
             </div>
@@ -4709,7 +4716,7 @@ function SpSensorMini({ sensors, onNavigate, locId, uid }) {
 
   return (
     <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>SensorPush</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>SensorPush</div>
       {spSensors.map(sp => {
         const reading = latestReadings[sp.id] || {};
         const temp = reading.temp;
@@ -4814,37 +4821,37 @@ setSaved(true);
 setTimeout(() => setSaved(false), 2000);
 };
 
-const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#111827" };
+const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#0f1f35" };
 
 return (
 <div>
 <div style={{ marginBottom: 22 }}>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Settings</div>
-<div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>Manage locations and preferences</div>
+<div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Settings</div>
+<div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Manage locations and preferences</div>
 </div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
-  <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Your Profile</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
+  <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Your Profile</div>
   <div style={{ marginBottom: 12 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Display Name</label>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Display Name</label>
     <input value={profileName} onChange={e => setProfileName(e.target.value)}
       style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" }}
       placeholder="Your name" />
   </div>
   <div style={{ marginBottom: 16 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Email</label>
-    <div style={{ padding: "9px 12px", background: "#f3f4f6", borderRadius: 8, fontSize: 13, color: "#6b7280", marginTop: 6 }}>{user?.email}</div>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Email</label>
+    <div style={{ padding: "9px 12px", background: "#f1f5f9", borderRadius: 8, fontSize: 13, color: "#64748b", marginTop: 6 }}>{user?.email}</div>
   </div>
   <div style={{ marginBottom: 16 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Update Email</label>
+    <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Update Email</label>
     <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new@email.com" type="email"
-      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#111827" }} />
+      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#0f1f35" }} />
     {emailMsg && <div style={{ fontSize: 12, color: emailMsg.includes("Error") ? "#dc2626" : "#059669", marginTop: 6 }}>{emailMsg}</div>}
     <button onClick={handleSaveEmail} disabled={emailSaving || !newEmail}
-      style={{ marginTop: 8, background: newEmail ? "#0ea5e9" : "#e5e7eb", color: newEmail ? "#fff" : "#9ca3af", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: newEmail ? "pointer" : "not-allowed" }}>
+      style={{ marginTop: 8, background: newEmail ? "#0ea5e9" : "#e2e8f0", color: newEmail ? "#fff" : "#94a3b8", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: newEmail ? "pointer" : "not-allowed" }}>
       {emailSaving ? "Updating..." : "Update Email"}
     </button>
   </div>
-  <button onClick={handleSaveProfile} style={{ background: profileSaved ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+  <button onClick={handleSaveProfile} style={{ background: profileSaved ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
     {profileSaved ? "Saved!" : "Save Profile"}
   </button>
 </div>
@@ -4854,41 +4861,41 @@ return (
 Changes saved!
 </div>
 )}
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-<div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Locations</div>
-<button onClick={() => setEditing("**new**")} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Location</button>
+<div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>Locations</div>
+<button onClick={() => setEditing("**new**")} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Location</button>
 </div>
 {sortedLocs.map((loc, idx) => (
 <div key={loc.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
 <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, marginBottom: 4 }}>
-  <button onClick={() => moveLocation(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "2px 8px", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "#d1d5db" : "#6b7280", fontSize: 12 }}>↑</button>
-  <button onClick={() => moveLocation(idx, 1)} disabled={idx === sortedLocs.length - 1} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "2px 8px", cursor: idx === sortedLocs.length - 1 ? "default" : "pointer", color: idx === sortedLocs.length - 1 ? "#d1d5db" : "#6b7280", fontSize: 12 }}>↓</button>
+  <button onClick={() => moveLocation(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "2px 8px", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "#d1d5db" : "#64748b", fontSize: 12 }}>↑</button>
+  <button onClick={() => moveLocation(idx, 1)} disabled={idx === sortedLocs.length - 1} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "2px 8px", cursor: idx === sortedLocs.length - 1 ? "default" : "pointer", color: idx === sortedLocs.length - 1 ? "#d1d5db" : "#64748b", fontSize: 12 }}>↓</button>
 </div>
 {editing === loc.id ? (
 <div>
 <div style={{ marginBottom: 12 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Location Name</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Location Name</label>
 <input value={name} onChange={e => setName(e.target.value)} style={inp} placeholder="e.g. North Station" />
 </div>
 <div style={{ marginBottom: 12 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Address</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Address</label>
 <input value={address} onChange={e => setAddress(e.target.value)} style={inp} placeholder="e.g. 1240 N. Highway Blvd" />
 </div>
 <div style={{ marginBottom: 14 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Zip Code (for weather)</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Zip Code (for weather)</label>
 <input value={zipCode} onChange={e => setZipCode(e.target.value)} style={inp} placeholder="e.g. 90210" maxLength={5} />
 </div>
 <div style={{ display: "flex", gap: 8 }}>
-<button onClick={() => handleSave(loc.id)} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
-<button onClick={() => setEditing(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+<button onClick={() => handleSave(loc.id)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+<button onClick={() => setEditing(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
 </div>
 </div>
 ) : (
 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
 <div style={{ flex: 1 }}>
-<div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{loc.name}</div>
-<div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{loc.address || "No address set"}</div>
+<div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35" }}>{loc.name}</div>
+<div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{loc.address || "No address set"}</div>
 
 {(locEquipment[loc.id] || []).map(eq => (
   <div key={eq.id} style={{ fontSize: 11, color: "#6366f1", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
@@ -4899,7 +4906,7 @@ Changes saved!
 ))}
 </div>
 <div style={{ display: "flex", gap: 8 }}>
-  <button onClick={() => startEdit(loc)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+  <button onClick={() => startEdit(loc)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
   {user?.role === "owner" && locations.length > 1 && (
     <button onClick={async () => {
       if (!window.confirm("Delete " + loc.name + "? This cannot be undone.")) return;
@@ -4915,26 +4922,26 @@ Changes saved!
 <div style={{ border: "1.5px dashed #6366f1", borderRadius: 10, padding: 16, marginBottom: 12, background: "#f5f3ff" }}>
 <div style={{ fontWeight: 600, fontSize: 13, color: "#6366f1", marginBottom: 12 }}>New Location</div>
 <div style={{ marginBottom: 12 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Location Name</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Location Name</label>
 <input value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. East Side Wash" />
 </div>
 <div style={{ marginBottom: 12 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Address</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Address</label>
 <input value={address} onChange={e => setAddress(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. 999 Main St" />
 </div>
 <div style={{ marginBottom: 14 }}>
-<label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Zip Code (for weather)</label>
+<label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Zip Code (for weather)</label>
 <input value={zipCode} onChange={e => setZipCode(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. 90210" maxLength={5} />
 </div>
 <div style={{ display: "flex", gap: 8 }}>
 <button onClick={() => handleSave("**new**")} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
-<button onClick={() => setEditing(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+<button onClick={() => setEditing(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
 </div>
 </div>
 )}
 </div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
-<div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Integrations</div>
+<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
+<div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Integrations</div>
 <SensorPushIntegration locations={locations} />
             <ShellyIntegration locations={locations} />
 </div>
@@ -5081,22 +5088,22 @@ function CarCounts({ locations }) {
   return (
     <div>
       <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Car Counts</div>
-        <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>Log daily car counts per location</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Car Counts</div>
+        <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Log daily car counts per location</div>
       </div>
-      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={() => goDay(-1)} style={{ background: "#f3f4f6", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 16, cursor: "pointer", color: "#374151", fontWeight: 700 }}>{"<"}</button>
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => goDay(-1)} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 16, cursor: "pointer", color: "#334155", fontWeight: 700 }}>{"<"}</button>
         <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{displayDate}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{displayDate}</div>
           {isToday && <div style={{ fontSize: 11, color: "#10b981", fontWeight: 600, marginTop: 2 }}>Today</div>}
         </div>
-        <button onClick={() => goDay(1)} disabled={isToday} style={{ background: isToday ? "#f9fafb" : "#f3f4f6", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 16, cursor: isToday ? "not-allowed" : "pointer", color: isToday ? "#d1d5db" : "#374151", fontWeight: 700 }}>{">"}</button>
+        <button onClick={() => goDay(1)} disabled={isToday} style={{ background: isToday ? "#f8fafc" : "#f1f5f9", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 16, cursor: isToday ? "not-allowed" : "pointer", color: isToday ? "#d1d5db" : "#334155", fontWeight: 700 }}>{">"}</button>
       </div>
       <div style={{ marginBottom: 18, display: "flex", alignItems: "center", gap: 10 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Jump to date:</label>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Jump to date:</label>
         <input type="date" value={selectedDate} max={today} onChange={e => e.target.value && setSelectedDate(e.target.value)}
-          style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#111827", background: "#fff" }} />
-        {!isToday && <button onClick={() => setSelectedDate(today)} style={{ background: "#f3f4f6", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Today</button>}
+          style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#0f1f35", background: "#fff" }} />
+        {!isToday && <button onClick={() => setSelectedDate(today)} style={{ background: "#f1f5f9", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#334155" }}>Today</button>}
       </div>
       <div style={{ background: "linear-gradient(135deg, #1a3352, #0ea5e9)", borderRadius: 12, padding: "14px 20px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600 }}>Total Cars</div>
@@ -5106,9 +5113,9 @@ function CarCounts({ locations }) {
         const eqs = locEquipment[loc.id] || [];
         const hasEq = eqs.length > 0;
         return (
-          <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 18, marginBottom: 12 }}>
+          <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 18, marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{loc.name}</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc.name}</div>
               {saved[loc.id] && <span style={{ fontSize: 12, color: "#10b981", fontWeight: 600 }}>Saved!</span>}
             </div>
 
@@ -5119,28 +5126,28 @@ function CarCounts({ locations }) {
                   const key = loc.id + "_" + eq.id;
                   return (
                     <div key={eq.id} style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>{eq.name}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>{eq.name}</div>
                       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                         <button onClick={() => setEqCounts(p => ({ ...p, [key]: Math.max(0, (parseInt(p[key]) || 0) - 1) }))}
-                          style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>-</button>
+                          style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>-</button>
                         <input type="number" min="0"
                           value={loaded[loc.id] ? (eqCounts[key] ?? "") : ""}
                           placeholder={loaded[loc.id] ? "0" : "..."}
                           onChange={e => setEqCounts(p => ({ ...p, [key]: e.target.value }))}
-                          style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa", boxSizing: "border-box" }} />
+                          style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#0f1f35", background: "#fafafa", boxSizing: "border-box" }} />
                         <button onClick={() => setEqCounts(p => ({ ...p, [key]: (parseInt(p[key]) || 0) + 1 }))}
-                          style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>+</button>
+                          style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>+</button>
                       </div>
                       <button onClick={() => handleSaveEq(loc.id, eq.id)} disabled={saving[key]}
-                        style={{ width: "100%", marginTop: 8, background: saved[key] ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        style={{ width: "100%", marginTop: 8, background: saved[key] ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                         {saving[key] ? "Saving..." : saved[key] ? "Saved!" : "Save " + eq.name + " Count"}
                       </button>
                     </div>
                   );
                 })}
-                <div style={{ marginTop: 8, padding: "8px 12px", background: "#f8fafc", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>Location Total</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: "#1a3352" }}>{counts[loc.id] || 0}</span>
+                <div style={{ marginTop: 8, padding: "8px 12px", background: "#f4f6f8", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Location Total</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "#0f1f35" }}>{counts[loc.id] || 0}</span>
                 </div>
               </>
             ) : (
@@ -5148,17 +5155,17 @@ function CarCounts({ locations }) {
               <>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <button onClick={() => setCounts(p => ({ ...p, [loc.id]: Math.max(0, (parseInt(p[loc.id]) || 0) - 1) }))}
-                    style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>-</button>
+                    style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>-</button>
                   <input type="number" min="0"
                     value={loaded[loc.id] ? (counts[loc.id] ?? "") : ""}
                     placeholder={loaded[loc.id] ? "0" : "..."}
                     onChange={e => setCounts(p => ({ ...p, [loc.id]: e.target.value }))}
-                    style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#111827", background: "#fafafa", boxSizing: "border-box" }} />
+                    style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#0f1f35", background: "#fafafa", boxSizing: "border-box" }} />
                   <button onClick={() => setCounts(p => ({ ...p, [loc.id]: (parseInt(p[loc.id]) || 0) + 1 }))}
-                    style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#374151", fontWeight: 700 }}>+</button>
+                    style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>+</button>
                 </div>
                 <button onClick={() => handleSave(loc.id)} disabled={saving[loc.id]}
-                  style={{ width: "100%", marginTop: 12, background: saved[loc.id] ? "#10b981" : "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ width: "100%", marginTop: 12, background: saved[loc.id] ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   {saving[loc.id] ? "Saving..." : saved[loc.id] ? "Saved!" : "Save Count"}
                 </button>
               </>
@@ -5237,19 +5244,19 @@ function TeamMembers({ user, locations }) {
   };
 
   const toggleLoc = (locId) => setInviteLocs(p => p.includes(locId) ? p.filter(l => l !== locId) : [...p, locId]);
-  const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#111827" };
+  const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#0f1f35" };
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 18 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Team Members</div>
-      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>Invite staff to access your dashboard</div>
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Team Members</div>
+      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 16 }}>Invite staff to access your dashboard</div>
       {editingMember && (
         <div style={{ background: "#f0f9ff", border: "2px solid #0ea5e9", borderRadius: 10, padding: 16, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: "#0369a1", marginBottom: 12 }}>Edit Access — {editingMember.name || editingMember.email}</div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Role</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Role</label>
             <select value={editRole} onChange={e => setEditRole(e.target.value)}
-              style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827", marginTop: 6 }}>
+              style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35", marginTop: 6 }}>
               <option value="attendant">Attendant — Limited access</option>
               <option value="technician">Technician — Equipment & tasks</option>
               {user?.role === "owner" && <option value="manager">Manager — Full access</option>}
@@ -5257,31 +5264,31 @@ function TeamMembers({ user, locations }) {
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Location Access</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Location Access</label>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <button onClick={() => setEditLocs(locations.map(l => l.id))}
                 style={{ fontSize: 11, background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>All</button>
               <button onClick={() => setEditLocs([])}
-                style={{ fontSize: 11, background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>None</button>
+                style={{ fontSize: 11, background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>None</button>
             </div>
             {locations.map(l => (
               <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }}>
                 <input type="checkbox" checked={editLocs.includes(l.id)}
                   onChange={() => setEditLocs(p => p.includes(l.id) ? p.filter(x => x !== l.id) : [...p, l.id])}
-                  style={{ width: 15, height: 15, accentColor: "#1a3352" }} />
-                <span style={{ fontSize: 13, color: "#374151" }}>{l.name}</span>
+                  style={{ width: 15, height: 15, accentColor: "#0f1f35" }} />
+                <span style={{ fontSize: 13, color: "#334155" }}>{l.name}</span>
               </label>
             ))}
           </div>
           {(editRole === "manager" && user?.role === "owner") && (
-            <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+            <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f4f6f8", borderRadius: 8, border: "1px solid #e5e7eb" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Payroll Access</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Allow this manager to view and manage payroll</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>Payroll Access</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Allow this manager to view and manage payroll</div>
                 </div>
                 <div onClick={() => setEditPayrollAccess(p => !p)}
-                  style={{ width: 44, height: 24, borderRadius: 12, background: editPayrollAccess ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                  style={{ width: 44, height: 24, borderRadius: 12, background: editPayrollAccess ? "#0f1f35" : "#e2e8f0", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
                   <div style={{ position: "absolute", top: 2, left: editPayrollAccess ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                 </div>
               </div>
@@ -5296,25 +5303,25 @@ function TeamMembers({ user, locations }) {
               setEditingMember(null);
               setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess } : m));
             }} disabled={savingEdit}
-              style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {savingEdit ? "Saving..." : "Save Changes"}
             </button>
             <button onClick={() => setEditingMember(null)}
-              style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       )}
       {members.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Active Members</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 8 }}>Active Members</div>
           {members.map(m => (
-            <div key={m.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f9fafb", borderRadius: 8, marginBottom: 8 }}>
+            <div key={m.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f8fafc", borderRadius: 8, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{m.name || m.email}</div>
-                  {m.role === "owner" && <span style={{ fontSize: 10, fontWeight: 700, background: "#1a3352", color: "#fff", borderRadius: 4, padding: "1px 6px" }}>OWNER</span>}
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{m.name || m.email}</div>
+                  {m.role === "owner" && <span style={{ fontSize: 10, fontWeight: 700, background: "#0f1f35", color: "#fff", borderRadius: 4, padding: "1px 6px" }}>OWNER</span>}
                 </div>
-                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
                   {m.email} — <span style={{ textTransform: "capitalize" }}>{m.role}</span>
                   {m.payrollAccess ? " · Payroll access" : ""}
                 </div>
@@ -5332,12 +5339,12 @@ function TeamMembers({ user, locations }) {
       )}
       {invites.filter(i => i.status === "pending").length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Pending Invites</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 8 }}>Pending Invites</div>
           {invites.filter(i => i.status === "pending").map(inv => (
             <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fffbeb", borderRadius: 8, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{inv.email}</div>
-                <div style={{ fontSize: 11, color: "#9ca3af" }}>{inv.role} — Pending</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{inv.email}</div>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>{inv.role} — Pending</div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button onClick={() => {
@@ -5350,7 +5357,7 @@ function TeamMembers({ user, locations }) {
                     await sendInvite({ inviteEmail: inv.email, inviteRole: inv.role, bizName: user.bizName || user.name, managerName: user.name });
                     alert("Invite email sent to " + inv.email);
                   } catch(e) { alert("Could not send email: " + e.message); }
-                }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Send Email</button>
+                }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Send Email</button>
                 <button onClick={async () => {
                   if (!window.confirm("Delete this invite?")) return;
                   await deleteDoc(doc(db, "invites", inv.id));
@@ -5361,13 +5368,13 @@ function TeamMembers({ user, locations }) {
         </div>
       )}
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Send Invite</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 10 }}>Send Invite</div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Email Address</label>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Email Address</label>
           <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} type="email" placeholder="staff@email.com" style={inp} />
         </div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Role</label>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Role</label>
           <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inp, marginTop: 6 }}>
             <option value="attendant">Attendant - Limited access</option>
             <option value="technician">Technician - Equipment access</option>
@@ -5375,17 +5382,17 @@ function TeamMembers({ user, locations }) {
           </select>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Location Access</label>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Location Access</label>
           {locations.map(l => (
             <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer" }}>
-              <input type="checkbox" checked={inviteLocs.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 15, height: 15, accentColor: "#1a3352" }} />
-              <span style={{ fontSize: 13, color: "#374151" }}>{l.name}</span>
+              <input type="checkbox" checked={inviteLocs.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 15, height: 15, accentColor: "#0f1f35" }} />
+              <span style={{ fontSize: 13, color: "#334155" }}>{l.name}</span>
             </label>
           ))}
         </div>
         {error && <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10 }}>{error}</div>}
         {sent && <div style={{ background: "#d1fae5", color: "#065f46", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10 }}>Invite saved! Have them create an account at WashLevel.com with this email.</div>}
-        <button onClick={handleInvite} disabled={sending} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" }}>
+        <button onClick={handleInvite} disabled={sending} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" }}>
           {sending ? "Saving..." : "Send Invite"}
         </button>
       </div>
@@ -5413,7 +5420,7 @@ function SetupWizard({ user, logout }) {
     setStep(3);
   };
 
-  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fff", color: "#111827", marginTop: 6 };
+  const inp = { width: "100%", padding: "11px 14px", border: "1.5px solid #e5e7eb", borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fff", color: "#0f1f35", marginTop: 6 };
 
   return (
     <div style={{ minHeight: "100dvh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -5421,7 +5428,7 @@ function SetupWizard({ user, logout }) {
       <div style={{ width: "100%", maxWidth: 480 }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#1a3352", borderRadius: 14, padding: "10px 22px", marginBottom: 12 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#0f1f35", borderRadius: 14, padding: "10px 22px", marginBottom: 12 }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
             <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
           </div>
@@ -5429,8 +5436,8 @@ function SetupWizard({ user, logout }) {
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 16 }}>
             {[1,2,3].map(s => (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: step >= s ? "#1a3352" : "#e5e7eb", color: step >= s ? "#fff" : "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{s}</div>
-                {s < 3 && <div style={{ width: 40, height: 2, background: step > s ? "#1a3352" : "#e5e7eb" }} />}
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: step >= s ? "#0f1f35" : "#e2e8f0", color: step >= s ? "#fff" : "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{s}</div>
+                {s < 3 && <div style={{ width: 40, height: 2, background: step > s ? "#0f1f35" : "#e2e8f0" }} />}
               </div>
             ))}
           </div>
@@ -5439,8 +5446,8 @@ function SetupWizard({ user, logout }) {
         <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: 32 }}>
           {step === 1 && (
             <div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Welcome, {user?.name?.split(" ")[0] || "there"}!</div>
-              <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>Let's get your car wash set up. It only takes a minute.</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>Welcome, {user?.name?.split(" ")[0] || "there"}!</div>
+              <div style={{ fontSize: 14, color: "#64748b", marginBottom: 24 }}>Let's get your car wash set up. It only takes a minute.</div>
               <div style={{ background: "#f0f9ff", borderRadius: 10, padding: 16, marginBottom: 24 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#0369a1", marginBottom: 8 }}>What you'll set up:</div>
                 {["Your first wash location", "Dashboard overview", "Team & time clock"].map(item => (
@@ -5448,48 +5455,48 @@ function SetupWizard({ user, logout }) {
                     <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#0ea5e9", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>
                     </div>
-                    <span style={{ fontSize: 13, color: "#374151" }}>{item}</span>
+                    <span style={{ fontSize: 13, color: "#334155" }}>{item}</span>
                   </div>
                 ))}
               </div>
-              <button onClick={() => setStep(2)} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => setStep(2)} style={{ width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
                 Get Started
               </button>
               <div style={{ textAlign: "center", marginTop: 12 }}>
-                <span onClick={logout} style={{ fontSize: 12, color: "#9ca3af", cursor: "pointer", textDecoration: "underline" }}>Sign out</span>
+                <span onClick={logout} style={{ fontSize: 12, color: "#94a3b8", cursor: "pointer", textDecoration: "underline" }}>Sign out</span>
               </div>
             </div>
           )}
 
           {step === 2 && (
             <div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Your First Location</div>
-              <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>You can add more locations later in Settings.</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>Your First Location</div>
+              <div style={{ fontSize: 14, color: "#64748b", marginBottom: 24 }}>You can add more locations later in Settings.</div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Car Wash Name *</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Car Wash Name *</label>
                 <input value={bizName} onChange={e => setBizName(e.target.value)} placeholder="e.g. Sunny Car Wash - Main St" style={inp} />
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Address</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Address</label>
                 <input value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 123 Main Street" style={inp} />
               </div>
               <div style={{ marginBottom: 24 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Zip Code <span style={{ color: "#9ca3af", fontWeight: 400 }}>(for weather data)</span></label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Zip Code <span style={{ color: "#94a3b8", fontWeight: 400 }}>(for weather data)</span></label>
                 <input value={zipCode} onChange={e => setZipCode(e.target.value)} placeholder="e.g. 37201" maxLength={5} style={inp} />
               </div>
               <button onClick={handleCreate} disabled={!bizName.trim() || saving}
-                style={{ width: "100%", background: bizName.trim() ? "#1a3352" : "#e5e7eb", color: bizName.trim() ? "#fff" : "#9ca3af", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: bizName.trim() ? "pointer" : "not-allowed" }}>
+                style={{ width: "100%", background: bizName.trim() ? "#0f1f35" : "#e2e8f0", color: bizName.trim() ? "#fff" : "#94a3b8", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: bizName.trim() ? "pointer" : "not-allowed" }}>
                 {saving ? "Setting up..." : "Create Location"}
               </button>
-              <button onClick={() => setStep(1)} style={{ width: "100%", background: "none", border: "none", color: "#9ca3af", fontSize: 13, cursor: "pointer", marginTop: 10 }}>Back</button>
+              <button onClick={() => setStep(1)} style={{ width: "100%", background: "none", border: "none", color: "#94a3b8", fontSize: 13, cursor: "pointer", marginTop: 10 }}>Back</button>
             </div>
           )}
 
           {step === 3 && (
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 8 }}>You're all set!</div>
-              <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 24 }}>Your dashboard is ready. Here are a few things to do next:</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#0f1f35", marginBottom: 8 }}>You're all set!</div>
+              <div style={{ fontSize: 14, color: "#64748b", marginBottom: 24 }}>Your dashboard is ready. Here are a few things to do next:</div>
               <div style={{ textAlign: "left", marginBottom: 24 }}>
                 {[
                   { title: "Add your team", desc: "Invite staff in Settings → Team Members" },
@@ -5500,13 +5507,13 @@ function SetupWizard({ user, logout }) {
                   <div key={item.title} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0ea5e9", marginTop: 5, flexShrink: 0 }} />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{item.title}</div>
-                      <div style={{ fontSize: 12, color: "#9ca3af" }}>{item.desc}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{item.title}</div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>{item.desc}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <button onClick={() => window.location.reload()} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => window.location.reload()} style={{ width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
                 Go to My Dashboard
               </button>
             </div>
@@ -5516,9 +5523,9 @@ function SetupWizard({ user, logout }) {
 
       {/* Owner-only danger zone */}
       {user?.role === "owner" && (
-        <div style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+        <div style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 16, padding: 20, marginBottom: 18 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: "#dc2626", marginBottom: 4 }}>Danger Zone</div>
-          <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>These actions are irreversible. Only the account owner can perform them.</div>
+          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>These actions are irreversible. Only the account owner can perform them.</div>
           <button onClick={async () => {
             const confirmed = window.confirm("Are you sure you want to delete your entire WashLevel account? This will permanently delete all locations, tasks, equipment, and data. This cannot be undone.");
             if (!confirmed) return;
@@ -5636,11 +5643,11 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  if (!prefs) return <div style={{ padding: 40, color: "#9ca3af", textAlign: "center" }}>Loading...</div>;
+  if (!prefs) return <div style={{ padding: 40, color: "#94a3b8", textAlign: "center" }}>Loading...</div>;
 
   const Toggle = ({ k }) => (
     <div onClick={() => update(k, !prefs[k])}
-      style={{ width: 44, height: 24, borderRadius: 12, background: prefs[k] ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+      style={{ width: 44, height: 24, borderRadius: 12, background: prefs[k] ? "#0f1f35" : "#e2e8f0", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
       <div style={{ position: "absolute", top: 2, left: prefs[k] ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
     </div>
   );
@@ -5648,8 +5655,8 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
   const Row = ({ label, desc, k }) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
       <div style={{ flex: 1, marginRight: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{label}</div>
-        {desc && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{desc}</div>}
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{label}</div>
+        {desc && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{desc}</div>}
       </div>
       <Toggle k={k} />
     </div>
@@ -5657,20 +5664,20 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
 
   return (
     <div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 12 }}>Notifications</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35", marginBottom: 12 }}>Notifications</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setNotifTab("inbox")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "inbox" ? "#1a3352" : "#f3f4f6", color: notifTab === "inbox" ? "#fff" : "#6b7280" }}>Inbox {notifications.filter(n => !n.read).length > 0 ? "(" + notifications.filter(n => !n.read).length + ")" : ""}</button>
-        <button onClick={() => setNotifTab("settings")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "settings" ? "#1a3352" : "#f3f4f6", color: notifTab === "settings" ? "#fff" : "#6b7280" }}>Alert Settings</button>
+        <button onClick={() => setNotifTab("inbox")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "inbox" ? "#0f1f35" : "#f1f5f9", color: notifTab === "inbox" ? "#fff" : "#64748b" }}>Inbox {notifications.filter(n => !n.read).length > 0 ? "(" + notifications.filter(n => !n.read).length + ")" : ""}</button>
+        <button onClick={() => setNotifTab("settings")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "settings" ? "#0f1f35" : "#f1f5f9", color: notifTab === "settings" ? "#fff" : "#64748b" }}>Alert Settings</button>
       </div>
       <div style={{ display: notifTab === "inbox" ? "block" : "none" }}>
         {notifications.length === 0 ? (
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 32, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🔔</div>
-            <div style={{ fontWeight: 600, fontSize: 15, color: "#111827", marginBottom: 4 }}>No notifications yet</div>
-            <div style={{ fontSize: 13, color: "#9ca3af" }}>Task assignments and alerts will appear here</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>No notifications yet</div>
+            <div style={{ fontSize: 13, color: "#94a3b8" }}>Task assignments and alerts will appear here</div>
           </div>
         ) : notifications.map(n => (
-          <div key={n.id} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10, display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div key={n.id} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 10, display: "flex", gap: 12, alignItems: "flex-start" }}>
             <div style={{ fontSize: 20 }}>📋</div>
             <div style={{ flex: 1, cursor: "pointer" }} onClick={() => {
               markRead(n.id);
@@ -5679,13 +5686,13 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
               else if (n.type === "sensor_alert") setView("sensors");
               else if (n.locationId) setView("tasks");
             }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{n.title}</div>
-              <div style={{ fontSize: 13, color: "#374151", marginTop: 2 }}>{n.body}</div>
-              <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35" }}>{n.title}</div>
+              <div style={{ fontSize: 13, color: "#334155", marginTop: 2 }}>{n.body}</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6" }} />}
-              <button onClick={async () => { await deleteDoc(doc(db, "users", user.uid, "notifications", n.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, padding: 2 }}>✕</button>
+              <button onClick={async () => { await deleteDoc(doc(db, "users", user.uid, "notifications", n.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16, padding: 2 }}>✕</button>
             </div>
           </div>
         ))}
@@ -5693,22 +5700,22 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
       <div style={{ display: notifTab === "settings" ? "block" : "none" }}>
 
       {/* Daily Summary Email */}
-      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Daily Summary Email</div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>Daily Summary Email</div>
           <Toggle k="dailySummaryEnabled" />
         </div>
-        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
           Receive a morning recap of the previous day
         </div>
         {prefs.dailySummaryEnabled && (
           <>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Send at</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Send at</label>
               <input type="time" value={prefs.dailySummaryTime} onChange={e => update("dailySummaryTime", e.target.value)}
                 style={{ padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none" }} />
             </div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Include in summary:</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 10 }}>Include in summary:</div>
             {user?.role === "manager" && <Row label="Car counts" desc="Yesterday's wash counts per location" k="includeCounts" />}
             <Row label="Tasks completed" desc="Tasks finished yesterday" k="includeTasksDone" />
             <Row label="Open tasks" desc="All currently pending or in-progress tasks" k="includeOpenTasks" />
@@ -5719,9 +5726,9 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
       </div>
 
       {/* Instant Alerts */}
-      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Instant Alerts</div>
-        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Get notified immediately when these occur</div>
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Instant Alerts</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Get notified immediately when these occur</div>
         <Row label="Overdue tasks" desc="Task passes due date without completion" k="overdueTasksAlert" />
         {user?.role === "manager" && <Row label="Low inventory" desc="Item falls below low stock threshold" k="lowInventoryAlert" />}
         {user?.role === "manager" && <Row label="Equipment alerts" desc="Equipment status changes to warning or alert" k="equipmentAlert" />}
@@ -5729,59 +5736,59 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
       </div>
 
       {/* Sensor Alerts */}
-      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Sensor Alerts</div>
-        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Get notified when sensor readings exceed thresholds</div>
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Sensor Alerts</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Get notified when sensor readings exceed thresholds</div>
 
         <Row label="ChemLevel alerts" desc="Pressure sensor outside min/max range" k="chemLevelAlert" />
         {prefs.chemLevelAlert && (
-          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
-            {chemSensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>No ChemLevel sensors found for this location. Add them in Sensors → ChemLevel tab.</div>}
+          <div style={{ background: "#f4f6f8", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            {chemSensors.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>No ChemLevel sensors found for this location. Add them in Sensors → ChemLevel tab.</div>}
             {chemSensors.map(s => (
               <div key={s.id} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{s.name || s.sensorId}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>{s.name || s.sensorId}</div>
                 <div style={{ display: "flex", gap: 10 }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 11, color: "#6b7280" }}>Min ({s.unit || "PSI"})</label>
+                    <label style={{ fontSize: 11, color: "#64748b" }}>Min ({s.unit || "PSI"})</label>
                     <input type="number" defaultValue={s.minAlert} onBlur={async e => {
                       await updateDoc(doc(db, "locations", locId, "chemSensors", s.id), { minAlert: Number(e.target.value) });
-                    }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                    }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#0f1f35", boxSizing: "border-box" }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 11, color: "#6b7280" }}>Max ({s.unit || "PSI"})</label>
+                    <label style={{ fontSize: 11, color: "#64748b" }}>Max ({s.unit || "PSI"})</label>
                     <input type="number" defaultValue={s.maxAlert} onBlur={async e => {
                       await updateDoc(doc(db, "locations", locId, "chemSensors", s.id), { maxAlert: Number(e.target.value) });
-                    }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                    }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#0f1f35", boxSizing: "border-box" }} />
                   </div>
                 </div>
               </div>
             ))}
-            {chemSensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af" }}>No ChemLevel sensors configured yet. Add them in the Sensors tab.</div>}
+            {chemSensors.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>No ChemLevel sensors configured yet. Add them in the Sensors tab.</div>}
           </div>
         )}
 
         <Row label="Shelly alerts" desc="Digital input or distance sensor triggered" k="shellyAlert" />
         {prefs.shellyAlert && (
-          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
-            {shellySensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>No Shelly devices found for this location. Add them in Sensors → Shelly tab.</div>}
+          <div style={{ background: "#f4f6f8", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            {shellySensors.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>No Shelly devices found for this location. Add them in Sensors → Shelly tab.</div>}
             {shellySensors.map(s => (
               <div key={s.id} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{s.name} ({s.type})</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>{s.name} ({s.type})</div>
                 {s.type === "blu_distance" ? (
                   <div style={{ display: "flex", gap: 10 }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 11, color: "#6b7280" }}>Min Distance (inches)</label>
+                      <label style={{ fontSize: 11, color: "#64748b" }}>Min Distance (inches)</label>
                       <input type="number" defaultValue={s.minAlert || 2} onBlur={async e => {
                         await updateDoc(doc(db, "locations", locId, "shellyDevices", s.id), { minAlert: Number(e.target.value) });
-                      }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                      }} style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#0f1f35", boxSizing: "border-box" }} />
                     </div>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <label style={{ fontSize: 11, color: "#6b7280" }}>Alert when signal is:</label>
+                    <label style={{ fontSize: 11, color: "#64748b" }}>Alert when signal is:</label>
                     <select defaultValue={s.alertOn || "on"} onBlur={async e => {
                       await updateDoc(doc(db, "locations", locId, "shellyDevices", s.id), { alertOn: e.target.value });
-                    }} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", background: "#fff", color: "#111827" }}>
+                    }} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", background: "#fff", color: "#0f1f35" }}>
                       <option value="on">ON</option>
                       <option value="off">OFF</option>
                       <option value="never">Never</option>
@@ -5795,31 +5802,31 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
 
         <Row label="SensorPush alerts" desc="Temperature or humidity out of range" k="sensorPushAlert" />
         {prefs.sensorPushAlert && (
-          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
-            {spSensors.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af" }}>No SensorPush sensors found. Connect SensorPush in the Sensors tab.</div>}
+          <div style={{ background: "#f4f6f8", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            {spSensors.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>No SensorPush sensors found. Connect SensorPush in the Sensors tab.</div>}
             {spSensors.map(s => (
               <div key={s.id} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{s.name}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>{s.name}</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#6b7280" }}>Min Temp (°F)</label>
+                    <label style={{ fontSize: 11, color: "#64748b" }}>Min Temp (°F)</label>
                     <input type="number" defaultValue={spAlerts[s.id]?.minTemp ?? ""} onBlur={e => saveSpAlert(s.id, "minTemp", e.target.value)}
-                      placeholder="e.g. 32" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                      placeholder="e.g. 32" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#0f1f35", boxSizing: "border-box" }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#6b7280" }}>Max Temp (°F)</label>
+                    <label style={{ fontSize: 11, color: "#64748b" }}>Max Temp (°F)</label>
                     <input type="number" defaultValue={spAlerts[s.id]?.maxTemp ?? ""} onBlur={e => saveSpAlert(s.id, "maxTemp", e.target.value)}
-                      placeholder="e.g. 100" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                      placeholder="e.g. 100" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#0f1f35", boxSizing: "border-box" }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#6b7280" }}>Min Humidity (%)</label>
+                    <label style={{ fontSize: 11, color: "#64748b" }}>Min Humidity (%)</label>
                     <input type="number" defaultValue={spAlerts[s.id]?.minHumidity ?? ""} onBlur={e => saveSpAlert(s.id, "minHumidity", e.target.value)}
-                      placeholder="e.g. 20" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                      placeholder="e.g. 20" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#0f1f35", boxSizing: "border-box" }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#6b7280" }}>Max Humidity (%)</label>
+                    <label style={{ fontSize: 11, color: "#64748b" }}>Max Humidity (%)</label>
                     <input type="number" defaultValue={spAlerts[s.id]?.maxHumidity ?? ""} onBlur={e => saveSpAlert(s.id, "maxHumidity", e.target.value)}
-                      placeholder="e.g. 80" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#111827", boxSizing: "border-box" }} />
+                      placeholder="e.g. 80" style={{ width: "100%", padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none", color: "#0f1f35", boxSizing: "border-box" }} />
                   </div>
                 </div>
               </div>
@@ -5829,26 +5836,26 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
       </div>
 
       {/* Car Recurrence Alerts */}
-      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Equipment Car Count Alerts</div>
-        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Get notified when car-based recurring tasks are due or approaching</div>
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Equipment Car Count Alerts</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Get notified when car-based recurring tasks are due or approaching</div>
         <Row label="Task due alert" desc="Notify when a car-recurrence task becomes due" k="carRecurrenceDueAlert" />
         <Row label="Upcoming task warning" desc="Notify when a task is approaching its car count threshold" k="carRecurrenceWarningAlert" />
         {prefs.carRecurrenceWarningAlert && (
-          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Warn me when within this many cars:</div>
+          <div style={{ background: "#f4f6f8", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>Warn me when within this many cars:</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <input type="number" min="50" max="2000" value={prefs.carRecurrenceWarningCars || 300}
                 onChange={e => update("carRecurrenceWarningCars", parseInt(e.target.value) || 300)}
-                style={{ width: 100, padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 14, fontWeight: 700, outline: "none", color: "#111827" }} />
-              <span style={{ fontSize: 13, color: "#6b7280" }}>cars remaining</span>
+                style={{ width: 100, padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 14, fontWeight: 700, outline: "none", color: "#0f1f35" }} />
+              <span style={{ fontSize: 13, color: "#64748b" }}>cars remaining</span>
             </div>
           </div>
         )}
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <button onClick={save} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+        <button onClick={save} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
           {saving ? "Saving..." : saved ? "Saved!" : "Save Preferences"}
         </button>
         <button onClick={async () => {
@@ -5859,7 +5866,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
             alert("Test email sent to " + (user.email || "your email") + "!");
           } catch(e) { alert("Error: " + e.message); }
           setSaving(false);
-        }} style={{ background: "#fff", color: "#1a3352", border: "2px solid #1a3352", borderRadius: 10, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+        }} style={{ background: "#fff", color: "#0f1f35", border: "2px solid #1a3352", borderRadius: 10, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
           Send Test Email
         </button>
       </div>
@@ -5898,25 +5905,25 @@ function AllLocations({ locations, tasks, setLocId, setView }) {
 
   return (
     <div style={{ padding: "20px 16px", maxWidth: 1000, margin: "0 auto" }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 4 }}>All Locations</div>
-      <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>{locations.length} locations</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35", marginBottom: 4 }}>All Locations</div>
+      <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>{locations.length} locations</div>
 
       {/* Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Cars Today</div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: "#1a3352" }}>{totalCarsToday}</div>
-          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Yesterday: {totalCarsYesterday}</div>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16 }}>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>Cars Today</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: "#0f1f35" }}>{totalCarsToday}</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Yesterday: {totalCarsYesterday}</div>
         </div>
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Open Tasks</div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: overdueTasks.length > 0 ? "#dc2626" : "#1a3352" }}>{openTasks.length}</div>
-          <div style={{ fontSize: 11, color: overdueTasks.length > 0 ? "#dc2626" : "#9ca3af", marginTop: 2 }}>{overdueTasks.length} overdue</div>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16 }}>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>Open Tasks</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: overdueTasks.length > 0 ? "#dc2626" : "#0f1f35" }}>{openTasks.length}</div>
+          <div style={{ fontSize: 11, color: overdueTasks.length > 0 ? "#dc2626" : "#94a3b8", marginTop: 2 }}>{overdueTasks.length} overdue</div>
         </div>
       </div>
 
       {/* Per Location Breakdown */}
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 12 }}>By Location</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 12 }}>By Location</div>
       {locations.map(loc => {
         const carsToday = daySummaries[loc.id]?.today?.carsWashed || 0;
         const carsYesterday = daySummaries[loc.id]?.yesterday?.carsWashed || 0;
@@ -5924,9 +5931,9 @@ function AllLocations({ locations, tasks, setLocId, setView }) {
         const locOpen = locTasks.filter(t => t.status !== "done");
         const locOverdue = locOpen.filter(t => t.dueDate && t.dueDate < today);
         return (
-          <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10 }}>
+          <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{loc.name}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{loc.name}</div>
               {locOverdue.length > 0 && (
                 <div style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>
                   {locOverdue.length} overdue
@@ -5935,20 +5942,20 @@ function AllLocations({ locations, tasks, setLocId, setView }) {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <div onClick={() => { setLocId(loc.id); setView("carcounts"); }}
-                style={{ background: "#f8fafc", borderRadius: 8, padding: 10, cursor: "pointer" }}
+                style={{ background: "#f4f6f8", borderRadius: 8, padding: 10, cursor: "pointer" }}
                 onMouseEnter={e => e.currentTarget.style.background="#e0f2fe"}
-                onMouseLeave={e => e.currentTarget.style.background="#f8fafc"}>
-                <div style={{ fontSize: 11, color: "#9ca3af" }}>Cars Today</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#1a3352" }}>{carsToday}</div>
-                <div style={{ fontSize: 10, color: "#9ca3af" }}>Yesterday: {carsYesterday}</div>
+                onMouseLeave={e => e.currentTarget.style.background="#f4f6f8"}>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>Cars Today</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#0f1f35" }}>{carsToday}</div>
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>Yesterday: {carsYesterday}</div>
               </div>
               <div onClick={() => { setLocId(loc.id); setView("tasks"); }}
-                style={{ background: "#f8fafc", borderRadius: 8, padding: 10, cursor: "pointer" }}
+                style={{ background: "#f4f6f8", borderRadius: 8, padding: 10, cursor: "pointer" }}
                 onMouseEnter={e => e.currentTarget.style.background="#fef3c7"}
-                onMouseLeave={e => e.currentTarget.style.background="#f8fafc"}>
-                <div style={{ fontSize: 11, color: "#9ca3af" }}>Open Tasks</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: locOverdue.length > 0 ? "#dc2626" : "#1a3352" }}>{locOpen.length}</div>
-                <div style={{ fontSize: 10, color: "#9ca3af" }}>{locTasks.length} total</div>
+                onMouseLeave={e => e.currentTarget.style.background="#f4f6f8"}>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>Open Tasks</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: locOverdue.length > 0 ? "#dc2626" : "#0f1f35" }}>{locOpen.length}</div>
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>{locTasks.length} total</div>
               </div>
             </div>
             {locOpen.length > 0 && (
@@ -5956,10 +5963,10 @@ function AllLocations({ locations, tasks, setLocId, setView }) {
                 {locOpen.slice(0, 3).map(t => (
                   <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: t.dueDate && t.dueDate < today ? "#dc2626" : "#f59e0b", flexShrink: 0 }} />
-                    <div style={{ fontSize: 12, color: "#374151" }}>{t.title}</div>
+                    <div style={{ fontSize: 12, color: "#334155" }}>{t.title}</div>
                   </div>
                 ))}
-                {locOpen.length > 3 && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>+{locOpen.length - 3} more</div>}
+                {locOpen.length > 3 && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>+{locOpen.length - 3} more</div>}
               </div>
             )}
           </div>
@@ -6096,18 +6103,18 @@ const curSens = sensors[locId] || null;
 const curEquip = equipment[locId] || [];
 
 return (
-<div style={{ height: "100dvh", background: "#f8fafc", overflow: "hidden" }}>
+<div style={{ height: "100dvh", background: "#f4f6f8", overflow: "hidden" }}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <Sidebar locations={locations} view={view} setView={setView} locId={locId} setLocId={setLocId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 <main style={{ overflowY: "auto", height: "100dvh", padding: "16px", paddingTop: "64px", boxSizing: "border-box", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
       {(
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 48, background: "#1a3352", display: "flex", alignItems: "center", paddingLeft: 12, paddingRight: 8, zIndex: 30 }}>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 48, background: "#0f1f35", display: "flex", alignItems: "center", paddingLeft: 12, paddingRight: 8, zIndex: 30, boxShadow: "0 2px 12px rgba(0,0,0,0.15)" }}>
           <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", padding: 8, display: "flex", flexDirection: "column", gap: 5 }}>
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
           </button>
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}><span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>WashLevel</span><span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 5px" }}>PRO</span></div><button onClick={() => setView("alerts")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 8, position: "relative" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>{unreadCount > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 10, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}</button>
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}><span style={{ color: "#fff", fontWeight: 800, fontSize: 16, letterSpacing: "-0.3px" }}>WashLevel</span><span style={{ background: "#00d4aa", color: "#0f1f35", fontSize: 9, fontWeight: 800, borderRadius: 4, padding: "2px 6px", letterSpacing: "0.05em" }}>PRO</span></div><button onClick={() => setView("alerts")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 8, position: "relative" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>{unreadCount > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 10, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}</button>
         </div>
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
