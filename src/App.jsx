@@ -3642,7 +3642,8 @@ return (
 }
 
 //  INVENTORY
-function Inventory({ locId, locationName }) {
+function Inventory({ locId, locationName, user }) {
+  const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
   const [items, setItems] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -3660,7 +3661,7 @@ function Inventory({ locId, locationName }) {
 
   useEffect(() => {
     if (!locId) return;
-    const unsubV = onSnapshot(collection(db, "locations", locId, "vendors"), snap => {
+    const unsubV = onSnapshot(collection(db, "users", ownerId, "vendors"), snap => {
       setVendors(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||"").localeCompare(b.name||"")));
     });
     return () => unsubV();
@@ -3918,7 +3919,7 @@ function Inventory({ locId, locationName }) {
                   if (!newVendor.name.trim()) return;
                   setSavingVendor(true);
                   const id = "ven" + Date.now();
-                  await setDoc(doc(db, "locations", locId, "vendors", id), { ...newVendor, id, createdAt: new Date().toISOString() });
+                  await setDoc(doc(db, "users", ownerId, "vendors", id), { ...newVendor, id, createdAt: new Date().toISOString() });
                   setNewVendor({ name: "", phone: "", email: "", website: "", accountNumber: "", notes: "" });
                   setShowAddVendor(false);
                   setSavingVendor(false);
@@ -3941,7 +3942,7 @@ function Inventory({ locId, locationName }) {
                   ))}
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                     <button onClick={async () => {
-                      await updateDoc(doc(db, "locations", locId, "vendors", v.id), { ...editVendorData, updatedAt: new Date().toISOString() });
+                      await updateDoc(doc(db, "users", ownerId, "vendors", v.id), { ...editVendorData, updatedAt: new Date().toISOString() });
                       setEditingVendorId(null);
                     }} style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
                     <button onClick={() => setEditingVendorId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
@@ -3953,7 +3954,7 @@ function Inventory({ locId, locationName }) {
                     <div style={{ fontWeight: 700, fontSize: 15, color: "#1a3352" }}>{v.name}</div>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => { setEditingVendorId(v.id); setEditVendorData({...v}); }} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Edit</button>
-                      <button onClick={async () => { if (!window.confirm("Delete vendor?")) return; await deleteDoc(doc(db, "locations", locId, "vendors", v.id)); }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
+                      <button onClick={async () => { if (!window.confirm("Delete vendor?")) return; await deleteDoc(doc(db, "users", ownerId, "vendors", v.id)); }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
                     </div>
                   </div>
                   <div style={{ fontSize: 12, color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -6010,7 +6011,7 @@ return (
 {view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
-{view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} />}
+{view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} user={user} />}
 {view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} onNavigate={setView} />}
         {view === "alerts" && (
   <AlertSettings locId={locId} locations={locations} user={user} setView={setView} setLocId={setLocId} />
