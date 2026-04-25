@@ -5028,14 +5028,39 @@ function CarCounts({ locations }) {
 
       // Check if any car-recurrence tasks for this equipment are now due
       const tasksSnap = await getDocs(collection(db, "locations", locId, "tasks"));
-      const carTasks = tasksSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(t => t.equipmentId === eqId && t.nextCarsDue && t.status !== "done" && newCarsCount >= t.nextCarsDue);
-      for (const t of carTasks) {
-        await updateDoc(doc(db, "locations", locId, "tasks", t.id), {
-          due: new Date().toISOString().split("T")[0],
-          updatedAt: new Date().toISOString(),
-        });
+      const allCarTasks = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(t => t.equipmentId === eqId && t.nextCarsDue && t.status !== "done");
+
+      // Load owner alert prefs
+      const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
+      const prefsSnap = await getDoc(doc(db, "users", ownerId, "prefs", "alerts"));
+      const alertPrefs = prefsSnap.exists() ? prefsSnap.data() : {};
+
+      for (const t of allCarTasks) {
+        const carsRemaining = t.nextCarsDue - newCarsCount;
+
+        if (newCarsCount >= t.nextCarsDue) {
+          await updateDoc(doc(db, "locations", locId, "tasks", t.id), {
+            due: new Date().toISOString().split("T")[0],
+            updatedAt: new Date().toISOString(),
+          });
+          // Notify if enabled
+          if (alertPrefs.carRecurrenceDueAlert !== false) {
+            try {
+              const createNotif = httpsCallable(functions, "createNotification");
+              await createNotif({ userId: ownerId, type: "car_recurrence_due", title: "Task Due: " + t.title, body: eqDoc.data().name + " has reached " + newCarsCount.toLocaleString() + " cars. " + t.title + " is now due.", locationId: locId, taskId: t.id });
+            } catch(e) {}
+          }
+        }
+
+        // Warning notification
+        const warningThreshold = alertPrefs.carRecurrenceWarningCars || 300;
+        if (alertPrefs.carRecurrenceWarningAlert && carsRemaining > 0 && carsRemaining <= warningThreshold) {
+          try {
+            const createNotif = httpsCallable(functions, "createNotification");
+            await createNotif({ userId: ownerId, type: "car_recurrence_warning", title: "Upcoming: " + t.title, body: eqDoc.data().name + " is " + carsRemaining.toLocaleString() + " cars away from " + t.title + ".", locationId: locId, taskId: t.id });
+          } catch(e) {}
+        }
       }
     }
 
@@ -5589,6 +5614,9 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     sensorPushAlert: true,
     chemLevelAlert: true,
     shellyAlert: true,
+    carRecurrenceDueAlert: true,
+    carRecurrenceWarningAlert: false,
+    carRecurrenceWarningCars: 300,
   };
 
   useEffect(() => {
@@ -5796,6 +5824,25 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Car Recurrence Alerts */}
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Equipment Car Count Alerts</div>
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Get notified when car-based recurring tasks are due or approaching</div>
+        <Row label="Task due alert" desc="Notify when a car-recurrence task becomes due" k="carRecurrenceDueAlert" />
+        <Row label="Upcoming task warning" desc="Notify when a task is approaching its car count threshold" k="carRecurrenceWarningAlert" />
+        {prefs.carRecurrenceWarningAlert && (
+          <div style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 16, marginTop: -8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Warn me when within this many cars:</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input type="number" min="50" max="2000" value={prefs.carRecurrenceWarningCars || 300}
+                onChange={e => update("carRecurrenceWarningCars", parseInt(e.target.value) || 300)}
+                style={{ width: 100, padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 14, fontWeight: 700, outline: "none", color: "#111827" }} />
+              <span style={{ fontSize: 13, color: "#6b7280" }}>cars remaining</span>
+            </div>
           </div>
         )}
       </div>

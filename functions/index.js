@@ -816,15 +816,58 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     // Check if any car-recurrence tasks for this equipment are now due
     try {
       const tasksSnap = await db.collection("locations").doc(foundLocId).collection("tasks").get();
-      const carTasks = tasksSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(t => t.equipmentId === foundEqId && t.nextCarsDue && t.status !== "done" && newCarsCount >= t.nextCarsDue);
-      for (const t of carTasks) {
-        await db.collection("locations").doc(foundLocId).collection("tasks").doc(t.id).update({
-          due: dateStr,
-          updatedAt: new Date().toISOString(),
-        });
-        console.log("Car recurrence triggered for task", t.id, "at", newCarsCount, "cars");
+      const allCarTasks = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Get location owner to notify
+      const locDoc = await db.collection("locations").doc(foundLocId).get();
+      const ownerId = locDoc.exists ? locDoc.data().ownerId : null;
+
+      // Get owner prefs for car recurrence notifications
+      let ownerPrefs = {};
+      if (ownerId) {
+        const prefsSnap = await db.collection("users").doc(ownerId).collection("prefs").doc("alerts").get();
+        if (prefsSnap.exists) ownerPrefs = prefsSnap.data();
+      }
+
+      for (const t of allCarTasks.filter(t => t.equipmentId === foundEqId && t.nextCarsDue && t.status !== "done")) {
+        const carsRemaining = t.nextCarsDue - newCarsCount;
+
+        // Task is now due
+        if (newCarsCount >= t.nextCarsDue) {
+          await db.collection("locations").doc(foundLocId).collection("tasks").doc(t.id).update({
+            due: dateStr, updatedAt: new Date().toISOString(),
+          });
+          console.log("Car recurrence triggered for task", t.id, "at", newCarsCount, "cars");
+
+          // Notify if enabled
+          if (ownerId && ownerPrefs.carRecurrenceDueAlert !== false) {
+            const eqDoc = await db.collection("locations").doc(foundLocId).collection("equipment").doc(foundEqId).get();
+            const eqName = eqDoc.exists ? eqDoc.data().name : "Equipment";
+            const notifId = "notif" + Date.now() + t.id;
+            await db.collection("users").doc(ownerId).collection("notifications").doc(notifId).set({
+              id: notifId, type: "car_recurrence_due",
+              title: "Task Due: " + t.title,
+              body: eqName + " has reached " + newCarsCount.toLocaleString() + " cars. " + t.title + " is now due.",
+              locationId: foundLocId, taskId: t.id,
+              createdAt: new Date().toISOString(), read: false,
+            });
+          }
+        }
+
+        // Warning notification (approaching threshold)
+        const warningThreshold = ownerPrefs.carRecurrenceWarningCars || 300;
+        if (ownerPrefs.carRecurrenceWarningAlert && carsRemaining > 0 && carsRemaining <= warningThreshold && carsRemaining > 0) {
+          const eqDoc = await db.collection("locations").doc(foundLocId).collection("equipment").doc(foundEqId).get();
+          const eqName = eqDoc.exists ? eqDoc.data().name : "Equipment";
+          const warnId = "warn" + Date.now() + t.id;
+          await db.collection("users").doc(ownerId).collection("notifications").doc(warnId).set({
+            id: warnId, type: "car_recurrence_warning",
+            title: "Upcoming: " + t.title,
+            body: eqName + " is " + carsRemaining.toLocaleString() + " cars away from " + t.title + ".",
+            locationId: foundLocId, taskId: t.id,
+            createdAt: new Date().toISOString(), read: false,
+          });
+        }
       }
     } catch(e) { console.log("Car recurrence check error:", e.message); }
 
