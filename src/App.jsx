@@ -481,7 +481,7 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
                 <button onClick={handleSignup} disabled={loading} style={{ width: "100%", background: "#1a3352", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
                   {loading ? "Creating account..." : "Create Account"}
                 </button>
-                <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#9ca3af" }}>By creating an account you agree to our terms of service.</div>
+                <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#9ca3af" }}>By creating an account you agree to our <a href="/terms.html" target="_blank" style={{ color: "#0ea5e9", textDecoration: "underline" }}>Terms of Service</a>.</div>
                 <div style={{ textAlign: "center", marginTop: 8, fontSize: 13, color: "#9ca3af" }}>
                   Already have an account?{" "}
                   <span onClick={() => setTab("login")} style={{ color: "#1a3352", fontWeight: 600, cursor: "pointer" }}>Sign in</span>
