@@ -204,8 +204,14 @@ if (fu) {
 let profile = DEMO_PROFILES[fu.email] || { name: fu.email, role: "attendant", locationId: "loc1", color: "#6366f1" };
 try {
 const snap = await getDoc(doc(db, "users", fu.uid));
-if (snap.exists()) profile = snap.data();
-else await setDoc(doc(db, "users", fu.uid), { ...profile, email: fu.email });
+if (snap.exists()) {
+  profile = snap.data();
+  // Migrate existing account creators from manager to owner
+  if (profile.role === "manager" && !profile.isTeamMember) {
+    await updateDoc(doc(db, "users", fu.uid), { role: "owner" });
+    profile = { ...profile, role: "owner" };
+  }
+} else await setDoc(doc(db, "users", fu.uid), { ...profile, email: fu.email });
 } catch (e) {}
 setUser({ uid: fu.uid, email: fu.email, ...profile });
 } else {
@@ -362,7 +368,7 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
           createdAt: new Date().toISOString()
         });
         await setDoc(doc(db, "users", uid), {
-          uid, email, name, role: "manager", locationId: locId,
+          uid, email, name, role: "owner", locationId: locId,
           bizName, color: "#6366f1", createdAt: new Date().toISOString()
         });
       }
@@ -506,7 +512,7 @@ const isMobile = useIsMobile();
     document.addEventListener('focusin', handleFocus);
     return () => document.removeEventListener('focusin', handleFocus);
   }, [isMobile]);
-const isManager = user?.role === "manager";
+const isManager = user?.role === "manager" || user?.role === "owner";
 const locs = isManager ? locations : locations.filter(l => l.id === user?.locationId);
 const isTechnician = user?.role === "technician";
 const nav = [
@@ -514,7 +520,7 @@ const nav = [
     ...(isManager ? [{ id: "alerts", label: "Notifications" }] : []),
 ...(isManager ? [{ id: "calendar", label: "Calendar" }] : []),
     ...(!isTechnician ? [{ id: "carcounts", label: "Car Counts" }] : []),
-...(!isTechnician ? [{ id: "timeclock", label: "Time Clock" }] : []),
+...(!isTechnician && (user?.role === "owner" || user?.role !== "manager" || user?.payrollAccess) ? [{ id: "timeclock", label: "Time Clock" }] : []),
 { id: "tasks",      label: "Tasks"      },
 { id: "inventory",  label: "Inventory"  },
 { id: "equipment",  label: "Equipment"  },
@@ -1328,7 +1334,7 @@ return (
 }} style={{ background: task.type === "inspection" && task.status !== "done" ? "#15803d" : btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
   {task.type === "inspection" && task.status !== "done" ? "Inspect" : nextLabel}
 </button>
-{user?.role === "manager" && task.status === "done" && !task.archived && (
+{(user?.role === "manager" || user?.role === "owner") && task.status === "done" && !task.archived && (
   <button onClick={async (e) => {
     e.stopPropagation();
     await updateDoc(doc(db, "locations", locId, "tasks", task.id), { archived: true, archivedAt: new Date().toISOString() });
@@ -1457,7 +1463,7 @@ const [fCat, setFC] = useState("all");
 const [inspectionTask, setInspectionTask] = useState(null);
 const [showArchived, setShowArchived] = useState(false);
 const [showHistory, setShowHistory] = useState(false);
-const isManager = user?.role === "manager";
+const isManager = user?.role === "manager" || user?.role === "owner";
 const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
 const isTech = user?.role === "technician";
@@ -1868,7 +1874,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                             {h.type === "inspection" && <span style={{ color: h.failCount > 0 ? "#dc2626" : (h.monitorCount > 0 ? "#d97706" : "#15803d"), fontWeight: 600 }}>
                               {h.failCount > 0 ? h.failCount + " failed" : h.monitorCount > 0 ? h.monitorCount + " to monitor" : "All passed"}
                             </span>}
-                            {user?.role === "manager" && h.type !== "task" && (
+                            {(user?.role === "manager" || user?.role === "owner") && h.type !== "task" && (
                               <button onClick={async (e) => {
                                 e.stopPropagation();
                                 if (!window.confirm("Delete this history entry?")) return;
@@ -2698,7 +2704,7 @@ function TimeClock({ locId, locationName, allLocations }) {
   const [payrollPeriodStart, setPayrollPeriodStart] = useState("");
   const [showReport, setShowReport] = useState(false);
 
-  const isManager = user?.role === "manager" || !user?.isTeamMember;
+  const isManager = user?.role === "manager" || user?.role === "owner" || !user?.isTeamMember;
   const today = new Date().toISOString().split("T")[0];
   const clockDocId = user?.uid + "_" + today;
 
@@ -2850,7 +2856,7 @@ function TimeClock({ locId, locationName, allLocations }) {
         <button style={tabStyle("clock")} onClick={() => setActiveTab("clock")}>My Clock</button>
         <button style={tabStyle("history")} onClick={() => setActiveTab("history")}>My History</button>
         {isManager && <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>Team</button>}
-        {isManager && <button style={tabStyle("payroll")} onClick={() => setActiveTab("payroll")}>Payroll</button>}
+        {(user?.role === "owner" || (isManager && user?.payrollAccess)) && <button style={tabStyle("payroll")} onClick={() => setActiveTab("payroll")}>Payroll</button>}
       </div>
 
       {activeTab === "clock" && (
@@ -2990,7 +2996,7 @@ function TimeClock({ locId, locationName, allLocations }) {
         </div>
       )}
 
-      {activeTab === "payroll" && isManager && (
+      {activeTab === "payroll" && (user?.role === "owner" || (isManager && user?.payrollAccess)) && (
         <div>
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 16 }}>Payroll Settings</div>
@@ -4847,7 +4853,7 @@ return (
     {profileSaved ? "Saved!" : "Save Profile"}
   </button>
 </div>
-{user?.role === "manager" && <TeamMembers user={user} locations={locations} />}
+{(user?.role === "manager" || user?.role === "owner") && <TeamMembers user={user} locations={locations} />}
 {saved && (
 <div style={{ background: "#d1fae5", color: "#065f46", padding: "10px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
 Changes saved!
@@ -4903,7 +4909,15 @@ Changes saved!
   </div>
 ))}
 </div>
-<button onClick={() => startEdit(loc)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+<div style={{ display: "flex", gap: 8 }}>
+  <button onClick={() => startEdit(loc)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+  {user?.role === "owner" && locations.length > 1 && (
+    <button onClick={async () => {
+      if (!window.confirm("Delete " + loc.name + "? This cannot be undone.")) return;
+      await deleteDoc(doc(db, "locations", loc.id));
+    }} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+  )}
+</div>
 </div>
 )}
 </div>
@@ -5147,6 +5161,7 @@ function TeamMembers({ user, locations }) {
   const [editingMember, setEditingMember] = useState(null);
   const [editLocs, setEditLocs] = useState([]);
   const [editRole, setEditRole] = useState("attendant");
+  const [editPayrollAccess, setEditPayrollAccess] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [inviteRole, setInviteRole] = useState("attendant");
   const [inviteLocs, setInviteLocs] = useState([]);
@@ -5222,9 +5237,8 @@ function TeamMembers({ user, locations }) {
             <select value={editRole} onChange={e => setEditRole(e.target.value)}
               style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#111827", marginTop: 6 }}>
               <option value="attendant">Attendant — Limited access</option>
-              <option value="manager">Manager — Full access</option>
               <option value="technician">Technician — Equipment & tasks</option>
-<option value="technician">Technician — Equipment & tasks</option>
+              {user?.role === "owner" && <option value="manager">Manager — Full access</option>}
             </select>
           </div>
 
@@ -5245,13 +5259,28 @@ function TeamMembers({ user, locations }) {
               </label>
             ))}
           </div>
+          {(editRole === "manager" && user?.role === "owner") && (
+            <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Payroll Access</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Allow this manager to view and manage payroll</div>
+                </div>
+                <div onClick={() => setEditPayrollAccess(p => !p)}
+                  style={{ width: 44, height: 24, borderRadius: 12, background: editPayrollAccess ? "#1a3352" : "#e5e7eb", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                  <div style={{ position: "absolute", top: 2, left: editPayrollAccess ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={async () => {
               setSavingEdit(true);
-              await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, updatedAt: new Date().toISOString() });
+              const payrollAccess = editRole === "manager" ? editPayrollAccess : false;
+              await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, payrollAccess, updatedAt: new Date().toISOString() });
               setSavingEdit(false);
               setEditingMember(null);
-              setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole } : m));
+              setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess } : m));
             }} disabled={savingEdit}
               style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {savingEdit ? "Saving..." : "Save Changes"}
@@ -5267,12 +5296,22 @@ function TeamMembers({ user, locations }) {
           {members.map(m => (
             <div key={m.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f9fafb", borderRadius: 8, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{m.name || m.email}</div>
-                <div style={{ fontSize: 11, color: "#9ca3af" }}>{m.email} — {m.role}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{m.name || m.email}</div>
+                  {m.role === "owner" && <span style={{ fontSize: 10, fontWeight: 700, background: "#1a3352", color: "#fff", borderRadius: 4, padding: "1px 6px" }}>OWNER</span>}
+                </div>
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                  {m.email} — <span style={{ textTransform: "capitalize" }}>{m.role}</span>
+                  {m.payrollAccess ? " · Payroll access" : ""}
+                </div>
               </div>
-              <button onClick={() => handleRemove(m.uid, m.name || m.email)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
-              <button onClick={() => { setEditingMember(m); setEditLocs(m.allowedLocations || []); setEditRole(m.role || "attendant"); }}
-                style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit Access</button>
+              {m.role !== "owner" && (
+                <button onClick={() => handleRemove(m.uid, m.name || m.email)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+              )}
+              {m.role !== "owner" && (
+                <button onClick={() => { setEditingMember(m); setEditLocs(m.allowedLocations || []); setEditRole(m.role || "attendant"); setEditPayrollAccess(m.payrollAccess || false); }}
+                  style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit Access</button>
+              )}
             </div>
           ))}
         </div>
@@ -5317,7 +5356,8 @@ function TeamMembers({ user, locations }) {
           <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Role</label>
           <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inp, marginTop: 6 }}>
             <option value="attendant">Attendant - Limited access</option>
-            <option value="manager">Manager - Full access</option>
+            <option value="technician">Technician - Equipment access</option>
+            {user?.role === "owner" && <option value="manager">Manager - Full access</option>}
           </select>
         </div>
         <div style={{ marginBottom: 14 }}>
@@ -5459,6 +5499,33 @@ function SetupWizard({ user, logout }) {
           )}
         </div>
       </div>
+
+      {/* Owner-only danger zone */}
+      {user?.role === "owner" && (
+        <div style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 12, padding: 20, marginBottom: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#dc2626", marginBottom: 4 }}>Danger Zone</div>
+          <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>These actions are irreversible. Only the account owner can perform them.</div>
+          <button onClick={async () => {
+            const confirmed = window.confirm("Are you sure you want to delete your entire WashLevel account? This will permanently delete all locations, tasks, equipment, and data. This cannot be undone.");
+            if (!confirmed) return;
+            const double = window.confirm("This is your final confirmation. Delete everything?");
+            if (!double) return;
+            try {
+              // Delete all locations
+              for (const loc of locations) {
+                await deleteDoc(doc(db, "locations", loc.id));
+              }
+              // Delete user doc
+              await deleteDoc(doc(db, "users", user.uid));
+              alert("Account deleted. You will be signed out.");
+              window.location.reload();
+            } catch(e) { alert("Error: " + e.message); }
+          }} style={{ background: "#fee2e2", color: "#dc2626", border: "1.5px solid #fca5a5", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Delete Account
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }
