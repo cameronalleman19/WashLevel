@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    // Fetch the calling user's Firestore profile
+    function callerProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Fetch the ownerId stored on a location document
+    function locationOwnerId(locId) {
+      return get(/databases/$(database)/documents/locations/$(locId)).data.ownerId;
+    }
+
+    // True if the caller owns the given location (by its ownerId value)
+    function isOwner(ownerId) {
+      return request.auth.uid == ownerId;
+    }
+
+    // True if the caller is a team member assigned to this location
+    function isAllowedTeamMember(locId, ownerId) {
+      let p = callerProfile();
+      return p.isTeamMember == true
+        && p.ownerId == ownerId
+        && p.allowedLocations != null
+        && locId in p.allowedLocations;
+    }
+
+    // Combined: owner or allowed team member for a location
+    function hasLocationAccess(locId) {
+      let ownerId = locationOwnerId(locId);
+      return isOwner(ownerId) || isAllowedTeamMember(locId, ownerId);
+    }
+
+    // ── Users ────────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Own profile, or the owner reading a team member's profile
+      allow read: if request.auth != null
+        && (request.auth.uid == userId
+            || resource.data.ownerId == request.auth.uid);
+
+      // Only the user themselves can write their own profile
+      allow write: if request.auth != null
+        && request.auth.uid == userId;
+
+      // Private subcollections: integrations, prefs, notifications
+      match /{sub=**} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == userId;
+      }
+    }
+
+    // ── Locations ────────────────────────────────────────────────────────────
+    match /locations/{locId} {
+      // Create: the new location's ownerId must match the creator's uid
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+
+      // Read: owner or an allowed team member
+      allow read: if request.auth != null
+        && (isOwner(resource.data.ownerId)
+            || isAllowedTeamMember(locId, resource.data.ownerId));
+
+      // Update/delete: owner only
+      allow update, delete: if request.auth != null
+        && isOwner(resource.data.ownerId);
+
+      // Subcollections: tasks, equipment, inventory, shellyReadings, sensorReadings, daySummaries, etc.
+      match /{sub=**} {
+        allow read, write: if request.auth != null && hasLocationAccess(locId);
+      }
+    }
+
+    // ── Sensors (flat top-level collection, keyed by locId) ──────────────────
+    match /sensors/{locId} {
+      allow read: if request.auth != null && hasLocationAccess(locId);
+      // Write restricted to owner — only the owner's browser polls SensorPush and writes here
+      allow write: if request.auth != null && isOwner(locationOwnerId(locId));
+    }
+
+    // ── Time Clock (top-level, doc ID = uid_date) ─────────────────────────────
+    match /timeclock/{entryId} {
+      // Employees: create and manage their own entries
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+
+      // Managers: read and edit entries from their team members
+      allow read, update: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(resource.data.uid)).data.ownerId == request.auth.uid;
+    }
+
+    // ── Invites ───────────────────────────────────────────────────────────────
+    match /invites/{inviteId} {
+      // Owner creates and manages their own invites
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+
+      // Invited user can read and accept their own invite (matched by auth email)
+      allow read, update: if request.auth != null
+        && resource.data.email == request.auth.token.email;
+    }
+
+  }
+}

@@ -2016,7 +2016,7 @@ function getShellyCapabilities(typeCode) {
   return { inputs: 1, relays: 1, power: false, distance: false, label: "Relay" };
 }
 
-function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, initialTab }) {
+function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, initialTab, onTabChange }) {
   const user = { uid };
   const s = sensors || {};
   const [spSensors, setSpSensors] = useState([]);
@@ -2347,9 +2347,9 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setActiveTab("sensorpush")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "sensorpush" ? "#0f1f35" : "#f1f5f9", color: activeTab === "sensorpush" ? "#fff" : "#64748b" }}>SensorPush</button>
-        <button onClick={() => setActiveTab("chemlevel")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "chemlevel" ? "#0f1f35" : "#f1f5f9", color: activeTab === "chemlevel" ? "#fff" : "#64748b" }}>ChemLevel</button>
-        <button onClick={() => setActiveTab("shelly")} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "shelly" ? "#0f1f35" : "#f1f5f9", color: activeTab === "shelly" ? "#fff" : "#64748b" }}>Shelly</button>
+        <button onClick={() => { setActiveTab("sensorpush"); onTabChange?.("sensorpush"); }} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "sensorpush" ? "#0f1f35" : "#f1f5f9", color: activeTab === "sensorpush" ? "#fff" : "#64748b" }}>SensorPush</button>
+        <button onClick={() => { setActiveTab("chemlevel"); onTabChange?.("chemlevel"); }} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "chemlevel" ? "#0f1f35" : "#f1f5f9", color: activeTab === "chemlevel" ? "#fff" : "#64748b" }}>ChemLevel</button>
+        <button onClick={() => { setActiveTab("shelly"); onTabChange?.("shelly"); }} style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: activeTab === "shelly" ? "#0f1f35" : "#f1f5f9", color: activeTab === "shelly" ? "#fff" : "#64748b" }}>Shelly</button>
       </div>
 
       {activeTab === "chemlevel" && (
@@ -2403,7 +2403,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
           )}
           {chemSensors.length === 0 && !showAddChem && (
             <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📡</div>
+              <div style={{ fontSize: 32, marginBottom: 8 }}></div>
               <div style={{ fontWeight: 600, fontSize: 15, color: "#334155", marginBottom: 4 }}>No ChemLevel sensors yet</div>
               <div style={{ fontSize: 13 }}>Add a sensor above then upload firmware to your ESP32</div>
               <div style={{ marginTop: 16, background: "#f4f6f8", borderRadius: 10, padding: 16, textAlign: "left", fontFamily: "monospace", fontSize: 12, color: "#334155" }}>
@@ -5982,13 +5982,22 @@ const [locations, setLocations] = useState([]);
 const [tasks, setTasks] = useState({});
 const [sensors, setSensors] = useState({});
 const [equipment, setEquipment] = useState({});
-const [view, setView] = useState("overview");
-const [locId, setLocId] = useState(null);
+const [view, setView] = useState(() => new URLSearchParams(window.location.search).get("view") || "overview");
+const [locId, setLocId] = useState(() => new URLSearchParams(window.location.search).get("loc") || null);
 const [ready, setReady] = useState(false);
 const [showAddTask, setShowAddTask] = useState(false);
   const [editTask, setEditTask] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [sensorTab, setSensorTab] = useState("sensorpush");
+  const [sensorTab, setSensorTab] = useState(() => new URLSearchParams(window.location.search).get("tab") || "sensorpush");
+
+  useEffect(() => {
+    if (!locId) return;
+    const params = new URLSearchParams();
+    params.set("view", view);
+    params.set("loc", locId);
+    if (view === "sensors") params.set("tab", sensorTab);
+    window.history.replaceState(null, "", "?" + params.toString());
+  }, [view, locId, sensorTab]);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -6129,7 +6138,7 @@ return (
 )}
 {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
         {view === "carcounts" && <CarCounts locations={locations} />}
-{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} locations={locations} initialTab={sensorTab} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} locations={locations} initialTab={sensorTab} onTabChange={setSensorTab} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); setEditTask(null); }} onAdd={() => {}} preset={taskPreset} user={user} editTask={editTask} />}
