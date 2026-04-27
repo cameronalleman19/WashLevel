@@ -703,7 +703,15 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     console.log("Full email object:", JSON.stringify(emailFull).slice(0, 2000));
     const toFull = toAddress;
     const body = emailFull?.text || emailFull?.html || "";
-    
+    const subject = emailFull?.subject || "";
+
+    // Skip WashWorld (and any other machine) weekly/monthly summary emails — only process daily totals
+    if (/weekly|monthly/i.test(subject) || /\b(week(?:ly)?|month(?:ly)?)\s+(total|report|summary)\b/i.test(body)) {
+      console.log("Skipping weekly/monthly summary, subject:", subject);
+      res.status(200).send("Skipped weekly/monthly");
+      return;
+    }
+
     // Extract location code from wash4821@washlevel.com
     const match = toFull.match(/([a-z]+\d+)@washlevel\.com/i);
     if (!match) { console.log("No location code in:", toFull); res.status(200).send("No location code"); return; }
@@ -712,6 +720,7 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     
     // Parse car count - supports multiple equipment email formats
     let count = null;
+    let extraData = {}; // Additional parsed fields (packages, revenue) stored alongside car count
 
     // Format 1: TOTAL = 16148: TODAY = 6 (Dencar)
     const todayMatch = body.match(/TODAY\s*=\s*(\d+)/i);
@@ -735,13 +744,38 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       }
     }
 
-    // Format 4: TOTAL = 16 fallback
+    // Format 4: PDQ Laserwash Daily Sales Report — "Total Washed = 92"
+    // Must be checked before the generic TOTAL= fallback, which would otherwise
+    // match the revenue line "Total = 882.000" and produce a wrong count.
     if (count === null) {
-      const totalMatch = body.match(/TOTAL\s*=\s*(\d+)/i);
+      const lwMatch = body.match(/Total\s+Washed\s*=\s*(\d+)/i);
+      if (lwMatch) {
+        count = parseInt(lwMatch[1]);
+        // Parse package breakdown for future reporting
+        const packages = {};
+        for (const m of body.matchAll(/Package\s+(\d+)\s+(\d+)%/gi)) {
+          packages[`pkg${m[1]}`] = { pct: parseInt(m[2]) };
+        }
+        for (const m of body.matchAll(/Package\s+(\d+):\s+(\d+)\s+x\s+([\d.]+)\s+=\s+([\d.]+)/gi)) {
+          const k = `pkg${m[1]}`;
+          packages[k] = { ...packages[k], count: parseInt(m[2]), price: parseFloat(m[3]), subtotal: parseFloat(m[4]) };
+        }
+        // "Total = 882.000" at end of cost breakdown section
+        const revMatch = body.match(/^\s*Total\s*=\s*([\d.]+)\s*$/mi);
+        const revenue = revMatch ? parseFloat(revMatch[1]) : null;
+        if (Object.keys(packages).length > 0 || revenue !== null) {
+          extraData = { packages, revenue };
+        }
+      }
+    }
+
+    // Format 5: TOTAL = 16 fallback (integer only — avoids matching PDQ revenue "Total = 882.000")
+    if (count === null) {
+      const totalMatch = body.match(/TOTAL\s*=\s*(\d+)(?![.\d])/i);
       if (totalMatch) count = parseInt(totalMatch[1]);
     }
 
-    // Format 5: Total Washes: 6
+    // Format 6: Total Washes: 6
     if (count === null) {
       const washMatch = body.match(/total\s*washes?\s*[:\-=]?\s*(\d+)/i);
       if (washMatch) count = parseInt(washMatch[1]);
@@ -757,14 +791,14 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     const locsSnap = await db.collection("locations").where("emailCode", "==", locationCode).get();
 
     if (!locsSnap.empty) {
-      // Location-level match — existing behavior unchanged
       const locId = locsSnap.docs[0].id;
       const summaryRef = db.collection("locations").doc(locId).collection("daySummaries").doc(dateStr);
       const existing = await summaryRef.get();
       const existingCount = existing.exists ? (existing.data().carsWashed || 0) : 0;
       const newCount = existingCount + count;
       await summaryRef.set({
-        carsWashed: newCount, date: dateStr, source: "email", updatedAt: new Date().toISOString()
+        carsWashed: newCount, date: dateStr, source: "email", updatedAt: new Date().toISOString(),
+        ...(Object.keys(extraData).length ? extraData : {}),
       }, { merge: true });
       console.log("Saved", count, "cars for location", locId, "on", dateStr);
       res.status(200).send("OK");
@@ -792,7 +826,11 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       return;
     }
 
-    // Write to equipment-specific day summary
+    // Write to equipment-specific day summary.
+    // Use update() for existing docs — Admin SDK set() with dotted string keys creates literal
+    // field names (e.g. "equipment.id.carsWashed") instead of nested objects, so the frontend's
+    // data.equipment[id] read would always come back undefined. update() interprets dotted keys
+    // as nested paths correctly.
     const eqSummaryRef = db.collection("locations").doc(foundLocId)
       .collection("daySummaries").doc(dateStr);
     const existingEqSummary = await eqSummaryRef.get();
@@ -800,21 +838,32 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       ? (existingEqSummary.data().equipment?.[foundEqId]?.carsWashed || 0)
       : 0;
     const newEqCount = existingEqCars + count;
-
-    await eqSummaryRef.set({
-      [`equipment.${foundEqId}.carsWashed`]: newEqCount,
-      [`equipment.${foundEqId}.date`]: dateStr,
-      [`equipment.${foundEqId}.source`]: "email",
-      [`equipment.${foundEqId}.updatedAt`]: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-
-    // Also add to location total
     const existingLocCount = existingEqSummary.exists ? (existingEqSummary.data().carsWashed || 0) : 0;
     const newLocCount = existingLocCount + count;
-    await eqSummaryRef.set({
-      carsWashed: newLocCount, date: dateStr, updatedAt: new Date().toISOString()
-    }, { merge: true });
+    const nowStr = new Date().toISOString();
+
+    if (existingEqSummary.exists) {
+      await eqSummaryRef.update({
+        [`equipment.${foundEqId}.carsWashed`]: newEqCount,
+        [`equipment.${foundEqId}.date`]: dateStr,
+        [`equipment.${foundEqId}.source`]: "email",
+        [`equipment.${foundEqId}.updatedAt`]: nowStr,
+        carsWashed: newLocCount,
+        date: dateStr,
+        updatedAt: nowStr,
+        ...(Object.keys(extraData).length ? extraData : {}),
+      });
+    } else {
+      await eqSummaryRef.set({
+        equipment: {
+          [foundEqId]: { carsWashed: newEqCount, date: dateStr, source: "email", updatedAt: nowStr },
+        },
+        carsWashed: newLocCount,
+        date: dateStr,
+        updatedAt: nowStr,
+        ...(Object.keys(extraData).length ? extraData : {}),
+      });
+    }
 
     // Update equipment carsCount lifetime total
     const eqRef = db.collection("locations").doc(foundLocId).collection("equipment").doc(foundEqId);

@@ -5302,13 +5302,24 @@ function CarCounts({ locations }) {
     const val = parseInt(eqCounts[key]) || 0;
     setSaving(p => ({ ...p, [key]: true }));
 
-    // Write equipment-specific count
-    await setDoc(doc(db, "locations", locId, "daySummaries", selectedDate), {
-      [`equipment.${eqId}.carsWashed`]: val,
-      [`equipment.${eqId}.date`]: selectedDate,
-      [`equipment.${eqId}.updatedAt`]: new Date().toISOString(),
-      date: selectedDate, updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    // Write equipment-specific count.
+    // setDoc with dotted string keys creates literal field names, not nested paths — use updateDoc
+    // (which interprets dotted keys as nested paths) so data.equipment[eqId] reads correctly.
+    const summaryRef = doc(db, "locations", locId, "daySummaries", selectedDate);
+    const summarySnap = await getDoc(summaryRef);
+    if (summarySnap.exists()) {
+      await updateDoc(summaryRef, {
+        [`equipment.${eqId}.carsWashed`]: val,
+        [`equipment.${eqId}.date`]: selectedDate,
+        [`equipment.${eqId}.updatedAt`]: new Date().toISOString(),
+        date: selectedDate, updatedAt: new Date().toISOString(),
+      });
+    } else {
+      await setDoc(summaryRef, {
+        equipment: { [eqId]: { carsWashed: val, date: selectedDate, updatedAt: new Date().toISOString() } },
+        date: selectedDate, updatedAt: new Date().toISOString(),
+      });
+    }
 
     // Recalculate location total from all equipment counts
     const snap = await getDoc(doc(db, "locations", locId, "daySummaries", selectedDate));
