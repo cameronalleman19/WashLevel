@@ -17,6 +17,7 @@ getFirestore,
 collection,
 doc,
 setDoc,
+addDoc,
 getDoc,
 getDocs,
 updateDoc,
@@ -25,6 +26,7 @@ onSnapshot,
 query,
 where,
 orderBy,
+limit,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -41,6 +43,9 @@ const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 const functions = getFunctions(firebaseApp);
 const storage = getStorage(firebaseApp);
+
+const writeNotif = (userId, payload) =>
+  addDoc(collection(db, "users", userId, "notifications"), { ...payload, read: false, createdAt: new Date().toISOString() });
 
 // Reusable file upload helper
 const uploadFile = async (file, path) => {
@@ -380,7 +385,12 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
         });
       }
     } catch(e) {
-      setError(e.message?.includes("email-already-in-use") ? "An account with this email already exists." : e.message || "Signup failed. Please try again.");
+      if (e.message?.includes("email-already-in-use")) {
+        setError("You already have a WashLevel account with this email. Sign in instead — you'll be prompted to accept the invite after logging in.");
+        setTab("login");
+      } else {
+        setError(e.message || "Signup failed. Please try again.");
+      }
     }
     setLoading(false);
   };
@@ -520,7 +530,7 @@ const isMobile = useIsMobile();
     return () => document.removeEventListener('focusin', handleFocus);
   }, [isMobile]);
 const isManager = user?.role === "manager" || user?.role === "owner";
-const locs = isManager ? locations : locations.filter(l => l.id === user?.locationId);
+const locs = locations; // Dashboard already filters to allowedLocations for team members
 const isTechnician = user?.role === "technician";
 const nav = [
 { id: "overview",   label: "Overview"   },
@@ -597,8 +607,289 @@ boxShadow: open ? "6px 0 32px rgba(0,0,0,0.3)" : "none"
 );
 }
 
+// Semicircle analog pressure gauge. Arc runs from 8-o'clock to 4-o'clock (240°),
+// zones: green 0-60, yellow 60-100, red 100-150 PSI.
+function PressureGauge({ psi, size = 120, max = 150, showLabels = false }) {
+  const R = size * 0.38;
+  const CX = size / 2;
+  const CY = size * 0.46;
+  const C = 2 * Math.PI * R;
+  const arcLen = C * (240 / 360);
+  const sw = size * 0.075;
+  const rot = `rotate(150 ${CX} ${CY})`;
+
+  const gLen = arcLen * (60 / max);
+  const yLen = arcLen * (40 / max);
+  const rLen = arcLen * (50 / max);
+
+  const v = Math.max(0, Math.min(max, psi ?? 0));
+  const aDeg = 210 - (v / max) * 240;
+  const aRad = aDeg * Math.PI / 180;
+  const nR = R * 0.72;
+  const svgH = Math.round(size * 0.72);
+
+  return (
+    <svg width={size} height={svgH} viewBox={`0 0 ${size} ${svgH}`} style={{ display: "block" }}>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e2e8f0" strokeWidth={sw}
+        strokeDasharray={`${arcLen} ${C - arcLen}`} transform={rot} />
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#22c55e" strokeWidth={sw}
+        strokeDasharray={`${gLen} ${C - gLen}`} strokeDashoffset={C} transform={rot} />
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f59e0b" strokeWidth={sw}
+        strokeDasharray={`${yLen} ${C - yLen}`} strokeDashoffset={C - gLen} transform={rot} />
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#ef4444" strokeWidth={sw}
+        strokeDasharray={`${rLen} ${C - rLen}`} strokeDashoffset={C - gLen - yLen} transform={rot} />
+      <line x1={CX} y1={CY} x2={CX + nR * Math.cos(aRad)} y2={CY - nR * Math.sin(aRad)}
+        stroke="#1a3352" strokeWidth={size * 0.025} strokeLinecap="round" />
+      <circle cx={CX} cy={CY} r={size * 0.042} fill="#1a3352" />
+      {showLabels && (
+        <>
+          <text x={CX - R * 0.9} y={CY + R * 0.65} fontSize={size * 0.085} fill="#94a3b8" textAnchor="middle">0</text>
+          <text x={CX + R * 0.9} y={CY + R * 0.65} fontSize={size * 0.085} fill="#94a3b8" textAnchor="middle">{max}</text>
+        </>
+      )}
+    </svg>
+  );
+}
+
+function PsiChart({ data, height = 130 }) {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+  const [stickyIdx, setStickyIdx] = useState(null);
+  const svgRef = useRef(null);
+
+  if (!data || data.length < 2) {
+    return (
+      <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: 12 }}>
+        No history data yet
+      </div>
+    );
+  }
+  const W = 400, H = 100;
+  const pad = { t: 8, r: 8, b: 20, l: 30 };
+  const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+
+  const vals = data.map(d => parseFloat(d.value) || 0);
+  const rawMin = Math.min(...vals), rawMax = Math.max(...vals);
+  const span = rawMax - rawMin || 10;
+  const minV = Math.max(0, rawMin - span * 0.1);
+  const maxV = Math.min(200, rawMax + span * 0.15);
+
+  const xFor = i => pad.l + (i / (data.length - 1)) * cW;
+  const yFor = v => pad.t + cH - ((v - minV) / (maxV - minV)) * cH;
+
+  const pts = data.map((d, i) => `${xFor(i)},${yFor(parseFloat(d.value) || 0)}`).join(" ");
+  const fillPts = `${xFor(0)},${H - pad.b} ${pts} ${xFor(data.length - 1)},${H - pad.b}`;
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const band = (lo, hi) => {
+    const top = clamp(hi, minV, maxV), bot = clamp(lo, minV, maxV);
+    if (top <= bot) return null;
+    return { y: yFor(top), h: yFor(bot) - yFor(top) };
+  };
+  const green = band(0, 60), yellow = band(60, 100), red = band(100, 150);
+
+  const yStep = maxV <= 60 ? 20 : maxV <= 120 ? 25 : 50;
+  const ticks = [];
+  for (let t = Math.ceil(minV / yStep) * yStep; t <= maxV; t += yStep) ticks.push(t);
+
+  const fmt = ts => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const fmtDate = ts => new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+
+  const getIdxFromEvent = (e) => {
+    if (!svgRef.current || data.length < 2) return null;
+    const rect = svgRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const chartStartPx = (pad.l / W) * rect.width;
+    const chartEndPx = ((W - pad.r) / W) * rect.width;
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left - chartStartPx) / (chartEndPx - chartStartPx)));
+    return Math.round(frac * (data.length - 1));
+  };
+
+  const handlePointerMove = (e) => {
+    const idx = getIdxFromEvent(e);
+    if (idx !== null) setHoveredIdx(idx);
+  };
+
+  const handlePointerLeave = () => setHoveredIdx(null);
+
+  const handleClick = (e) => {
+    const idx = getIdxFromEvent(e);
+    setStickyIdx(prev => (prev === idx ? null : idx));
+  };
+
+  const activeIdx = stickyIdx ?? hoveredIdx;
+  const tooltipPt = activeIdx != null ? data[activeIdx] : null;
+  const tooltipLeftPct = activeIdx != null ? Math.max(8, Math.min(88, Math.round((xFor(activeIdx) / W) * 100))) : null;
+  const tooltipVal = tooltipPt ? parseFloat(tooltipPt.value) : null;
+  const tooltipTs = tooltipPt?.timestamp;
+
+  return (
+    <div style={{ position: "relative", userSelect: "none", touchAction: "pan-y" }}>
+      {tooltipPt && (
+        <div style={{
+          position: "absolute", top: 4, left: `${tooltipLeftPct}%`,
+          transform: "translateX(-50%)",
+          background: "#0f1f35", color: "#fff", borderRadius: 8,
+          padding: "4px 9px", fontSize: 11, fontWeight: 600,
+          whiteSpace: "nowrap", zIndex: 10, pointerEvents: "none",
+          lineHeight: 1.5,
+        }}>
+          {tooltipVal != null ? tooltipVal.toFixed(1) : "--"} PSI
+          <span style={{ fontWeight: 400, opacity: 0.7, marginLeft: 5 }}>
+            {fmtDate(tooltipTs)} {fmt(tooltipTs)}
+          </span>
+        </div>
+      )}
+      <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ display: "block", cursor: "crosshair" }}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+        onClick={handleClick}
+      >
+        {green && <rect x={pad.l} y={green.y} width={cW} height={green.h} fill="#22c55e" opacity={0.08} />}
+        {yellow && <rect x={pad.l} y={yellow.y} width={cW} height={yellow.h} fill="#f59e0b" opacity={0.1} />}
+        {red && <rect x={pad.l} y={red.y} width={cW} height={red.h} fill="#ef4444" opacity={0.08} />}
+        {ticks.map(t => (
+          <g key={t}>
+            <line x1={pad.l} y1={yFor(t)} x2={W - pad.r} y2={yFor(t)} stroke="#e2e8f0" strokeWidth={0.5} />
+            <text x={pad.l - 3} y={yFor(t) + 3} fontSize={7} fill="#94a3b8" textAnchor="end">{t}</text>
+          </g>
+        ))}
+        <polygon points={fillPts} fill="#0ea5e9" opacity={0.07} />
+        <polyline points={pts} fill="none" stroke="#0ea5e9" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+        {activeIdx != null && (
+          <>
+            <line x1={xFor(activeIdx)} y1={pad.t} x2={xFor(activeIdx)} y2={H - pad.b}
+              stroke="#0f1f35" strokeWidth={0.75} strokeDasharray="3 2" opacity={0.35} />
+            <circle cx={xFor(activeIdx)} cy={yFor(parseFloat(data[activeIdx].value) || 0)}
+              r={3} fill="#0ea5e9" stroke="#fff" strokeWidth={1.5} />
+          </>
+        )}
+        <circle cx={xFor(data.length - 1)} cy={yFor(parseFloat(data[data.length - 1].value) || 0)} r={2.5} fill="#0ea5e9" />
+        <text x={pad.l} y={H - 2} fontSize={7} fill="#94a3b8">{fmt(data[0].timestamp)}</text>
+        <text x={W - pad.r} y={H - 2} fontSize={7} fill="#94a3b8" textAnchor="end">{fmt(data[data.length - 1].timestamp)}</text>
+      </svg>
+    </div>
+  );
+}
+
+function SensorDetailModal({ sensor, locId, onClose }) {
+  const [range, setRange] = useState("6h");
+  const [histData, setHistData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [minAlert, setMinAlert] = useState(sensor?.minAlert ?? "");
+  const [maxAlert, setMaxAlert] = useState(sensor?.maxAlert ?? "");
+  const [savingAlerts, setSavingAlerts] = useState(false);
+
+  useEffect(() => {
+    if (!sensor?.id || !locId) return;
+    const hoursMap = { "1h": 1, "6h": 6, "24h": 24, "1w": 168 };
+    const startISO = new Date(Date.now() - hoursMap[range] * 3600000).toISOString();
+    setLoading(true);
+    setHistData([]);
+    getDocs(query(
+      collection(db, "locations", locId, "sensorReadings", sensor.id, "history"),
+      orderBy("timestamp", "desc"),
+      limit(500)
+    )).then(snap => {
+      const pts = snap.docs.map(d => d.data()).filter(d => d.timestamp >= startISO).reverse();
+      setHistData(pts);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [sensor?.id, locId, range]);
+
+  const psi = sensor.lastReading ?? sensor.value ?? null;
+  const updatedAt = sensor.updatedAt ?? sensor.timestamp ?? null;
+  const isPressure = sensor.type === "pressure" || sensor.unit === "PSI";
+
+  const valueColor = psi == null ? "#94a3b8"
+    : psi < 60 ? "#22c55e"
+    : psi < 100 ? "#f59e0b"
+    : "#ef4444";
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 440, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: "#0f1f35" }}>{sensor.name || sensor.sensorId}</div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>ID: {sensor.sensorId || sensor.id} · {sensor.type || "sensor"}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20 }}>
+          {isPressure && <PressureGauge psi={psi} size={190} showLabels />}
+          <div style={{ fontSize: 40, fontWeight: 800, color: valueColor, marginTop: isPressure ? -6 : 0, lineHeight: 1 }}>
+            {psi != null ? (typeof psi === "number" ? psi.toFixed(1) : psi) : "--"}
+          </div>
+          <div style={{ fontSize: 14, color: "#94a3b8", marginTop: 2 }}>{sensor.unit || "PSI"}</div>
+          {updatedAt && (
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+              Updated {new Date(updatedAt).toLocaleTimeString()}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          {[["1h","1H"],["6h","6H"],["24h","24H"],["1w","1W"]].map(([val, label]) => (
+            <button key={val} onClick={() => setRange(val)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", background: range === val ? "#0f1f35" : "#f1f5f9", color: range === val ? "#fff" : "#64748b" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {loading
+          ? <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: 13 }}>Loading…</div>
+          : <PsiChart data={histData} height={130} />
+        }
+
+        <div style={{ marginTop: 20, borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.04em" }}>Alert Thresholds</div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 4 }}>Min Alert ({sensor.unit || "PSI"})</label>
+              <input
+                type="number" value={minAlert} onChange={e => setMinAlert(e.target.value)}
+                placeholder="e.g. 40"
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 4 }}>Max Alert ({sensor.unit || "PSI"})</label>
+              <input
+                type="number" value={maxAlert} onChange={e => setMaxAlert(e.target.value)}
+                placeholder="e.g. 120"
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+          </div>
+          <button
+            disabled={savingAlerts}
+            onClick={async () => {
+              if (!sensor?.id || !locId) return;
+              setSavingAlerts(true);
+              try {
+                await updateDoc(doc(db, "locations", locId, "chemSensors", sensor.id), {
+                  minAlert: minAlert !== "" ? parseFloat(minAlert) : null,
+                  maxAlert: maxAlert !== "" ? parseFloat(maxAlert) : null,
+                });
+              } finally {
+                setSavingAlerts(false);
+              }
+            }}
+            style={{ width: "100%", padding: "9px 0", borderRadius: 10, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#0f1f35", color: "#fff", opacity: savingAlerts ? 0.6 : 1 }}
+          >
+            {savingAlerts ? "Saving…" : "Save Thresholds"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
   const [chemSensors, setChemSensors] = useState([]);
+  const [selectedSensor, setSelectedSensor] = useState(null);
   const [shellyDevices, setShellyDevices] = useState([]);
   const [shellyReadings, setShellyReadings] = useState({});
   const [spSensors, setSpSensors] = useState([]);
@@ -793,6 +1084,8 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
         </div>
       )}
 
+      {selectedSensor && <SensorDetailModal sensor={selectedSensor} locId={locId} onClose={() => setSelectedSensor(null)} />}
+
       {hasAnyVisible && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 10 }}>
           {orderedVisible.map(sensor => {
@@ -800,13 +1093,28 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
               const s = chemSensors.find(c => "chem_" + c.id === sensor.key);
               if (!s) return null;
               const val = s.lastReading ?? s.lastWeight ?? null;
+              const isPressure = s.type === "pressure" || s.unit === "PSI";
               const unit = s.unit || "PSI";
               const min = s.minAlert ?? 0;
               const max = s.maxAlert ?? 150;
               const pct = val != null && max > 0 ? Math.min(100, Math.round((val / max) * 100)) : null;
               const alert = val != null && (val < min || val > max);
+
+              if (isPressure) {
+                const valColor = val == null ? "#94a3b8" : val < 60 ? "#22c55e" : val < 100 ? "#f59e0b" : "#ef4444";
+                return (
+                  <div key={sensor.key} onClick={() => setSelectedSensor(s)} style={{ background: alert ? "#fef2f2" : "#f8fafc", border: "1px solid " + (alert ? "#fca5a5" : "#e2e8f0"), borderRadius: 12, padding: "10px 8px 8px", cursor: "pointer", textAlign: "center" }}>
+                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.sensorId}</div>
+                    <div style={{ margin: "0 auto", width: 84 }}><PressureGauge psi={val} size={84} /></div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: valColor, lineHeight: 1, marginTop: 1 }}>{val != null ? (typeof val === "number" ? val.toFixed(1) : val) : "--"}</div>
+                    <div style={{ fontSize: 9, color: "#94a3b8" }}>{unit}</div>
+                    {s.updatedAt && <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>{new Date(s.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>}
+                  </div>
+                );
+              }
+
               return (
-                <div key={sensor.key} onClick={() => onSensorNavigate ? onSensorNavigate("chemlevel") : onNavigate("sensors")} style={{ background: alert ? "#fef2f2" : "#f4f6f8", border: "1px solid " + (alert ? "#fca5a5" : "#e2e8f0"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
+                <div key={sensor.key} onClick={() => setSelectedSensor(s)} style={{ background: alert ? "#fef2f2" : "#f4f6f8", border: "1px solid " + (alert ? "#fca5a5" : "#e2e8f0"), borderRadius: 10, padding: "12px 10px", cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name || s.sensorId}</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: alert ? "#dc2626" : "#0f1f35" }}>{val != null ? val : "--"}</div>
                   <div style={{ fontSize: 10, color: "#94a3b8" }}>{unit}</div>
@@ -1347,10 +1655,10 @@ return (
     await updateDoc(doc(db, "locations", locId, "tasks", task.id), { archived: true, archivedAt: new Date().toISOString() });
   }} style={{ background: "#d1fae5", color: "#065f46", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Approve</button>
 )}
-{user?.role === "manager" && (
+{(user?.role === "manager" || user?.role === "owner") && (
   <button onClick={e => { e.stopPropagation(); onEdit && onEdit(task); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Edit</button>
 )}
-{user?.role === "manager" && (
+{(user?.role === "manager" || user?.role === "owner") && (
   <button onClick={async (e) => {
     e.stopPropagation();
     if (!window.confirm("Delete this task?")) return;
@@ -1407,7 +1715,7 @@ style={{ width: "100%", padding: "8px 10px", border: "1px solid #e5e7eb", border
                   <div style={{ fontSize: 11, color: "#334155", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
                   <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(a.uploadedAt).toLocaleDateString()}</div>
                 </div>
-                {user?.role === "manager" && (
+                {(user?.role === "manager" || user?.role === "owner") && (
                   <button onClick={async () => {
                     if (!window.confirm("Delete this attachment? This cannot be undone.")) return;
                     try {
@@ -1703,7 +2011,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
           <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Equipment</div>
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Equipment</button>
+        {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Equipment</button>}
       </div>
 
       {showAdd && (
@@ -1748,7 +2056,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔧</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>No equipment added yet</div>
             <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Track your car wash equipment, service schedules, and maintenance history.</div>
-            <button onClick={() => setShowAdd(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Equipment</button>
+            {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAdd(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Equipment</button>}
           </div>
         ) : equipment.map(eq => {
           const s = EQS[eq.status] || EQS.ok;
@@ -1801,9 +2109,9 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
-                  <button onClick={e => { e.stopPropagation(); setEditingId(isEditing ? null : eq.id); setEditData({ status: eq.status, lastService: eq.lastService||"", lastServiceCars: eq.lastServiceCars||0, nextService: eq.nextService||"", nextServiceCars: eq.nextServiceCars||0, carsCount: eq.carsCount||0, note: eq.note||"", tracksCarCount: eq.tracksCarCount||false }); }} style={{ background: "#f1f5f9", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#334155", fontWeight: 600 }}>Edit</button>
+                  {(user?.role === "manager" || user?.role === "owner") && <button onClick={e => { e.stopPropagation(); setEditingId(isEditing ? null : eq.id); setEditData({ status: eq.status, lastService: eq.lastService||"", lastServiceCars: eq.lastServiceCars||0, nextService: eq.nextService||"", nextServiceCars: eq.nextServiceCars||0, carsCount: eq.carsCount||0, note: eq.note||"", tracksCarCount: eq.tracksCarCount||false }); }} style={{ background: "#f1f5f9", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#334155", fontWeight: 600 }}>Edit</button>}
                   <button onClick={e => { e.stopPropagation(); onCreateTask && onCreateTask(eq); }} style={{ background: "#ede9fe", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#6366f1", fontWeight: 600 }}>+ Task</button>
-                  <button onClick={e => { e.stopPropagation(); handleDelete(eq.id); }} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Delete</button>
+                  {(user?.role === "manager" || user?.role === "owner") && <button onClick={e => { e.stopPropagation(); handleDelete(eq.id); }} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Delete</button>}
                 </div>
                 <span style={{ color: "#94a3b8", fontSize: 12 }}>{isExpanded ? "v" : ">"}</span>
               </div>
@@ -1955,7 +2263,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                         )}
                         <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(f.uploadedAt).toLocaleDateString()}</div>
                       </div>
-                      {user?.role === "manager" && (
+                      {(user?.role === "manager" || user?.role === "owner") && (
                         <button onClick={async () => {
                           if (!window.confirm("Delete this file? This cannot be undone.")) return;
                           try { await deleteObject(ref(storage, f.path || f.url)); } catch(e) {}
@@ -2022,10 +2330,8 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
   const [spSensors, setSpSensors] = useState([]);
   const [history, setHistory] = useState({});
   const [selectedSensor, setSelectedSensor] = useState(null);
+  const [chemDetailSensor, setChemDetailSensor] = useState(null);
   const [chemSensors, setChemSensors] = useState([]);
-  const [showAddChem, setShowAddChem] = useState(false);
-  const [newChem, setNewChem] = useState({ name: "", type: "pressure", unit: "PSI", minAlert: 20, maxAlert: 150, sensorId: "" });
-  const [savingChem, setSavingChem] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab || "sensorpush");
   const [shellyDevices, setShellyDevices] = useState([]);
   const [showAddShelly, setShowAddShelly] = useState(false);
@@ -2223,6 +2529,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
   const [timeRange, setTimeRange] = useState("6h");
   const [latestReadings, setLatestReadings] = useState({});
   const rangeMs = { "1h": 1, "6h": 6, "24h": 24, "7d": 168 };
+  const historyCache = useRef({});
 
   useEffect(() => {
     const load = async () => {
@@ -2297,6 +2604,12 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
   const loadHistory = async (sensorId, range) => {
     const r = range || timeRange;
     setSelectedSensor(sensorId);
+    const cacheKey = sensorId + "_" + r;
+    const cached = historyCache.current[cacheKey];
+    if (cached && Date.now() - cached.fetchedAt < 10 * 60 * 1000) {
+      setHistory(p => ({ ...p, [sensorId]: cached.samples }));
+      return;
+    }
     setLoadingHistory(true);
     setHistory(p => ({ ...p, [sensorId]: undefined }));
     try {
@@ -2317,7 +2630,9 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
       });
       const sampData = await sampRes.json();
       const samples = sampData.sensors?.[sensorId] || [];
-      setHistory(p => ({ ...p, [sensorId]: samples.slice().reverse() }));
+      const ordered = samples.slice().reverse();
+      historyCache.current[cacheKey] = { samples: ordered, fetchedAt: Date.now() };
+      setHistory(p => ({ ...p, [sensorId]: ordered }));
     } catch(e) { console.log("History error:", e); }
     setLoadingHistory(false);
   };
@@ -2343,7 +2658,6 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
         {activeTab === "shelly" && <button onClick={() => setShowAddShelly(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Device</button>}
-        {activeTab === "chemlevel" && <button onClick={() => setShowAddChem(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Sensor</button>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -2354,70 +2668,54 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
 
       {activeTab === "chemlevel" && (
         <div>
-          {showAddChem && (
-            <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 16, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#6366f1", marginBottom: 12 }}>Add ChemLevel Sensor</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Sensor Name</label>
-                  <input value={newChem.name} onChange={e => setNewChem(p => ({...p, name: e.target.value}))} placeholder="e.g. City Water Pressure" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Sensor ID</label>
-                  <input value={newChem.sensorId} onChange={e => setNewChem(p => ({...p, sensorId: e.target.value}))} placeholder="e.g. pressure1" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Type</label>
-                  <select value={newChem.type} onChange={e => setNewChem(p => ({...p, type: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}>
-                    <option value="pressure">Pressure</option>
-                    <option value="flow">Flow Rate</option>
-                    <option value="level">Chemical Level</option>
-                    <option value="temperature">Temperature</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Unit</label>
-                  <input value={newChem.unit} onChange={e => setNewChem(p => ({...p, unit: e.target.value}))} placeholder="PSI" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Min Alert</label>
-                  <input type="number" value={newChem.minAlert} onChange={e => setNewChem(p => ({...p, minAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Max Alert</label>
-                  <input type="number" value={newChem.maxAlert} onChange={e => setNewChem(p => ({...p, maxAlert: Number(e.target.value)}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={async () => {
-                  if (!newChem.name || !newChem.sensorId) return;
-                  setSavingChem(true);
-                  await setDoc(doc(db, "locations", locId, "chemSensors", newChem.sensorId), { ...newChem, createdAt: new Date().toISOString(), locationId: locId });
-                  setNewChem({ name: "", type: "pressure", unit: "PSI", minAlert: 20, maxAlert: 150, sensorId: "" });
-                  setShowAddChem(false);
-                  setSavingChem(false);
-                }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingChem ? "Saving..." : "Add Sensor"}</button>
-                <button onClick={() => setShowAddChem(false)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-              </div>
-            </div>
-          )}
-          {chemSensors.length === 0 && !showAddChem && (
+          {chemDetailSensor && <SensorDetailModal sensor={chemDetailSensor} locId={locId} onClose={() => setChemDetailSensor(null)} />}
+
+          {chemSensors.length === 0 && (
             <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}></div>
-              <div style={{ fontWeight: 600, fontSize: 15, color: "#334155", marginBottom: 4 }}>No ChemLevel sensors yet</div>
-              <div style={{ fontSize: 13 }}>Add a sensor above then upload firmware to your ESP32</div>
-              <div style={{ marginTop: 16, background: "#f4f6f8", borderRadius: 10, padding: 16, textAlign: "left", fontFamily: "monospace", fontSize: 12, color: "#334155" }}>
-                <div style={{ fontWeight: 700, marginBottom: 8, fontFamily: "sans-serif" }}>Arduino endpoint:</div>
-                POST https://us-central1-washlevel-c16d9.cloudfunctions.net/ingestSensorReading<br/>
-                {"{"}"sensorId": "pressure1", "locationId": "{locId}", "value": 87.5, "unit": "PSI", "secret": "chemlevel2025"{"}"}
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📡</div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "#334155", marginBottom: 4 }}>No pressure sensors yet</div>
+              <div style={{ fontSize: 13, marginBottom: 16 }}>Sensors register automatically the first time your ESP32 posts data.</div>
+              <div style={{ background: "#f4f6f8", borderRadius: 10, padding: 16, textAlign: "left", fontFamily: "monospace", fontSize: 12, color: "#334155" }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, fontFamily: "sans-serif", fontSize: 12 }}>Your location_id for this location:</div>
+                <div style={{ background: "#e2e8f0", borderRadius: 6, padding: "8px 12px", userSelect: "all", letterSpacing: "0.02em" }}>{locId}</div>
+                <div style={{ fontWeight: 700, margin: "12px 0 6px", fontFamily: "sans-serif", fontSize: 12 }}>ESP32 endpoint (pressureLevel):</div>
+                POST https://us-central1-washlevel-c16d9.cloudfunctions.net/pressureLevel<br/>
+                Header: x-washlevel-secret: pressurelevel2025<br/><br/>
+                {"{"}"device_id": "carwash-pressure-01",<br/>
+                &nbsp;"location_id": "{locId}",<br/>
+                &nbsp;"sensor_label": "City Water Inlet",<br/>
+                &nbsp;"city_water_psi": 62.4{"}"}
               </div>
             </div>
           )}
-          {chemSensors.map(sensor => {
+
+          {/* Pressure-type sensors: gauge tile grid */}
+          {chemSensors.filter(s => s.type === "pressure" || s.unit === "PSI").length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 16 }}>
+              {chemSensors.filter(s => s.type === "pressure" || s.unit === "PSI").map(sensor => {
+                const val = sensor.value ?? null;
+                const alert = val != null && ((sensor.minAlert != null && val < sensor.minAlert) || (sensor.maxAlert != null && val > sensor.maxAlert));
+                const valColor = val == null ? "#94a3b8" : val < 60 ? "#22c55e" : val < 100 ? "#f59e0b" : "#ef4444";
+                return (
+                  <div key={sensor.id} onClick={() => setChemDetailSensor(sensor)} style={{ background: alert ? "#fef2f2" : "#f8fafc", border: "1.5px solid " + (alert ? "#fca5a5" : "#e2e8f0"), borderRadius: 16, padding: "14px 12px 12px", cursor: "pointer", textAlign: "center" }}>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sensor.name || sensor.sensorId}</div>
+                    <div style={{ margin: "0 auto", width: 110 }}><PressureGauge psi={val} size={110} /></div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: valColor, marginTop: 2, lineHeight: 1 }}>{val != null ? (typeof val === "number" ? val.toFixed(1) : val) : "--"}</div>
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>{sensor.unit || "PSI"}</div>
+                    {sensor.timestamp && <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(sensor.timestamp).toLocaleTimeString()}</div>}
+                    {alert && <div style={{ marginTop: 6, background: "#fee2e2", color: "#dc2626", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600 }}>⚠ Alert</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Non-pressure sensors: existing large card style */}
+          {chemSensors.filter(s => s.type !== "pressure" && s.unit !== "PSI").map(sensor => {
             const isAlert = sensor.value < sensor.minAlert || sensor.value > sensor.maxAlert;
-            const pct = Math.min(100, Math.max(0, ((sensor.value - 0) / (sensor.maxAlert * 1.2)) * 100));
+            const pct = Math.min(100, Math.max(0, ((sensor.value - 0) / ((sensor.maxAlert || 100) * 1.2)) * 100));
             return (
-              <div key={sensor.id} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 14 }}>
+              <div key={sensor.id} onClick={() => setChemDetailSensor(sensor)} style={{ background: "#fff", border: isAlert ? "2px solid #dc2626" : "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 14, cursor: "pointer" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{sensor.name || sensor.sensorId}</div>
@@ -2640,7 +2938,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                     const color = isTemp ? "#3b82f6" : "#0891b2";
                     const darkColor = isTemp ? "#1e40af" : "#0e7490";
                     const label = isTemp ? "Temperature (F)" : "Humidity (%)";
-                    const targetBars = timeRange === "7d" ? 168 : timeRange === "24h" ? 96 : 60;
+                    const targetBars = timeRange === "7d" ? 42 : timeRange === "24h" ? 96 : 60;
                     const filtered = selHistory.filter((_, i) => i % Math.max(1, Math.floor(selHistory.length / targetBars)) === 0);
                     return (
                       <div key={chartType} style={{ marginBottom: 20 }}>
@@ -2661,7 +2959,9 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                               {filtered.map((pt, i) => {
                                 const val = isTemp ? pt.temperature : pt.humidity;
                                 const h = maxV === minV ? 50 : Math.round(((val - minV) / (maxV - minV)) * 70) + 10;
-                                const time = new Date(pt.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                                const time = timeRange === "7d"
+                                  ? new Date(pt.observed).toLocaleDateString([], { month: "short", day: "numeric" }) + " " + new Date(pt.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                  : new Date(pt.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                                 const isActive = tooltip?.chart === chartType && tooltip?.i === i;
                                 return (
                                   <div key={i}
@@ -2674,8 +2974,10 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
                               })}
                             </div>
                             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
-                              <span>{new Date(selHistory[0]?.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                              <span style={{ fontWeight: 600 }}>Time</span>
+                              <span>{timeRange === "7d"
+                                ? new Date(selHistory[0]?.observed).toLocaleDateString([], { month: "short", day: "numeric" })
+                                : new Date(selHistory[0]?.observed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              <span style={{ fontWeight: 600 }}>{timeRange === "7d" ? "Date" : "Time"}</span>
                               <span>Now</span>
                             </div>
                           </div>
@@ -2727,14 +3029,28 @@ function TimeClock({ locId, locationName, allLocations }) {
 
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(collection(db, "timeclock"), snap => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const mine = all.filter(d => d.uid === user.uid).sort((a, b) => b.date > a.date ? 1 : -1);
+    const unsub = onSnapshot(query(collection(db, "timeclock"), where("uid", "==", user.uid)), snap => {
+      const mine = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date > a.date ? 1 : -1);
       setHistory(mine);
-      if (isManager) setTeamHistory(all.sort((a, b) => b.date > a.date ? 1 : -1));
     });
     return unsub;
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user || !isManager) return;
+    const managerUid = user.isTeamMember ? user.ownerId : user.uid;
+    let unsubClock = () => {};
+    getDocs(query(collection(db, "users"), where("ownerId", "==", managerUid))).then(membersSnap => {
+      const uids = [managerUid, ...membersSnap.docs.map(d => d.id)];
+      unsubClock = onSnapshot(
+        query(collection(db, "timeclock"), where("uid", "in", uids.slice(0, 30))),
+        snap => {
+          setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date > a.date ? 1 : -1));
+        }
+      );
+    });
+    return () => unsubClock();
+  }, [user?.uid, isManager]);
 
   useEffect(() => {
     if (!user || !isManager) return;
@@ -2773,9 +3089,11 @@ function TimeClock({ locId, locationName, allLocations }) {
   const isClockedIn = clockState?.mainClockIn && !clockState?.mainClockOut;
   const isClockedOut = clockState?.mainClockIn && clockState?.mainClockOut;
 
+  const myOwnerId = user?.isTeamMember ? user?.ownerId : user?.uid;
+
   const handleMainClock = async () => {
     if (!clockState || !clockState.mainClockIn) {
-      await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, name: user.name || user.email, date: today, mainClockIn: now(), mainClockOut: null, locationTimes: locClocks });
+      await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, ownerId: myOwnerId, name: user.name || user.email, date: today, mainClockIn: now(), mainClockOut: null, locationTimes: locClocks });
     } else if (!clockState.mainClockOut) {
       await updateDoc(doc(db, "timeclock", clockDocId), { mainClockOut: now() });
     } else {
@@ -2791,7 +3109,7 @@ function TimeClock({ locId, locationName, allLocations }) {
     else updated[lId] = { in: now(), out: null };
     setLocClocks(updated);
     if (clockState) await updateDoc(doc(db, "timeclock", clockDocId), { locationTimes: updated });
-    else await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, name: user.name || user.email, date: today, mainClockIn: null, mainClockOut: null, locationTimes: updated });
+    else await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, ownerId: myOwnerId, name: user.name || user.email, date: today, mainClockIn: null, mainClockOut: null, locationTimes: updated });
   };
 
   const handleSaveEdit = async () => {
@@ -3450,11 +3768,10 @@ const resolvedUserId = (assignTo && !["everyone","attendant","technician","manag
 
     const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, nextCarsDue, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
-// Notify assigned user via Firebase Function
+// Notify assigned user
 if (resolvedUserId) {
   try {
-    const createNotif = httpsCallable(functions, "createNotification");
-    await createNotif({ userId: resolvedUserId, type: "task_assigned", title: "New task assigned to you", body: title.trim(), locationId: locId, taskId: id });
+    await writeNotif(resolvedUserId, { type: "task_assigned", title: "New task assigned to you", body: title.trim(), locationId: locId, taskId: id });
   } catch(e) { console.log("Notif error:", e.message); }
 }
 
@@ -3462,10 +3779,8 @@ if (resolvedUserId) {
 try {
   const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
   const teamSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId)));
-  const createNotif = httpsCallable(functions, "createNotification");
   const allUsers = [...teamSnap.docs];
   for (const memberDoc of allUsers) {
-    // Skip if already notified via direct assignment
     if (memberDoc.id === resolvedUserId) continue;
     const md = memberDoc.data();
     const hasAccess = !md.allowedLocations || md.allowedLocations.includes(locId);
@@ -3473,34 +3788,14 @@ try {
     const prefsSnap = await getDoc(doc(db, "users", memberDoc.id, "prefs", "alerts"));
     const prefs = prefsSnap.exists() ? prefsSnap.data() : {};
     if (prefs.newTaskAlert) {
-      await createNotif({ userId: memberDoc.id, type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
-    }
-  }
-} catch(e) { console.log("Location notif error:", e.message); }
-
-// Notify all users with access to this location who have newTaskAlert enabled
-try {
-  const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
-  const teamSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId)));
-  const createNotif = httpsCallable(functions, "createNotification");
-  const allUsers = [...teamSnap.docs];
-  for (const memberDoc of allUsers) {
-    // Skip if already notified via direct assignment
-    if (memberDoc.id === resolvedUserId) continue;
-    const md = memberDoc.data();
-    const hasAccess = !md.allowedLocations || md.allowedLocations.includes(locId);
-    if (!hasAccess) continue;
-    const prefsSnap = await getDoc(doc(db, "users", memberDoc.id, "prefs", "alerts"));
-    const prefs = prefsSnap.exists() ? prefsSnap.data() : {};
-    if (prefs.newTaskAlert) {
-      await createNotif({ userId: memberDoc.id, type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
+      await writeNotif(memberDoc.id, { type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
     }
   }
   // Also notify current user if they have newTaskAlert on
   const myPrefsSnap = await getDoc(doc(db, "users", user.uid, "prefs", "alerts"));
   const myPrefs = myPrefsSnap.exists() ? myPrefsSnap.data() : {};
   if (myPrefs.newTaskAlert) {
-    await createNotif({ userId: user.uid, type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
+    await writeNotif(user.uid, { type: "new_task", title: "New task added", body: title.trim(), locationId: locId, taskId: id });
   }
 } catch(e) { console.log("Location notif error:", e.message); }
 
@@ -3730,8 +4025,8 @@ function Inventory({ locId, locationName, user }) {
           <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Inventory</div>
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
-        {activeTab === "vendors" && <button onClick={() => setShowAddVendor(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
-        {activeTab === "inventory" && <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>}
+        {activeTab === "vendors" && (user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAddVendor(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
+        {activeTab === "inventory" && (user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -3854,8 +4149,8 @@ function Inventory({ locId, locationName, user }) {
                           <span style={{ fontSize: 12, color: "#94a3b8" }}> {item.unit}</span>
                         </div>
                         <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f1f5f9", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-                        <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); }} style={{ background: "#0f1f35", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>
-                        <button onClick={() => handleDelete(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Del</button>
+                        {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); }} style={{ background: "#0f1f35", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>}
+                        {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => handleDelete(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Del</button>}
                       </div>
                     </div>
                   )}
@@ -4960,30 +5255,33 @@ function CarCounts({ locations }) {
   const [loaded, setLoaded] = useState({});
   const [locEquipment, setLocEquipment] = useState({});
 
-  // Load car-tracking equipment per location
   useEffect(() => {
-    if (!locations.length) return;
-    locations.forEach(async loc => {
-      const snap = await getDocs(collection(db, "locations", loc.id, "equipment"));
-      const eqs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.tracksCarCount);
-      if (eqs.length) setLocEquipment(p => ({ ...p, [loc.id]: eqs }));
-    });
-  }, [locations.length]);
-
-  useEffect(() => {
-    if (!selectedDate) return;
+    if (!locations.length || !selectedDate) return;
     setLoaded({});
     locations.forEach(async loc => {
-      const snap = await getDoc(doc(db, "locations", loc.id, "daySummaries", selectedDate));
-      const data = snap.exists() ? snap.data() : {};
+      const [eqSnap, daySnap] = await Promise.all([
+        getDocs(collection(db, "locations", loc.id, "equipment")),
+        getDoc(doc(db, "locations", loc.id, "daySummaries", selectedDate)),
+      ]);
+      const eqs = eqSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.tracksCarCount);
+      if (eqs.length) setLocEquipment(p => ({ ...p, [loc.id]: eqs }));
+
+      const data = daySnap.exists() ? daySnap.data() : {};
       const cars = data.carsWashed ?? "";
       setCounts(p => ({ ...p, [loc.id]: cars === 0 ? "0" : cars || "" }));
-      // Load per-equipment counts
-      if (data.equipment) {
-        Object.entries(data.equipment).forEach(([eqId, eqData]) => {
-          setEqCounts(p => ({ ...p, [loc.id + "_" + eqId]: eqData.carsWashed ?? "" }));
+
+      const eqData = data.equipment || {};
+      const hasEqData = Object.keys(eqData).length > 0;
+      if (hasEqData) {
+        Object.entries(eqData).forEach(([eqId, d]) => {
+          setEqCounts(p => ({ ...p, [loc.id + "_" + eqId]: d.carsWashed ?? "" }));
         });
       }
+      if (!hasEqData && eqs.length === 1 && cars !== "") {
+        // Location total set (e.g. from email) but no per-equipment breakdown — assign to the single tracking piece
+        setEqCounts(p => ({ ...p, [loc.id + "_" + eqs[0].id]: parseInt(cars) || 0 }));
+      }
+
       setLoaded(p => ({ ...p, [loc.id]: true }));
     });
   }, [selectedDate, locations.length]);
@@ -5054,8 +5352,7 @@ function CarCounts({ locations }) {
           // Notify if enabled
           if (alertPrefs.carRecurrenceDueAlert !== false) {
             try {
-              const createNotif = httpsCallable(functions, "createNotification");
-              await createNotif({ userId: ownerId, type: "car_recurrence_due", title: "Task Due: " + t.title, body: eqDoc.data().name + " has reached " + newCarsCount.toLocaleString() + " cars. " + t.title + " is now due.", locationId: locId, taskId: t.id });
+              await writeNotif(ownerId, { type: "car_recurrence_due", title: "Task Due: " + t.title, body: eqDoc.data().name + " has reached " + newCarsCount.toLocaleString() + " cars. " + t.title + " is now due.", locationId: locId, taskId: t.id });
             } catch(e) {}
           }
         }
@@ -5064,8 +5361,7 @@ function CarCounts({ locations }) {
         const warningThreshold = alertPrefs.carRecurrenceWarningCars || 300;
         if (alertPrefs.carRecurrenceWarningAlert && carsRemaining > 0 && carsRemaining <= warningThreshold) {
           try {
-            const createNotif = httpsCallable(functions, "createNotification");
-            await createNotif({ userId: ownerId, type: "car_recurrence_warning", title: "Upcoming: " + t.title, body: eqDoc.data().name + " is " + carsRemaining.toLocaleString() + " cars away from " + t.title + ".", locationId: locId, taskId: t.id });
+            await writeNotif(ownerId, { type: "car_recurrence_warning", title: "Upcoming: " + t.title, body: eqDoc.data().name + " is " + carsRemaining.toLocaleString() + " cars away from " + t.title + ".", locationId: locId, taskId: t.id });
           } catch(e) {}
         }
       }
@@ -5130,10 +5426,10 @@ function CarCounts({ locations }) {
                       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                         <button onClick={() => setEqCounts(p => ({ ...p, [key]: Math.max(0, (parseInt(p[key]) || 0) - 1) }))}
                           style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>-</button>
-                        <input type="number" min="0"
+                        <input type="text" inputMode="numeric" pattern="[0-9]*"
                           value={loaded[loc.id] ? (eqCounts[key] ?? "") : ""}
                           placeholder={loaded[loc.id] ? "0" : "..."}
-                          onChange={e => setEqCounts(p => ({ ...p, [key]: e.target.value }))}
+                          onChange={e => setEqCounts(p => ({ ...p, [key]: e.target.value.replace(/[^0-9]/g, "") }))}
                           style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#0f1f35", background: "#fafafa", boxSizing: "border-box" }} />
                         <button onClick={() => setEqCounts(p => ({ ...p, [key]: (parseInt(p[key]) || 0) + 1 }))}
                           style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>+</button>
@@ -5145,9 +5441,9 @@ function CarCounts({ locations }) {
                     </div>
                   );
                 })}
-                <div style={{ marginTop: 8, padding: "8px 12px", background: "#f4f6f8", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Location Total</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: "#0f1f35" }}>{counts[loc.id] || 0}</span>
+                <div style={{ marginTop: 8, padding: "10px 14px", background: "#f4f6f8", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 15, color: "#0f1f35", fontWeight: 700 }}>Location Total</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: "#0f1f35" }}>{counts[loc.id] || 0}</span>
                 </div>
               </>
             ) : (
@@ -5156,10 +5452,10 @@ function CarCounts({ locations }) {
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <button onClick={() => setCounts(p => ({ ...p, [loc.id]: Math.max(0, (parseInt(p[loc.id]) || 0) - 1) }))}
                     style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>-</button>
-                  <input type="number" min="0"
+                  <input type="text" inputMode="numeric" pattern="[0-9]*"
                     value={loaded[loc.id] ? (counts[loc.id] ?? "") : ""}
                     placeholder={loaded[loc.id] ? "0" : "..."}
-                    onChange={e => setCounts(p => ({ ...p, [loc.id]: e.target.value }))}
+                    onChange={e => setCounts(p => ({ ...p, [loc.id]: e.target.value.replace(/[^0-9]/g, "") }))}
                     style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: "#0f1f35", background: "#fafafa", boxSizing: "border-box" }} />
                   <button onClick={() => setCounts(p => ({ ...p, [loc.id]: (parseInt(p[loc.id]) || 0) + 1 }))}
                     style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 40, height: 40, fontSize: 20, cursor: "pointer", color: "#334155", fontWeight: 700 }}>+</button>
@@ -5716,11 +6012,11 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
                 style={{ padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none" }} />
             </div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 10 }}>Include in summary:</div>
-            {user?.role === "manager" && <Row label="Car counts" desc="Yesterday's wash counts per location" k="includeCounts" />}
+            {(user?.role === "manager" || user?.role === "owner") && <Row label="Car counts" desc="Yesterday's wash counts per location" k="includeCounts" />}
             <Row label="Tasks completed" desc="Tasks finished yesterday" k="includeTasksDone" />
             <Row label="Open tasks" desc="All currently pending or in-progress tasks" k="includeOpenTasks" />
             <Row label="Overdue tasks" desc="Tasks past their due date" k="includeOverdue" />
-            {user?.role === "manager" && <Row label="Equipment alerts" desc="Any equipment in warning or alert status" k="includeEquipment" />}
+            {(user?.role === "manager" || user?.role === "owner") && <Row label="Equipment alerts" desc="Any equipment in warning or alert status" k="includeEquipment" />}
           </>
         )}
       </div>
@@ -5730,8 +6026,8 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
         <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Instant Alerts</div>
         <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Get notified immediately when these occur</div>
         <Row label="Overdue tasks" desc="Task passes due date without completion" k="overdueTasksAlert" />
-        {user?.role === "manager" && <Row label="Low inventory" desc="Item falls below low stock threshold" k="lowInventoryAlert" />}
-        {user?.role === "manager" && <Row label="Equipment alerts" desc="Equipment status changes to warning or alert" k="equipmentAlert" />}
+        {(user?.role === "manager" || user?.role === "owner") && <Row label="Low inventory" desc="Item falls below low stock threshold" k="lowInventoryAlert" />}
+        {(user?.role === "manager" || user?.role === "owner") && <Row label="Equipment alerts" desc="Equipment status changes to warning or alert" k="equipmentAlert" />}
         <Row label="New task assigned" desc="New task added at your location" k="newTaskAlert" />
       </div>
 
@@ -6148,8 +6444,72 @@ return (
 }
 
 function AppInner() {
-const { user, loading } = useAuth();
+const { user, loading, refreshUser } = useAuth();
+const [pendingInvite, setPendingInvite] = useState(null);
+const [acceptingInvite, setAcceptingInvite] = useState(false);
+
+useEffect(() => {
+  if (!user) { setPendingInvite(null); return; }
+  getDocs(query(collection(db, "invites"), where("email", "==", user.email.toLowerCase()), where("status", "==", "pending")))
+    .then(async snap => {
+      if (snap.empty) return;
+      const inv = snap.docs[0];
+      const invData = inv.data();
+      if (invData.ownerId === user.uid) return; // their own invite
+      const ownerSnap = await getDoc(doc(db, "users", invData.ownerId));
+      const bizName = ownerSnap.exists() ? ownerSnap.data().bizName || ownerSnap.data().name : "a team";
+      setPendingInvite({ ...invData, inviteRef: inv.ref, bizName });
+    });
+}, [user?.uid]);
+
 if (loading) return <Spinner />;
+
+if (user && pendingInvite) {
+  const handleAccept = async () => {
+    setAcceptingInvite(true);
+    try {
+      await setDoc(doc(db, "users", user.uid), {
+        uid: user.uid, email: user.email, name: user.name || user.email,
+        role: pendingInvite.role || "attendant",
+        ownerId: pendingInvite.ownerId,
+        locationId: pendingInvite.locationId || null,
+        allowedLocations: pendingInvite.allowedLocations || [],
+        color: "#0ea5e9", isTeamMember: true, setupComplete: true,
+        createdAt: new Date().toISOString()
+      });
+      await updateDoc(pendingInvite.inviteRef, { status: "accepted", acceptedAt: new Date().toISOString() });
+      await refreshUser();
+      setPendingInvite(null);
+    } catch(e) { alert("Error accepting invite: " + e.message); }
+    setAcceptingInvite(false);
+  };
+  const handleDecline = () => setPendingInvite(null);
+  return (
+    <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: 32, maxWidth: 440, width: "100%" }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>👋</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>You've been invited!</div>
+          <div style={{ fontSize: 14, color: "#64748b" }}>
+            <b>{pendingInvite.bizName}</b> has invited you to join as <b>{pendingInvite.role || "attendant"}</b>.
+          </div>
+        </div>
+        <div style={{ background: "#fef9c3", border: "1px solid #fde047", borderRadius: 10, padding: "12px 16px", marginBottom: 24, fontSize: 13, color: "#713f12" }}>
+          <b>Heads up:</b> Accepting will replace your current WashLevel account data and add you to this organization. Any locations or data you created independently will be removed.
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={handleAccept} disabled={acceptingInvite} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            {acceptingInvite ? "Accepting..." : "Accept Invite"}
+          </button>
+          <button onClick={handleDecline} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+            Decline
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 if (user) return <Dashboard />;
 const params = new URLSearchParams(window.location.search);
 const inviteEmail = params.get("invite");

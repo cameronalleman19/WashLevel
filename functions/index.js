@@ -404,6 +404,11 @@ exports.ingestSensorReading = onRequest({ cors: true }, async (req, res) => {
     .collection("sensorReadings").doc(sensorId)
     .collection("history").add(reading);
 
+  // Update lastReading on chemSensors config doc so the overview tile shows live data
+  await db.collection("locations").doc(locationId)
+    .collection("chemSensors").doc(sensorId)
+    .set({ lastReading: parseFloat(value), updatedAt: timestamp }, { merge: true });
+
   // Check Shelly BLU distance threshold alerts
   try {
     const shellySnap = await db.collection("locations").doc(locationId)
@@ -469,6 +474,11 @@ exports.ingestSensorReading = onRequest({ cors: true }, async (req, res) => {
   await db.collection("locations").doc(locationId)
     .collection("sensorReadings").doc(sensorId)
     .collection("history").add(reading);
+
+  // Update lastReading on chemSensors config doc so the overview tile shows live data
+  await db.collection("locations").doc(locationId)
+    .collection("chemSensors").doc(sensorId)
+    .set({ lastReading: parseFloat(value), updatedAt: timestamp }, { merge: true });
 
   // Check Shelly BLU distance threshold alerts
   try {
@@ -878,3 +888,48 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     res.status(500).send("Error: " + e.message);
   }
 });// updated Fri Apr  3 01:06:00 UTC 2026
+
+exports.pressureLevel = onRequest({ cors: true }, async (req, res) => {
+  if (req.method !== "POST") return res.status(405).send("Method not allowed");
+
+  if (req.headers["x-washlevel-secret"] !== "pressurelevel2025") return res.status(401).send("Unauthorized");
+
+  const { device_id, location_id, location_name, sensor_label, city_water_psi, voltage, raw } = req.body;
+  if (!device_id || !location_id || city_water_psi === undefined) return res.status(400).send("Missing required fields: device_id, location_id, city_water_psi");
+
+  try {
+    const psi = parseFloat(city_water_psi);
+    const name = sensor_label || "City Water Pressure";
+    const timestamp = new Date().toISOString();
+
+    // Write latest reading to sensorReadings — this is what the Sensors detail view displays
+    await db.collection("locations").doc(location_id)
+      .collection("sensorReadings").doc(device_id)
+      .set({ sensorId: device_id, name, value: psi, unit: "PSI", type: "pressure", locationId: location_id, timestamp, updatedAt: timestamp });
+
+    // Write to sensorReadings history for time-series charts
+    await db.collection("locations").doc(location_id)
+      .collection("sensorReadings").doc(device_id)
+      .collection("history").add({ sensorId: device_id, value: psi, unit: "PSI", timestamp });
+
+    // Upsert chemSensors config doc — this is what the overview tile reads for lastReading.
+    // merge:true so user-configured minAlert/maxAlert are never overwritten.
+    await db.collection("locations").doc(location_id)
+      .collection("chemSensors").doc(device_id)
+      .set({ sensorId: device_id, name, unit: "PSI", type: "pressure", locationId: location_id, lastReading: psi, updatedAt: timestamp }, { merge: true });
+
+    // Raw archive preserving voltage and ADC value
+    await db.collection("locations").doc(location_id).collection("pressure_readings").add({
+      device_id, location_id, location_name: location_name || null,
+      sensor_label: name, city_water_psi: psi,
+      voltage: voltage !== undefined ? parseFloat(voltage) : null,
+      raw: raw !== undefined ? raw : null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.status(200).json({ ok: true });
+  } catch(e) {
+    console.error("pressureLevel error:", e.message);
+    res.status(500).send("Internal server error");
+  }
+});
