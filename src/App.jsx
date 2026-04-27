@@ -6318,17 +6318,50 @@ const [sidebarOpen, setSidebarOpen] = useState(false);
 const isMobile = useIsMobile();
 
 useEffect(() => {
-if (!user) return;
-const ownerId = user.isTeamMember ? user.ownerId : user.uid;
-const allowedLocs = user.allowedLocations || [];
-const unsub = onSnapshot(query(collection(db, "locations"), where("ownerId", "==", ownerId)), snap => {
-const allLocs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
-const locs = user.isTeamMember && allowedLocs.length ? allLocs.filter(l => allowedLocs.includes(l.id)) : allLocs;
-setLocations(locs);
-setLocId(id => id || user.locationId || locs[0]?.id);
-setReady(true);
-});
-return unsub;
+  if (!user) return;
+  const ownerId = user.isTeamMember ? user.ownerId : user.uid;
+  const allowedLocs = user.allowedLocations || [];
+
+  if (user.isTeamMember) {
+    // Team members: fetch only their allowed locations individually.
+    // A collection query for all owner locations fails Firestore security rules
+    // when the team member doesn't have access to every document in the result set.
+    if (!allowedLocs.length) {
+      setReady(true);
+      return;
+    }
+    const locMap = {};
+    const unsubs = allowedLocs.map(id =>
+      onSnapshot(
+        doc(db, "locations", id),
+        snap => {
+          if (snap.exists()) locMap[id] = { id: snap.id, ...snap.data() };
+          else delete locMap[id];
+          const locs = Object.values(locMap).sort((a, b) => (a.order || 0) - (b.order || 0));
+          setLocations(locs);
+          setLocId(cur => cur || user.locationId || locs[0]?.id);
+          setReady(true);
+        },
+        () => setReady(true)
+      )
+    );
+    return () => unsubs.forEach(u => u());
+  }
+
+  const unsub = onSnapshot(
+    query(collection(db, "locations"), where("ownerId", "==", ownerId)),
+    snap => {
+      const locs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+      setLocations(locs);
+      setLocId(id => id || user.locationId || locs[0]?.id);
+      setReady(true);
+    },
+    err => {
+      console.error("Locations query error:", err);
+      setReady(true);
+    }
+  );
+  return unsub;
 }, [user?.uid]);
 
 useEffect(() => {
