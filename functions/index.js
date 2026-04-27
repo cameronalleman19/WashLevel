@@ -721,6 +721,7 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     // Parse car count - supports multiple equipment email formats
     let count = null;
     let extraData = {}; // Additional parsed fields (packages, revenue) stored alongside car count
+    const isPDQ = /Laserwash.*Daily\s+Sales\s+Report/i.test(subject);
 
     // Format 1: TOTAL = 16148: TODAY = 6 (Dencar)
     const todayMatch = body.match(/TODAY\s*=\s*(\d+)/i);
@@ -769,9 +770,10 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       }
     }
 
-    // Format 5: TOTAL = 16 fallback (integer only — avoids matching PDQ revenue "Total = 882.000")
-    if (count === null) {
-      const totalMatch = body.match(/TOTAL\s*=\s*(\d+)(?![.\d])/i);
+    // Format 5: TOTAL = 16 fallback — skipped for PDQ emails (subject-identified) to avoid
+    // matching the revenue line "Total = 882.000". Other machines using this format are unaffected.
+    if (count === null && !isPDQ) {
+      const totalMatch = body.match(/TOTAL\s*=\s*(\d+)/i);
       if (totalMatch) count = parseInt(totalMatch[1]);
     }
 
