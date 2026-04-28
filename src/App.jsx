@@ -4058,7 +4058,7 @@ function Inventory({ locId, locationName, user }) {
     setSaving(true);
     const id = "inv" + Date.now();
     await setDoc(doc(db, "locations", locId, "inventory", id), { ...newItem, id, createdAt: new Date().toISOString() });
-    setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0, vendorId: "" });
+    setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0, vendorId: "", barcode: "", generateBarcode: false });
     setShowAdd(false);
     setSaving(false);
   };
@@ -4130,9 +4130,12 @@ function Inventory({ locId, locationName, user }) {
                     setScanResult({ barcode, found: false });
                   }
                 } else if (scanMode === "attach" && attachingBarcode) {
-                  updateDoc(doc(db, "locations", locId, "inventory", attachingBarcode), { barcode, updatedAt: new Date().toISOString() });
+                  if (attachingBarcode === "__new__") {
+                    setNewItem(p => ({...p, barcode}));
+                  } else {
+                    updateDoc(doc(db, "locations", locId, "inventory", attachingBarcode), { barcode, updatedAt: new Date().toISOString() });
+                  }
                   setAttachingBarcode(null);
-                  alert("Barcode saved!");
                 }
               } catch(e) { console.error("Scan error:", e); }
             }, 300);
@@ -4202,6 +4205,26 @@ function Inventory({ locId, locationName, user }) {
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={newItem.vendorId || ""} onChange={e => setNewItem(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={inp} /></div>
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Reorder At (qty)</label><input type="number" value={newItem.reorderAt || ""} onChange={e => setNewItem(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} placeholder="e.g. 5" style={inp} /></div>
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Barcode</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "nowrap" }}>
+                {newItem.barcode ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                    <div style={{ fontSize: 12, color: "#059669", fontWeight: 600, flex: 1 }}>✓ {newItem.barcode}</div>
+                    <button onClick={() => { setAttachingBarcode("__new__"); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Rescan</button>
+                    <button onClick={() => setNewItem(p => ({...p, barcode: ""}))} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Remove</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setAttachingBarcode("__new__"); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>📷 Scan Existing</button>
+                )}
+                {!newItem.barcode && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "#334155", fontWeight: 600 }}>
+                    <input type="checkbox" checked={newItem.generateBarcode || false} onChange={e => setNewItem(p => ({...p, generateBarcode: e.target.checked}))} style={{ width: 15, height: 15, accentColor: "#0f1f35" }} />
+                    Generate barcode
+                  </label>
+                )}
+              </div>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={handleAdd} disabled={saving} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Adding..." : "Add Item"}</button>
@@ -4257,6 +4280,26 @@ function Inventory({ locId, locationName, user }) {
                         <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Barcode</label>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "nowrap" }}>
+                            {item.barcode ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+                                <div style={{ fontSize: 11, color: "#059669", fontWeight: 600, flex: 1 }}>✓ {item.barcode}</div>
+                                <button onClick={() => { setAttachingBarcode(item.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Rescan</button>
+                                <button onClick={() => updateDoc(doc(db, "locations", locId, "inventory", item.id), { barcode: null })} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Remove</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => { setAttachingBarcode(item.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 5, padding: "5px 8px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>📷 Scan Existing</button>
+                            )}
+                            {!item.barcode && (
+                              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, color: "#334155", fontWeight: 600 }}>
+                                <input type="checkbox" checked={editData.generateBarcode || false} onChange={e => setEditData(p => ({...p, generateBarcode: e.target.checked}))} style={{ width: 13, height: 13, accentColor: "#0f1f35" }} />
+                                Generate
+                              </label>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => handleSaveEdit(item.id)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
