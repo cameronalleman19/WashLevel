@@ -5359,6 +5359,7 @@ function CarCounts({ locations }) {
         const eqMapY = {};
         snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; const eq = d.data().equipment || {}; Object.entries(eq).forEach(([eqId, v]) => { eqMapY[eqId] = eqMapY[eqId] || {}; eqMapY[eqId][d.id] = v.carsWashed || 0; }); });
         const months = [];
+        let yearTotal = 0;
         for (let m = 1; m <= 12; m++) {
           const ms = selectedYear + "-" + String(m).padStart(2, "0");
           const dim = new Date(parseInt(selectedYear), m, 0).getDate();
@@ -5678,14 +5679,36 @@ function CarCounts({ locations }) {
                       <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc.name}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#0f1f35" }}>{d.total.toLocaleString()}</div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
-                      {d.months.map(m => (
-                        <div key={m.month} style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
-                          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{m.label}</div>
-                          <div style={{ fontSize: 16, fontWeight: 700, color: m.cars > 0 ? "#0f1f35" : "#d1d5db", marginTop: 4 }}>{m.cars > 0 ? m.cars.toLocaleString() : "-"}</div>
-                        </div>
-                      ))}
-                    </div>
+                    {locEquipment[loc.id] && locEquipment[loc.id].length > 1 ? (
+                      locEquipment[loc.id].map(eq => {
+                        const eqMonths = d.months.map(m => ({
+                          ...m,
+                          cars: Object.entries(d.eqMap[eq.id] || {}).filter(([k]) => k.startsWith(m.month)).reduce((s, [, v]) => s + v, 0)
+                        }));
+                        return (
+                          <div key={eq.id} style={{ marginBottom: 14 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>{eq.name}</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
+                              {eqMonths.map(m => (
+                                <div key={m.month} style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{m.label}</div>
+                                  <div style={{ fontSize: 16, fontWeight: 700, color: m.cars > 0 ? "#0f1f35" : "#d1d5db", marginTop: 4 }}>{m.cars > 0 ? m.cars.toLocaleString() : "-"}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
+                        {d.months.map(m => (
+                          <div key={m.month} style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+                            <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{m.label}</div>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: m.cars > 0 ? "#0f1f35" : "#d1d5db", marginTop: 4 }}>{m.cars > 0 ? m.cars.toLocaleString() : "-"}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
