@@ -5278,6 +5278,13 @@ function CarCounts({ locations }) {
   const [saving, setSaving] = useState({});
   const [loaded, setLoaded] = useState({});
   const [locEquipment, setLocEquipment] = useState({});
+  const [activeTab, setActiveTab] = useState("daily");
+  const [monthlyData, setMonthlyData] = useState({});
+  const [yearlyData, setYearlyData] = useState({});
+  const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(today.slice(0, 4));
+  const [monthlyLoaded, setMonthlyLoaded] = useState(false);
+  const [yearlyLoaded, setYearlyLoaded] = useState(false);
 
   useEffect(() => {
     if (!locations.length || !selectedDate) return;
@@ -5309,6 +5316,65 @@ function CarCounts({ locations }) {
       setLoaded(p => ({ ...p, [loc.id]: true }));
     });
   }, [selectedDate, locations.length]);
+
+
+  useEffect(() => {
+    if (activeTab !== "monthly" || !locations.length || !selectedMonth) return;
+    setMonthlyLoaded(false);
+    const loadMonthly = async () => {
+      const [year, month] = selectedMonth.split("-");
+      const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const result = {};
+      for (const loc of locations) {
+        const snaps = await getDocs(collection(db, "locations", loc.id, "daySummaries"));
+        const dataMap = {};
+        snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; });
+        const days = [];
+        let total = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const ds = year + "-" + month + "-" + String(d).padStart(2, "0");
+          const cars = dataMap[ds] || 0;
+          days.push({ date: ds, cars });
+          total += cars;
+        }
+        result[loc.id] = { total, days };
+      }
+      setMonthlyData(result);
+      setMonthlyLoaded(true);
+    };
+    loadMonthly();
+  }, [activeTab, selectedMonth, locations.length]);
+
+  useEffect(() => {
+    if (activeTab !== "yearly" || !locations.length || !selectedYear) return;
+    setYearlyLoaded(false);
+    const loadYearly = async () => {
+      const mn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const result = {};
+      for (const loc of locations) {
+        const snaps = await getDocs(collection(db, "locations", loc.id, "daySummaries"));
+        const dataMap = {};
+        snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; });
+        let yearTotal = 0;
+        const months = [];
+        for (let m = 1; m <= 12; m++) {
+          const ms = selectedYear + "-" + String(m).padStart(2, "0");
+          const dim = new Date(parseInt(selectedYear), m, 0).getDate();
+          let mt = 0;
+          for (let d = 1; d <= dim; d++) {
+            mt += dataMap[ms + "-" + String(d).padStart(2, "0")] || 0;
+          }
+          months.push({ month: ms, label: mn[m-1], cars: mt });
+          yearTotal += mt;
+        }
+        result[loc.id] = { total: yearTotal, months };
+      }
+      setYearlyData(result);
+      setYearlyLoaded(true);
+    };
+    loadYearly();
+  }, [activeTab, selectedYear, locations.length]);
+
 
   const handleSave = async (locId) => {
     const val = parseInt(counts[locId]) || 0;
@@ -5422,6 +5488,19 @@ function CarCounts({ locations }) {
         <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Car Counts</div>
         <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Log daily car counts per location</div>
       </div>
+      <div style={{ display: "flex", background: "#f8fafc", borderRadius: "10px 10px 0 0", borderBottom: "1px solid #e5e7eb", marginBottom: 18, overflow: "hidden" }}>
+        {["daily", "monthly", "yearly"].map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
+              background: activeTab === tab ? "#fff" : "#f8fafc",
+              color: activeTab === tab ? "#0f1f35" : "#94a3b8",
+              borderBottom: activeTab === tab ? "2px solid #1a3352" : "2px solid transparent",
+              textTransform: "capitalize" }}>
+            {tab}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: activeTab === "daily" ? "block" : "none" }}>
       <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={() => goDay(-1)} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 16, cursor: "pointer", color: "#334155", fontWeight: 700 }}>{"<"}</button>
         <div style={{ flex: 1, textAlign: "center" }}>
@@ -5504,9 +5583,97 @@ function CarCounts({ locations }) {
           </div>
         );
       })}
+      </div>
+      {/* Monthly View */}
+      {activeTab === "monthly" && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Month:</label>
+            <input type="month" value={selectedMonth} max={today.slice(0, 7)}
+              onChange={e => setSelectedMonth(e.target.value)}
+              style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#0f1f35", background: "#fff" }} />
+          </div>
+          {!monthlyLoaded ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>Loading...</div>
+          ) : (
+            <div>
+              <div style={{ background: "linear-gradient(135deg, #1a3352, #0ea5e9)", borderRadius: 12, padding: "14px 20px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600 }}>Monthly Total</div>
+                <div style={{ color: "#fff", fontSize: 28, fontWeight: 800 }}>{Object.values(monthlyData).reduce((s, l) => s + (l.total || 0), 0).toLocaleString()}</div>
+              </div>
+              {locations.map(loc => {
+                const d = monthlyData[loc.id];
+                if (!d) return null;
+                return (
+                  <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 18, marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc.name}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0f1f35" }}>{d.total.toLocaleString()}</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))", gap: 6 }}>
+                      {d.days.map(day => (
+                        <div key={day.date} style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(day.date + "T12:00:00").getDate()}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: day.cars > 0 ? "#0f1f35" : "#d1d5db" }}>{day.cars > 0 ? day.cars : "-"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Yearly View */}
+      {activeTab === "yearly" && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Year:</label>
+            <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}
+              style={{ padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#0f1f35", background: "#fff" }}>
+              {[today.slice(0, 4), String(parseInt(today.slice(0, 4)) - 1), String(parseInt(today.slice(0, 4)) - 2)].map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          {!yearlyLoaded ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>Loading...</div>
+          ) : (
+            <div>
+              <div style={{ background: "linear-gradient(135deg, #1a3352, #0ea5e9)", borderRadius: 12, padding: "14px 20px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600 }}>Yearly Total</div>
+                <div style={{ color: "#fff", fontSize: 28, fontWeight: 800 }}>{Object.values(yearlyData).reduce((s, l) => s + (l.total || 0), 0).toLocaleString()}</div>
+              </div>
+              {locations.map(loc => {
+                const d = yearlyData[loc.id];
+                if (!d) return null;
+                return (
+                  <div key={loc.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 18, marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc.name}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0f1f35" }}>{d.total.toLocaleString()}</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
+                      {d.months.map(m => (
+                        <div key={m.month} style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+                          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{m.label}</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: m.cars > 0 ? "#0f1f35" : "#d1d5db", marginTop: 4 }}>{m.cars > 0 ? m.cars.toLocaleString() : "-"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
 
 function TeamMembers({ user, locations }) {
   const [inviteEmail, setInviteEmail] = useState("");
