@@ -293,7 +293,7 @@ const Spinner = () => (
   </div>
 );
 
-function Login({ defaultTab = "login", defaultEmail = "" }) {
+function Login({ defaultTab = "login", defaultEmail = "", ownerId = "" }) {
   const { login, signup } = useAuth();
   const [tab, setTab] = useState(defaultTab);
   const [email, setEmail] = useState(defaultEmail);
@@ -315,9 +315,17 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
       getDocs(query(collection(db, "invites"), where("email", "==", defaultEmail.toLowerCase()), where("status", "==", "pending"))).then(snap => {
         if (!snap.empty) {
           const inv = snap.docs[0].data();
-          getDoc(doc(db, "users", inv.ownerId)).then(ownerSnap => {
+          const ownerIdToUse = ownerId || inv.ownerId;
+          getDoc(doc(db, "users", ownerIdToUse)).then(ownerSnap => {
             const biz = ownerSnap.exists() ? ownerSnap.data().bizName || ownerSnap.data().name : "";
-            setInviteData({ ...inv, bizName: biz });
+            setInviteData({ ...inv, bizName: biz, ownerId: ownerIdToUse });
+          });
+        } else if (ownerId) {
+          getDoc(doc(db, "users", ownerId)).then(ownerSnap => {
+            if (ownerSnap.exists()) {
+              const biz = ownerSnap.data().bizName || ownerSnap.data().name || "WashLevel";
+              setInviteData({ bizName: biz, ownerId, role: "attendant" });
+            }
           });
         }
       });
@@ -341,7 +349,22 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
     if (!email || !password) return;
     setError(""); setLoading(true);
     try {
-      await login(email, password);
+      const cred = await login(email, password);
+      const uid = cred.user.uid;
+      const inviteSnap = await getDocs(query(collection(db, "invites"), where("email", "==", email.toLowerCase()), where("status", "==", "pending")));
+      if (!inviteSnap.empty) {
+        const inviteDoc = inviteSnap.docs[0];
+        const invite = inviteDoc.data();
+        await updateDoc(doc(db, "users", uid), {
+          ownerId: invite.ownerId,
+          isTeamMember: true,
+          role: invite.role || "attendant",
+          allowedLocations: invite.allowedLocations || [],
+          locationId: invite.locationId || null,
+          updatedAt: new Date().toISOString()
+        });
+        await updateDoc(inviteDoc.ref, { status: "accepted", acceptedAt: new Date().toISOString() });
+      }
     } catch(e) {
       setError("Invalid email or password.");
     }
@@ -368,7 +391,7 @@ function Login({ defaultTab = "login", defaultEmail = "" }) {
         await setDoc(doc(db, "users", uid), {
           uid, email, name, role: invite.role || "attendant",
           ownerId: invite.ownerId, locationId: invite.locationId || null,
-          allowedLocations: invite.allowedLocations || [],
+          allowedLocations: invite.allowedLocations || {},
           color: "#0ea5e9", createdAt: new Date().toISOString(), isTeamMember: true,
           setupComplete: true
         });
@@ -530,18 +553,18 @@ const isMobile = useIsMobile();
     return () => document.removeEventListener('focusin', handleFocus);
   }, [isMobile]);
 const isManager = user?.role === "manager" || user?.role === "owner";
-const locs = locations; // Dashboard already filters to allowedLocations for team members
+const locs = isManager ? locations : locations.filter(l => (user?.allowedLocations && Array.isArray(user.allowedLocations) ? user.allowedLocations.includes(l.id) : l.id === user?.locationId));
 const isTechnician = user?.role === "technician";
 const nav = [
 { id: "overview",   label: "Overview"   },
     ...(isManager ? [{ id: "alerts", label: "Notifications" }] : []),
 ...(isManager ? [{ id: "calendar", label: "Calendar" }] : []),
-    ...(!isTechnician ? [{ id: "carcounts", label: "Car Counts" }] : []),
-...(!isTechnician && (user?.role === "owner" || user?.role !== "manager" || user?.payrollAccess) ? [{ id: "timeclock", label: "Time Clock" }] : []),
+    ...(isManager || user?.carCountAccess ? [{ id: "carcounts", label: "Car Counts" }] : []),
+...(user ? [{ id: "timeclock", label: "Time Clock" }] : []),
 { id: "tasks",      label: "Tasks"      },
-{ id: "inventory",  label: "Inventory"  },
-{ id: "equipment",  label: "Equipment"  },
-...(isManager ? [{ id: "sensors", label: "Sensors" }] : []),
+...(isManager || user?.inventoryAccess ? [{ id: "inventory", label: "Inventory" }] : []),
+...(isManager || user?.equipmentAccess ? [{ id: "equipment", label: "Equipment" }] : []),
+...(isManager || user?.sensorAccess ? [{ id: "sensors", label: "Sensors" }] : []),
 ...(isManager ? [{ id: "settings", label: "Settings" }] : []),
 ];
 const RC = { manager: "#6366f1", attendant: "#0ea5e9", technician: "#f59e0b", owner: "#10b981" };
@@ -1163,6 +1186,7 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
 }
 
 function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSensorNavigate }) {
+  const isManager = user?.role === "manager" || user?.role === "owner";
   const done = tasks.filter(t => t.status === "done").length;
   const inprog = tasks.filter(t => t.status === "in-progress").length;
   const eqBad = equipment.filter(e => e.status !== "ok").length;
@@ -1247,16 +1271,16 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
 
       {[visible.cars, visible.tasksDone, visible.inprog, visible.equip].some(Boolean) && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
-          {visible.cars      && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#00d4aa" /></div>}
+          {visible.cars && (isManager || user?.carCountAccess) && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#00d4aa" /></div>}
           {visible.tasksDone && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#00d4aa" /></div>}
           {visible.inprog    && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>}
-          {visible.equip     && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>}
+          {visible.equip && (isManager || user?.equipmentAccess) && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>}
         </div>
       )}
 
-      {(visible.sensors || visible.equipment) && (
+      {((visible.sensors && (isManager || user?.sensorAccess)) || (visible.equipment && (isManager || user?.equipmentAccess))) && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
-          {visible.sensors && (
+          {visible.sensors && (isManager || user?.sensorAccess) && (
             <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
               <SensorTilesPanel locId={location?.id} uid={user?.uid} onNavigate={onNavigate} onSensorNavigate={onSensorNavigate} />
             </div>
@@ -5490,6 +5514,10 @@ function TeamMembers({ user, locations }) {
   const [editLocs, setEditLocs] = useState([]);
   const [editRole, setEditRole] = useState("attendant");
   const [editPayrollAccess, setEditPayrollAccess] = useState(false);
+  const [editCarCountAccess, setEditCarCountAccess] = useState(false);
+  const [editSensorAccess, setEditSensorAccess] = useState(false);
+  const [editInventoryAccess, setEditInventoryAccess] = useState(false);
+  const [editEquipmentAccess, setEditEquipmentAccess] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [inviteRole, setInviteRole] = useState("attendant");
   const [inviteLocs, setInviteLocs] = useState([]);
@@ -5526,11 +5554,7 @@ function TeamMembers({ user, locations }) {
         const biz = user.bizName || user.name || "WashLevel";
         const mgr = user.name || user.email || "Your Manager";
         await sendInvite({ 
-          inviteEmail: inviteEmail.toLowerCase(), 
-          inviteRole: inviteRole || "attendant", 
-          bizName: biz, 
-          managerName: mgr 
-        });
+          inviteEmail: inviteEmail.toLowerCase(), inviteRole: inviteRole || "attendant", bizName: biz, managerName: mgr, ownerId: user.uid });
       } catch(e) { console.log("Email send error:", e.message); }
       setSent(true); setInviteEmail(""); setInviteLocs([]);
       setTimeout(() => setSent(false), 3000);
@@ -5601,14 +5625,40 @@ function TeamMembers({ user, locations }) {
               </div>
             </div>
           )}
+          {editRole !== "manager" && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 8 }}>Section Access</div>
+              {[
+                { state: editCarCountAccess, set: setEditCarCountAccess, label: "Car Counts", desc: "View car count data and reports" },
+                { state: editSensorAccess, set: setEditSensorAccess, label: "Sensors", desc: "View pressure and chemical sensors" },
+                { state: editInventoryAccess, set: setEditInventoryAccess, label: "Inventory", desc: "View and manage inventory" },
+                { state: editEquipmentAccess, set: setEditEquipmentAccess, label: "Equipment", desc: "View and manage equipment" },
+              ].map(({ state, set, label, desc }) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#f4f6f8", borderRadius: 8, border: "1px solid #e5e7eb", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{label}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{desc}</div>
+                  </div>
+                  <div onClick={() => set(p => !p)}
+                    style={{ width: 44, height: 24, borderRadius: 12, background: state ? "#0f1f35" : "#e2e8f0", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                    <div style={{ position: "absolute", top: 2, left: state ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={async () => {
               setSavingEdit(true);
               const payrollAccess = editRole === "manager" ? editPayrollAccess : false;
-              await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, payrollAccess, updatedAt: new Date().toISOString() });
+              const carCountAccess = editRole === "manager" ? true : editCarCountAccess;
+              const sensorAccess = editRole === "manager" ? true : editSensorAccess;
+              const inventoryAccess = editRole === "manager" ? true : editInventoryAccess;
+              const equipmentAccess = editRole === "manager" ? true : editEquipmentAccess;
+              await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess, updatedAt: new Date().toISOString() });
               setSavingEdit(false);
               setEditingMember(null);
-              setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess } : m));
+              setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess } : m));
             }} disabled={savingEdit}
               style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {savingEdit ? "Saving..." : "Save Changes"}
@@ -5637,7 +5687,7 @@ function TeamMembers({ user, locations }) {
                 <button onClick={() => handleRemove(m.uid, m.name || m.email)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
               )}
               {m.role !== "owner" && (
-                <button onClick={() => { setEditingMember(m); setEditLocs(m.allowedLocations || []); setEditRole(m.role || "attendant"); setEditPayrollAccess(m.payrollAccess || false); }}
+                <button onClick={() => { setEditingMember(m); setEditLocs(m.allowedLocations || []); setEditRole(m.role || "attendant"); setEditPayrollAccess(m.payrollAccess || false); setEditCarCountAccess(m.carCountAccess || false); setEditSensorAccess(m.sensorAccess || false); setEditInventoryAccess(m.inventoryAccess || false); setEditEquipmentAccess(m.equipmentAccess || false); }}
                   style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit Access</button>
               )}
             </div>
@@ -5661,7 +5711,7 @@ function TeamMembers({ user, locations }) {
                 <button onClick={async () => {
                   try {
                     const sendInvite = httpsCallable(functions, "sendInviteEmail");
-                    await sendInvite({ inviteEmail: inv.email, inviteRole: inv.role, bizName: user.bizName || user.name, managerName: user.name });
+                    await sendInvite({ inviteEmail: inv.email, inviteRole: inv.role, bizName: user.bizName || user.name, managerName: user.name, ownerId: user.uid });
                     alert("Invite email sent to " + inv.email);
                   } catch(e) { alert("Could not send email: " + e.message); }
                 }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Send Email</button>
@@ -6557,7 +6607,8 @@ if (user && pendingInvite) {
 if (user) return <Dashboard />;
 const params = new URLSearchParams(window.location.search);
 const inviteEmail = params.get("invite");
-return <Login defaultTab={inviteEmail ? "signup" : "login"} defaultEmail={inviteEmail || ""} />;
+const inviteOwner = params.get("owner");
+return <Login defaultTab={inviteEmail ? "signup" : "login"} defaultEmail={inviteEmail || ""} ownerId={inviteOwner || ""} />;
 }
 
 export default function App() {

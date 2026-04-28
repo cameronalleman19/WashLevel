@@ -36,7 +36,7 @@ exports.sendInviteEmail = onCall({ secrets: [RESEND_API_KEY] }, async (request) 
           <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; text-align: center;">
             <span style="color: #0369a1; font-weight: 600; font-size: 15px;">${inviteEmail}</span>
           </div>
-          <a href="https://washlevel.com/?invite=${encodeURIComponent(inviteEmail)}" style="display: block; background: #1a3352; color: #fff; text-decoration: none; text-align: center; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 15px;">
+          <a href="https://washlevel.com/?invite=${encodeURIComponent(inviteEmail)}&owner=${encodeURIComponent(request.data.ownerId || "")}" style="display: block; background: #1a3352; color: #fff; text-decoration: none; text-align: center; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 15px;">
             Create My Account
           </a>
         </div>
