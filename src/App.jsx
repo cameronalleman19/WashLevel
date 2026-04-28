@@ -1,6 +1,7 @@
 // Paste into App.tsx, then in Dependencies panel add: firebase (10.8.0)
 
 import React, { useState, useEffect, useRef, createContext, useContext, Component } from "react";
+import { Html5QrcodeScanner, Html5Qrcode } from "html5-qrcode";
 import { initializeApp, getApps } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -3972,6 +3973,47 @@ return (
 }
 
 //  INVENTORY
+const SCANNER_ID = "washlevel-barcode-scanner";
+
+function BarcodeScanner({ onScan, onClose }) {
+  useEffect(() => {
+    let html5Qr = null;
+    let scanned = false;
+    const timer = setTimeout(() => {
+      html5Qr = new Html5Qrcode(SCANNER_ID);
+      html5Qr.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (decodedText) => {
+          if (scanned) return;
+          scanned = true;
+          onScan(decodedText);
+        },
+        () => {}
+      ).catch(err => console.log("Scanner start error:", err));
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      if (html5Qr) html5Qr.stop().catch(() => {});
+    };
+  }, []);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 2000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "100%", maxWidth: 400, margin: "0 16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>Scan Barcode</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, textAlign: "center" }}>Point camera at barcode</div>
+        <div id={SCANNER_ID} style={{ width: "100%", borderRadius: 10, overflow: "hidden" }} />
+      </div>
+    </div>
+  );
+}
+
+
 function Inventory({ locId, locationName, user }) {
   const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
   const [items, setItems] = useState([]);
@@ -3988,6 +4030,12 @@ function Inventory({ locId, locationName, user }) {
   const [editVendorData, setEditVendorData] = useState({});
   const [saving, setSaving] = useState(false);
   const [expandedVendors, setExpandedVendors] = useState({});
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanMode, setScanMode] = useState("inventory"); // "inventory" or "attach"
+  const [scanResult, setScanResult] = useState(null);
+  const [scanQtyPrompt, setScanQtyPrompt] = useState(null); // { item, barcode }
+  const [scanQty, setScanQty] = useState(1);
+  const [attachingBarcode, setAttachingBarcode] = useState(null); // itemId being attached
 
   useEffect(() => {
     if (!locId) return;
@@ -4050,7 +4098,7 @@ function Inventory({ locId, locationName, user }) {
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
         {activeTab === "vendors" && (user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAddVendor(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
-        {activeTab === "inventory" && (user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>}
+        {activeTab === "inventory" && (user?.role === "manager" || user?.role === "owner") && <div style={{ display: "flex", gap: 8 }}><button onClick={() => { setScanMode("inventory"); setShowScanner(true); }} style={{ background: "#f0fdf4", color: "#059669", border: "1.5px solid #bbf7d0", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>📷 Scan</button><button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button></div>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -4065,6 +4113,71 @@ function Inventory({ locId, locationName, user }) {
       </div>
 
       {activeTab === "inventory" && <>
+
+      {/* Barcode Scanner Modal */}
+      {showScanner && (
+        <BarcodeScanner
+          onScan={(barcode) => {
+            setShowScanner(false);
+            setTimeout(() => {
+              try {
+                if (scanMode === "inventory") {
+                  const found = items.find(i => i.barcode === barcode);
+                  if (found) {
+                    setScanQtyPrompt({ item: found, barcode });
+                    setScanQty(1);
+                  } else {
+                    setScanResult({ barcode, found: false });
+                  }
+                } else if (scanMode === "attach" && attachingBarcode) {
+                  updateDoc(doc(db, "locations", locId, "inventory", attachingBarcode), { barcode, updatedAt: new Date().toISOString() });
+                  setAttachingBarcode(null);
+                  alert("Barcode saved!");
+                }
+              } catch(e) { console.error("Scan error:", e); }
+            }, 300);
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
+      {/* Scan Quantity Prompt */}
+      {scanQtyPrompt && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 360 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35", marginBottom: 4 }}>{scanQtyPrompt.item.name}</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Current stock: {scanQtyPrompt.item.quantity} {scanQtyPrompt.item.unit}</div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>How many are you adding?</label>
+            <input type="number" value={scanQty} min="1"
+              onChange={e => setScanQty(parseFloat(e.target.value) || 1)}
+              style={{ width: "100%", padding: "12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", boxSizing: "border-box", marginBottom: 16 }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={async () => {
+                const newQty = (scanQtyPrompt.item.quantity || 0) + scanQty;
+                await updateDoc(doc(db, "locations", locId, "inventory", scanQtyPrompt.item.id), { quantity: newQty, updatedAt: new Date().toISOString() });
+                setScanQtyPrompt(null);
+              }} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Add to Inventory</button>
+              <button onClick={() => setScanQtyPrompt(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barcode Not Found */}
+      {scanResult && !scanResult.found && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 10, padding: "12px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "#92400e" }}>Barcode not found</div>
+            <div style={{ fontSize: 11, color: "#b45309", marginTop: 2 }}>{scanResult.barcode}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { setNewItem(p => ({...p, barcode: scanResult.barcode})); setShowAdd(true); setScanResult(null); }}
+              style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>
+            <button onClick={() => setScanResult(null)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#94a3b8" }}>×</button>
+          </div>
+        </div>
+      )}
+
 
       {showAdd && (
         <div style={{ background: "#fff", border: "1.5px dashed #6366f1", borderRadius: 16, padding: 20, marginBottom: 18 }}>
