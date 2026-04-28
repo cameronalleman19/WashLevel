@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, createContext, useContext, Component } from "react";
 import { Html5QrcodeScanner, Html5Qrcode } from "html5-qrcode";
+import JsBarcode from "jsbarcode";
 import { initializeApp, getApps } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -4057,7 +4058,12 @@ function Inventory({ locId, locationName, user }) {
     if (!newItem.name.trim()) return;
     setSaving(true);
     const id = "inv" + Date.now();
-    await setDoc(doc(db, "locations", locId, "inventory", id), { ...newItem, id, createdAt: new Date().toISOString() });
+    const itemToSave = { ...newItem, id, createdAt: new Date().toISOString() };
+    if (newItem.generateBarcode && !newItem.barcode) {
+      itemToSave.barcode = "WL-" + id;
+    }
+    delete itemToSave.generateBarcode;
+    await setDoc(doc(db, "locations", locId, "inventory", id), itemToSave);
     setNewItem({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0, vendorId: "", barcode: "", generateBarcode: false });
     setShowAdd(false);
     setSaving(false);
@@ -4070,8 +4076,36 @@ function Inventory({ locId, locationName, user }) {
   };
 
   const handleSaveEdit = async (itemId) => {
-    await updateDoc(doc(db, "locations", locId, "inventory", itemId), { ...editData, updatedAt: new Date().toISOString() });
-    setEditingId(null);
+    const dataToSave = { ...editData, updatedAt: new Date().toISOString() };
+    if (editData.generateBarcode && !items.find(i => i.id === itemId)?.barcode) {
+      dataToSave.barcode = "WL-" + itemId;
+    }
+    delete dataToSave.generateBarcode;
+    await updateDoc(doc(db, "locations", locId, "inventory", itemId), dataToSave);
+  };
+
+  const printBarcode = (item) => {
+    const win = window.open("", "_blank");
+    win.document.write(`
+      <html><head><title>Barcode - ${item.name}</title>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
+        h2 { font-size: 18px; margin-bottom: 8px; }
+        p { font-size: 13px; color: #666; margin: 4px 0; }
+        svg { margin: 16px auto; display: block; }
+        @media print { button { display: none; } }
+      </style></head>
+      <body>
+        <h2>${item.name}</h2>
+        ${item.partNumber ? `<p>Part #: ${item.partNumber}</p>` : ""}
+        <svg id="barcode"></svg>
+        <p style="font-size:11px;color:#999;margin-top:8px">${item.barcode}</p>
+        <br/><button onclick="window.print()" style="padding:10px 24px;font-size:14px;cursor:pointer;background:#0f1f35;color:#fff;border:none;border-radius:8px;">Print</button>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+        <script>JsBarcode("#barcode", "${item.barcode}", { format: "CODE128", width: 2, height: 80, displayValue: false });</script>
+      </body></html>
+    `);
+    win.document.close();
   };
 
   const handleDelete = async (itemId) => {
@@ -4288,6 +4322,7 @@ function Inventory({ locId, locationName, user }) {
                                 <div style={{ fontSize: 11, color: "#059669", fontWeight: 600, flex: 1 }}>✓ {item.barcode}</div>
                                 <button onClick={() => { setAttachingBarcode(item.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Rescan</button>
                                 <button onClick={() => updateDoc(doc(db, "locations", locId, "inventory", item.id), { barcode: null })} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Remove</button>
+                                <button onClick={() => printBarcode(item)} style={{ background: "#f0fdf4", color: "#059669", border: "1px solid #bbf7d0", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>🖨️ Print</button>
                               </div>
                             ) : (
                               <button onClick={() => { setAttachingBarcode(item.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 5, padding: "5px 8px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>📷 Scan Existing</button>
