@@ -5319,7 +5319,7 @@ function CarCounts({ locations }) {
 
 
   useEffect(() => {
-    if (activeTab !== "monthly" || !locations.length || !selectedMonth) return;
+    if (activeTab !== "monthly" || !locations.length || !selectedMonth || monthlyLoaded) return;
     setMonthlyLoaded(false);
     const loadMonthly = async () => {
       const [year, month] = selectedMonth.split("-");
@@ -5328,7 +5328,8 @@ function CarCounts({ locations }) {
       for (const loc of locations) {
         const snaps = await getDocs(collection(db, "locations", loc.id, "daySummaries"));
         const dataMap = {};
-        snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; });
+        const eqMap = {};
+        snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; const eq = d.data().equipment || {}; Object.entries(eq).forEach(([eqId, v]) => { eqMap[eqId] = eqMap[eqId] || {}; eqMap[eqId][d.id] = v.carsWashed || 0; }); });
         const days = [];
         let total = 0;
         for (let d = 1; d <= daysInMonth; d++) {
@@ -5337,7 +5338,7 @@ function CarCounts({ locations }) {
           days.push({ date: ds, cars });
           total += cars;
         }
-        result[loc.id] = { total, days };
+        result[loc.id] = { total, days, eqMap };
       }
       setMonthlyData(result);
       setMonthlyLoaded(true);
@@ -5346,7 +5347,7 @@ function CarCounts({ locations }) {
   }, [activeTab, selectedMonth, locations.length]);
 
   useEffect(() => {
-    if (activeTab !== "yearly" || !locations.length || !selectedYear) return;
+    if (activeTab !== "yearly" || !locations.length || !selectedYear || yearlyLoaded) return;
     setYearlyLoaded(false);
     const loadYearly = async () => {
       const mn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -5355,7 +5356,8 @@ function CarCounts({ locations }) {
         const snaps = await getDocs(collection(db, "locations", loc.id, "daySummaries"));
         const dataMap = {};
         snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; });
-        let yearTotal = 0;
+        const eqMapY = {};
+        snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; const eq = d.data().equipment || {}; Object.entries(eq).forEach(([eqId, v]) => { eqMapY[eqId] = eqMapY[eqId] || {}; eqMapY[eqId][d.id] = v.carsWashed || 0; }); });
         const months = [];
         for (let m = 1; m <= 12; m++) {
           const ms = selectedYear + "-" + String(m).padStart(2, "0");
@@ -5367,7 +5369,7 @@ function CarCounts({ locations }) {
           months.push({ month: ms, label: mn[m-1], cars: mt });
           yearTotal += mt;
         }
-        result[loc.id] = { total: yearTotal, months };
+        result[loc.id] = { total: yearTotal, months, eqMap: eqMapY };
       }
       setYearlyData(result);
       setYearlyLoaded(true);
@@ -5610,14 +5612,35 @@ function CarCounts({ locations }) {
                       <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc.name}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#0f1f35" }}>{d.total.toLocaleString()}</div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))", gap: 6 }}>
-                      {d.days.map(day => (
-                        <div key={day.date} style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(day.date + "T12:00:00").getDate()}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: day.cars > 0 ? "#0f1f35" : "#d1d5db" }}>{day.cars > 0 ? day.cars : "-"}</div>
-                        </div>
-                      ))}
-                    </div>
+                    {locEquipment[loc.id] && locEquipment[loc.id].length > 1 ? (
+                      // Multiple equipment - show one calendar per equipment
+                      locEquipment[loc.id].map(eq => {
+                        const eqDays = d.days.map(day => ({ ...day, cars: (d.eqMap[eq.id] || {})[day.date] || 0 }));
+                        return (
+                          <div key={eq.id} style={{ marginBottom: 14 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>{eq.name}</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))", gap: 6 }}>
+                              {eqDays.map(day => (
+                                <div key={day.date} style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(day.date + "T12:00:00").getDate()}</div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: day.cars > 0 ? "#0f1f35" : "#d1d5db" }}>{day.cars > 0 ? day.cars : "-"}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      // Single equipment or no equipment - show location total calendar
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))", gap: 6 }}>
+                        {d.days.map(day => (
+                          <div key={day.date} style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                            <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(day.date + "T12:00:00").getDate()}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: day.cars > 0 ? "#0f1f35" : "#d1d5db" }}>{day.cars > 0 ? day.cars : "-"}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
