@@ -4181,20 +4181,39 @@ function Inventory({ locId, locationName, user }) {
       {/* Scan Quantity Prompt */}
       {scanQtyPrompt && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 360 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 420 }}>
             <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35", marginBottom: 4 }}>{scanQtyPrompt.item.name}</div>
-            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Current stock: {scanQtyPrompt.item.quantity} {scanQtyPrompt.item.unit}</div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>How many are you adding?</label>
-            <input type="number" value={scanQty} min="1"
-              onChange={e => setScanQty(parseFloat(e.target.value) || 1)}
-              style={{ width: "100%", padding: "12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", boxSizing: "border-box", marginBottom: 16 }} />
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 4 }}>Current Stock (tap to correct)</div>
+              <input type="number" value={scanQtyPrompt.item.quantity}
+                onChange={e => setScanQtyPrompt(p => ({...p, item: {...p.item, quantity: parseFloat(e.target.value)||0}}))}
+                style={{ width: "100%", padding: "10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 20, fontWeight: 700, textAlign: "center", outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
+              <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginTop: 4 }}>{scanQtyPrompt.item.unit}</div>
+            </div>
+
+            <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 16, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>Adjust quantity</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setScanQty(q => q - 1)}
+                  style={{ width: 40, height: 40, borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#f1f5f9", fontSize: 20, fontWeight: 700, cursor: "pointer", color: "#dc2626" }}>−</button>
+                <input type="number" value={scanQty}
+                  onChange={e => setScanQty(parseFloat(e.target.value) || 0)}
+                  style={{ flex: 1, padding: "10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 22, fontWeight: 700, textAlign: "center", outline: "none", color: scanQty > 0 ? "#059669" : scanQty < 0 ? "#dc2626" : "#334155" }} />
+                <button onClick={() => setScanQty(q => q + 1)}
+                  style={{ width: 40, height: 40, borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#f1f5f9", fontSize: 20, fontWeight: 700, cursor: "pointer", color: "#059669" }}>+</button>
+              </div>
+              {scanQty !== 0 && <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", marginTop: 6 }}>New total: {scanQtyPrompt.item.quantity + scanQty} {scanQtyPrompt.item.unit}</div>}
+            </div>
+
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={async () => {
-                const newQty = (scanQtyPrompt.item.quantity || 0) + scanQty;
+                const newQty = scanQtyPrompt.item.quantity + scanQty;
                 await updateDoc(doc(db, "locations", locId, "inventory", scanQtyPrompt.item.id), { quantity: newQty, updatedAt: new Date().toISOString() });
                 setScanQtyPrompt(null);
-              }} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Add to Inventory</button>
-              <button onClick={() => setScanQtyPrompt(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                setScanQty(1);
+              }} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Update Inventory</button>
+              <button onClick={() => { setScanQtyPrompt(null); setScanQty(1); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
             </div>
           </div>
         </div>
