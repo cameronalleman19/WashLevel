@@ -4037,6 +4037,8 @@ function Inventory({ locId, locationName, user }) {
   const [scanQtyPrompt, setScanQtyPrompt] = useState(null); // { item, barcode }
   const [scanQty, setScanQty] = useState(1);
   const [attachingBarcode, setAttachingBarcode] = useState(null); // itemId being attached
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [savedEdit, setSavedEdit] = useState(false);
 
   useEffect(() => {
     if (!locId) return;
@@ -4076,12 +4078,16 @@ function Inventory({ locId, locationName, user }) {
   };
 
   const handleSaveEdit = async (itemId) => {
+    setSavingEdit(true);
     const dataToSave = { ...editData, updatedAt: new Date().toISOString() };
     if (editData.generateBarcode && !items.find(i => i.id === itemId)?.barcode) {
       dataToSave.barcode = "WL-" + itemId;
     }
     delete dataToSave.generateBarcode;
     await updateDoc(doc(db, "locations", locId, "inventory", itemId), dataToSave);
+    setSavingEdit(false);
+    setSavedEdit(true);
+    setTimeout(() => { setSavedEdit(false); setEditingId(null); }, 1000);
   };
 
   const printBarcode = (item) => {
@@ -4356,7 +4362,7 @@ function Inventory({ locId, locationName, user }) {
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => handleSaveEdit(item.id)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                        <button onClick={() => handleSaveEdit(item.id)} disabled={savingEdit} style={{ background: savedEdit ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : savedEdit ? "Saved!" : "Save"}</button>
                         <button onClick={() => setEditingId(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                       </div>
                     </div>
