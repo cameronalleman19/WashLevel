@@ -4039,6 +4039,9 @@ function Inventory({ locId, locationName, user }) {
   const [attachingBarcode, setAttachingBarcode] = useState(null); // itemId being attached
   const [savingEdit, setSavingEdit] = useState(false);
   const [savedEdit, setSavedEdit] = useState(false);
+  const [showItemHistory, setShowItemHistory] = useState(false);
+  const [itemHistory, setItemHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (!locId) return;
@@ -4074,7 +4077,11 @@ function Inventory({ locId, locationName, user }) {
   const handleUpdate = async (itemId, qty) => {
     const val = parseFloat(qty);
     if (isNaN(val)) return;
+    const item = items.find(i => i.id === itemId);
+    const qtyBefore = item?.quantity || 0;
+    const delta = val - qtyBefore;
     await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: val, updatedAt: new Date().toISOString() });
+    await logInventoryHistory(itemId, delta >= 0 ? "add" : "remove", delta, qtyBefore, val, "Manual adjustment");
   };
 
   const handleSaveEdit = async (itemId) => {
@@ -4085,6 +4092,11 @@ function Inventory({ locId, locationName, user }) {
     }
     delete dataToSave.generateBarcode;
     await updateDoc(doc(db, "locations", locId, "inventory", itemId), dataToSave);
+    const item = items.find(i => i.id === itemId);
+    const qtyBefore = item?.quantity || 0;
+    const qtyAfter = editData.quantity ?? qtyBefore;
+    const delta = qtyAfter - qtyBefore;
+    if (delta !== 0) await logInventoryHistory(itemId, delta > 0 ? "add" : "remove", delta, qtyBefore, qtyAfter, "Edited");
     setSavingEdit(false);
     setSavedEdit(true);
     setTimeout(() => { setSavedEdit(false); setEditingId(null); }, 1000);
@@ -4239,6 +4251,38 @@ function Inventory({ locId, locationName, user }) {
         </div>
       )}
 
+      {/* Inventory History Modal */}
+      {showItemHistory && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 480, maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexShrink: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>Inventory History</div>
+              <button onClick={() => setShowItemHistory(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {loadingHistory ? (
+                <div style={{ textAlign: "center", padding: 30, color: "#94a3b8" }}>Loading...</div>
+              ) : itemHistory.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 30, color: "#94a3b8" }}>No history yet</div>
+              ) : itemHistory.map(h => (
+                <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: h.delta > 0 ? "#059669" : h.delta < 0 ? "#dc2626" : "#0ea5e9", background: h.delta > 0 ? "#f0fdf4" : h.delta < 0 ? "#fef2f2" : "#f0f9ff", padding: "2px 8px", borderRadius: 6 }}>
+                        {h.delta > 0 ? "+" + h.delta : h.delta === 0 ? "Set" : h.delta}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#334155", fontWeight: 600 }}>{h.quantityBefore} → {h.quantityAfter}</span>
+                      {h.note && <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic" }}>{h.note}</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{h.userName} · {new Date(h.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Barcode Not Found */}
       {scanResult && !scanResult.found && (
         <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 10, padding: "12px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -4333,7 +4377,13 @@ function Inventory({ locId, locationName, user }) {
                 <div key={item.id} style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: 12, marginBottom: 12 }}>
                   {isEditing ? (
                     <div style={{ background: "#f4f6f8", borderRadius: 8, padding: 14 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: "#334155", marginBottom: 10 }}>Editing: {item.name}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "#334155" }}>Editing: {item.name}</div>
+                        <button onClick={async () => { const next = !showItemHistory; setShowItemHistory(next); if (next) { setLoadingHistory(true); const snap = await getDocs(collection(db, "locations", locId, "inventory", item.id, "history")); setItemHistory(snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.timestamp.localeCompare(a.timestamp))); setLoadingHistory(false); } }} style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>History</button>
+                      </div>
+                        <button onClick={async () => { const next = !showItemHistory; setShowItemHistory(next); if (next) { setLoadingHistory(true); const snap = await getDocs(collection(db, "locations", locId, "inventory", item.id, "history")); setItemHistory(snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.timestamp.localeCompare(a.timestamp))); setLoadingHistory(false); } }} style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>History</button>
+                      </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
@@ -4584,6 +4634,7 @@ const item = items.find(i => i.id === itemId);
 if (!item) continue;
 const newQty = Math.max(0, item.quantity - qty);
 await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: newQty, updatedAt: new Date().toISOString() });
+await addDoc(collection(db, "locations", locId, "inventory", itemId, "history"), { type: "task_use", delta: -qty, quantityBefore: item.quantity, quantityAfter: newQty, userId: "task", userName: "Task", timestamp: new Date().toISOString(), note: "Used on task: " + (task?.title || "Unknown"), taskId: task?.id || "" });
 }
 setSaving(false);
 onClose();

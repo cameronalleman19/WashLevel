@@ -845,8 +845,9 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     const existingEqCars = existingEqSummary.exists
       ? (existingEqSummary.data().equipment?.[foundEqId]?.carsWashed || 0)
       : 0;
-    const newEqCount = existingEqCars + count;
-    const existingLocCount = existingEqSummary.exists ? (existingEqSummary.data().carsWashed || 0) : 0;
+    const newEqCount = count; // Set directly from email, not additive
+    const existingEqData = existingEqSummary.exists ? (existingEqSummary.data().equipment || {}) : {};
+    const existingLocCount = Object.entries(existingEqData).filter(([k]) => k !== foundEqId).reduce((s, [, v]) => s + (v.carsWashed || 0), 0);
     const newLocCount = existingLocCount + count;
     const nowStr = new Date().toISOString();
 
