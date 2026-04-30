@@ -1774,6 +1774,14 @@ View History
 </button>
 )}
 </div>
+{task.partsUsed && task.partsUsed.length > 0 && (
+  <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+    <span style={{ fontSize: 10, color: "#059669", fontWeight: 600 }}>Materials:</span>
+    {task.partsUsed.map((p, i) => (
+      <span key={i} style={{ fontSize: 10, background: "#f0fdf4", color: "#059669", border: "1px solid #bbf7d0", borderRadius: 4, padding: "1px 6px", fontWeight: 600 }}>{p.name} x{p.qty}</span>
+    ))}
+  </div>
+)}
 {showHistory && (
 <div style={{ marginTop: 12 }}>
 <div style={{ fontWeight: 600, fontSize: 12, color: "#334155", marginBottom: 8 }}>Task History</div>
@@ -4636,6 +4644,24 @@ const newQty = Math.max(0, item.quantity - qty);
 await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: newQty, updatedAt: new Date().toISOString() });
 await addDoc(collection(db, "locations", locId, "inventory", itemId, "history"), { type: "task_use", delta: -qty, quantityBefore: item.quantity, quantityAfter: newQty, userId: "task", userName: "Task", timestamp: new Date().toISOString(), note: "Used on task: " + (task?.title || "Unknown"), taskId: task?.id || "" });
 }
+// Save materials used to task
+const usedItems = Object.entries(selected)
+  .filter(([, qty]) => qty > 0)
+  .map(([itemId, qty]) => {
+    const item = items.find(i => i.id === itemId);
+    return { itemId, name: item?.name || itemId, qty, unit: item?.unit || "" };
+  });
+  const existingParts = task.partsUsed || [];
+  const mergedParts = [...existingParts];
+  for (const newItem of usedItems) {
+    const idx = mergedParts.findIndex(p => p.itemId === newItem.itemId);
+    if (idx >= 0) { mergedParts[idx] = { ...mergedParts[idx], qty: mergedParts[idx].qty + newItem.qty }; }
+    else { mergedParts.push(newItem); }
+  }
+  await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
+    partsUsed: mergedParts,
+    updatedAt: new Date().toISOString(),
+  });
 setSaving(false);
 onClose();
 };
