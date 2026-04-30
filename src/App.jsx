@@ -4090,6 +4090,18 @@ function Inventory({ locId, locationName, user }) {
     setTimeout(() => { setSavedEdit(false); setEditingId(null); }, 1000);
   };
 
+  const logInventoryHistory = async (itemId, type, delta, quantityBefore, quantityAfter, note = "") => {
+    try {
+      await addDoc(collection(db, "locations", locId, "inventory", itemId, "history"), {
+        type, delta, quantityBefore, quantityAfter,
+        userId: user?.uid || "unknown",
+        userName: user?.name || user?.email || "Unknown",
+        timestamp: new Date().toISOString(),
+        note,
+      });
+    } catch(e) { console.log("History log error:", e.message); }
+  };
+
   const printBarcode = (item) => {
     const win = window.open("", "_blank");
     win.document.write(`
@@ -4214,8 +4226,10 @@ function Inventory({ locId, locationName, user }) {
 
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={async () => {
-                const newQty = scanQtyPrompt.item.quantity + scanQty;
+                const qtyBefore = scanQtyPrompt.item.quantity;
+                const newQty = qtyBefore + scanQty;
                 await updateDoc(doc(db, "locations", locId, "inventory", scanQtyPrompt.item.id), { quantity: newQty, updatedAt: new Date().toISOString() });
+                await logInventoryHistory(scanQtyPrompt.item.id, scanQty >= 0 ? "add" : "remove", scanQty, qtyBefore, newQty, "Scanned");
                 setScanQtyPrompt(null);
                 setScanQty(1);
               }} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Update Inventory</button>

@@ -722,6 +722,12 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     let count = null;
     let extraData = {}; // Additional parsed fields (packages, revenue) stored alongside car count
     const isPDQ = /Laserwash.*Daily\s+Sales\s+Report/i.test(subject);
+    // For PDQ, extract count from subject line (most reliable source)
+    // Subject format: "Laserwash: S: Daily Sales Report :92"
+    if (isPDQ) {
+      const subjectCount = subject.match(/:\s*(\d+)\s*$/);
+      if (subjectCount) count = parseInt(subjectCount[1]);
+    }
 
     // Format 1: TOTAL = 16148: TODAY = 6 (Dencar)
     const todayMatch = body.match(/TODAY\s*=\s*(\d+)/i);
