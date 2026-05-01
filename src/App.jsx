@@ -6070,7 +6070,7 @@ function CarCounts({ locations }) {
 
 
   useEffect(() => {
-    if (activeTab !== "monthly" || !locations.length || !selectedMonth || monthlyLoaded) return;
+    if (activeTab !== "monthly" || !locations.length || !selectedMonth) return;
     setMonthlyLoaded(false);
     const loadMonthly = async () => {
       const [year, month] = selectedMonth.split("-");
