@@ -1305,7 +1305,7 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 18, marginBottom: 18 }}>
           {visible.sensors && (isManager || user?.sensorAccess) && (
             <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-              <SensorTilesPanel locId={location?.id} uid={user?.uid} onNavigate={onNavigate} onSensorNavigate={onSensorNavigate} />
+              <SensorTilesPanel locId={location?.id} uid={user?.isTeamMember ? user?.ownerId : user?.uid} onNavigate={onNavigate} onSensorNavigate={onSensorNavigate} />
             </div>
           )}
           {visible.equipment && (
@@ -6359,10 +6359,12 @@ function TeamMembers({ user, locations }) {
               const sensorAccess = editRole === "manager" ? true : editSensorAccess;
               const inventoryAccess = editRole === "manager" ? true : editInventoryAccess;
               const equipmentAccess = editRole === "manager" ? true : editEquipmentAccess;
-              await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess, updatedAt: new Date().toISOString() });
+              try {
+                await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess, updatedAt: new Date().toISOString() });
+                setEditingMember(null);
+                setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess } : m));
+              } catch(e) { alert("Save error: " + e.message); }
               setSavingEdit(false);
-              setEditingMember(null);
-              setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess } : m));
             }} disabled={savingEdit}
               style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {savingEdit ? "Saving..." : "Save Changes"}
@@ -7234,7 +7236,7 @@ return (
 )}
 {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
         {view === "carcounts" && <CarCounts locations={locations} />}
-{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.uid} locations={locations} initialTab={sensorTab} onTabChange={setSensorTab} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.isTeamMember ? user?.ownerId : user?.uid} locations={locations} initialTab={sensorTab} onTabChange={setSensorTab} />}
 {view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); setEditTask(null); }} onAdd={() => {}} preset={taskPreset} user={user} editTask={editTask} />}

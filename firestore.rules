@@ -41,14 +41,18 @@ service cloud.firestore {
         && (request.auth.uid == userId
             || resource.data.ownerId == request.auth.uid);
 
-      // Only the user themselves can write their own profile
+      // User can write their own profile, or owner can update team member profiles
       allow write: if request.auth != null
-        && request.auth.uid == userId;
+        && (request.auth.uid == userId
+            || resource.data.ownerId == request.auth.uid);
 
       // Private subcollections: integrations, prefs
       match /{sub=**} {
         allow read, write: if request.auth != null
           && request.auth.uid == userId;
+        // Team members can read their owner's integrations and prefs
+        allow read: if request.auth != null
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ownerId == userId;
       }
 
       // Notifications: owner manages their own; any authenticated user can create (for cross-user task/alert notifications)
