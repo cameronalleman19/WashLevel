@@ -219,10 +219,27 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
     totalOpen += open.length;
     totalOverdue += overdue.length;
 
-    if (prefs.includeTasksDone !== false && done.length > 0)
+    if (prefs.includeTasksDone !== false && done.length > 0) {
       html += `<p style="margin: 4px 0; color: #374151;"><strong>Tasks Completed:</strong> ${done.length}</p>`;
-    if (prefs.includeOpenTasks !== false && open.length > 0)
+      if (prefs.includeTaskNames !== false) {
+        html += `<ul style="margin: 2px 0 8px 16px; padding: 0; list-style: none;">`;
+        done.forEach(t => {
+          html += `<li style="margin: 2px 0; color: #059669; font-size: 13px;">✓ ${t.title}</li>`;
+        });
+        html += `</ul>`;
+      }
+    }
+    if (prefs.includeOpenTasks !== false && open.length > 0) {
       html += `<p style="margin: 4px 0; color: #374151;"><strong>Open Tasks:</strong> ${open.length}</p>`;
+      if (prefs.includeTaskNames !== false) {
+        html += `<ul style="margin: 2px 0 8px 16px; padding: 0; list-style: none;">`;
+        open.forEach(t => {
+          const isOverdue = t.due && t.due < today;
+          html += `<li style="margin: 2px 0; color: ${isOverdue ? '#e74c3c' : '#374151'}; font-size: 13px;">${isOverdue ? '⚠ ' : '• '}${t.title}${t.due ? ' (due ' + t.due + ')' : ''}</li>`;
+        });
+        html += `</ul>`;
+      }
+    }
     if (prefs.includeOverdue !== false && overdue.length > 0)
       html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Overdue Tasks:</strong> ${overdue.length}</p>`;
 
@@ -342,10 +359,25 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
         totalOpen += open.length;
         totalOverdue += overdue.length;
 
-        if (prefs.includeTasksDone !== false && done.length > 0)
+        if (prefs.includeTasksDone !== false && done.length > 0) {
           html += `<p style="margin: 4px 0; color: #374151;"><strong>Tasks Completed:</strong> ${done.length}</p>`;
-        if (prefs.includeOpenTasks !== false && open.length > 0)
+          if (prefs.includeTaskNames !== false) {
+            html += `<ul style="margin: 2px 0 8px 16px; padding: 0; list-style: none;">`;
+            done.forEach(t => { html += `<li style="margin: 2px 0; color: #059669; font-size: 13px;">✓ ${t.title}</li>`; });
+            html += `</ul>`;
+          }
+        }
+        if (prefs.includeOpenTasks !== false && open.length > 0) {
           html += `<p style="margin: 4px 0; color: #374151;"><strong>Open Tasks:</strong> ${open.length}</p>`;
+          if (prefs.includeTaskNames !== false) {
+            html += `<ul style="margin: 2px 0 8px 16px; padding: 0; list-style: none;">`;
+            open.forEach(t => {
+              const isOverdue = t.due && t.due < today;
+              html += `<li style="margin: 2px 0; color: ${isOverdue ? '#e74c3c' : '#374151'}; font-size: 13px;">${isOverdue ? '⚠ ' : '• '}${t.title}${t.due ? ' (due ' + t.due + ')' : ''}</li>`;
+            });
+            html += `</ul>`;
+          }
+        }
         if (prefs.includeOverdue !== false && overdue.length > 0)
           html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Overdue Tasks:</strong> ${overdue.length}</p>`;
 

@@ -1970,6 +1970,9 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
           category: t.category,
           mediaUrls: t.mediaUrls || latestHist?.photos || [],
           partsUsed: latestHist?.partsUsed || [],
+          items: latestHist?.items || t.checklist || [],
+          failCount: latestHist?.failCount || 0,
+          monitorCount: latestHist?.monitorCount || 0,
         });
       }
 
@@ -3490,7 +3493,45 @@ function TaskHistoryDetailModal({ entry, onClose }) {
             </div>
           </div>
         )}
-        {!entry.note && (!entry.mediaUrls || entry.mediaUrls.length === 0) && (!entry.partsUsed || entry.partsUsed.length === 0) && (
+        {/* Inspection Results */}
+        {entry.items && entry.items.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 10 }}>Inspection Results</div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+              <div style={{ background: "#dcfce7", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "#15803d" }}>
+                {entry.items.filter(i => i.result === "good").length} Passed
+              </div>
+              {entry.items.filter(i => i.result === "monitor").length > 0 && (
+                <div style={{ background: "#fef9c3", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "#854d0e" }}>
+                  {entry.items.filter(i => i.result === "monitor").length} Monitor
+                </div>
+              )}
+              {entry.items.filter(i => i.result === "fail").length > 0 && (
+                <div style={{ background: "#fee2e2", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "#dc2626" }}>
+                  {entry.items.filter(i => i.result === "fail").length} Failed
+                </div>
+              )}
+            </div>
+            {entry.items.map((item, idx) => (
+              <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                  background: item.result === "good" ? "#dcfce7" : item.result === "fail" ? "#fee2e2" : "#fef9c3",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700,
+                  color: item.result === "good" ? "#15803d" : item.result === "fail" ? "#dc2626" : "#854d0e" }}>
+                  {item.result === "good" ? "✓" : item.result === "fail" ? "✕" : "!"}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{item.label}</div>
+                  {item.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{item.note}</div>}
+                  {item.photoUrl && <img src={item.photoUrl} alt="inspection" onClick={() => window.open(item.photoUrl)}
+                    style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, marginTop: 6, cursor: "pointer" }} />}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!entry.note && !entry.items?.length && (!entry.mediaUrls || entry.mediaUrls.length === 0) && (!entry.partsUsed || entry.partsUsed.length === 0) && (
           <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "20px 0" }}>No notes or photos were added when this task was completed.</div>
         )}
       </div>
@@ -3503,6 +3544,7 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
   const [filterUser, setFilterUser] = useState("all");
   const [filterEquipment, setFilterEquipment] = useState("all");
   const [equipmentList, setEquipmentList] = useState([]);
+  const [selectedEntry, setSelectedEntry] = useState(null);
 
   useEffect(() => {
     if (!locId) return;
@@ -3529,6 +3571,7 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+      {selectedEntry && <TaskHistoryDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />}
       <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -3558,7 +3601,22 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
           {filtered.length === 0 ? (
             <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 14, padding: 40 }}>No completed tasks yet</div>
           ) : filtered.map(t => (
-            <div key={t.id} style={{ padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+            <div key={t.id} onClick={async () => {
+              // Load task history for inspection results
+              let items = t.checklist || [];
+              let note = t.note || "";
+              let mediaUrls = t.mediaUrls || [];
+              let partsUsed = [];
+              let duration = t.duration || null;
+              if (locId) {
+                try {
+                  const histSnap = await getDocs(collection(db, "locations", locId, "tasks", t.id, "history"));
+                  const hist = histSnap.docs.map(d => d.data()).sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))[0];
+                  if (hist) { items = hist.items || items; note = hist.note || note; mediaUrls = hist.photos || mediaUrls; partsUsed = hist.partsUsed || []; duration = hist.duration || duration; }
+                } catch(e) {}
+              }
+              setSelectedEntry({ taskTitle: t.title, completedAt: t.completedAt, completedBy: t.completedBy, category: t.category, note, mediaUrls, partsUsed, duration, items });
+            }} style={{ padding: "12px 0", borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 13, color: t.archived ? "#94a3b8" : "#0f1f35", textDecoration: t.archived ? "line-through" : "none" }}>{t.title}</div>
@@ -3570,8 +3628,10 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
                     {t.equipmentId && equipmentList.find(e => e.id === t.equipmentId) && (
                       <span style={{ fontSize: 10, fontWeight: 600, color: "#1d4ed8", background: "#dbeafe", padding: "2px 6px", borderRadius: 4 }}>{equipmentList.find(e => e.id === t.equipmentId).name}</span>
                     )}
+                    {t.category === "inspection" && <span style={{ fontSize: 10, color: "#94a3b8" }}>Tap to view results</span>}
                   </div>
                 </div>
+                <span style={{ fontSize: 16, color: "#94a3b8", flexShrink: 0 }}>›</span>
               </div>
             </div>
           ))}
@@ -3636,8 +3696,19 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
       updatedAt: now
     });
 
+    // Always write to task history subcollection
+    const taskHistId = "insp" + Date.now();
+    await setDoc(doc(db, "locations", locId, "tasks", task.id, "history", taskHistId), {
+      id: taskHistId, type: "inspection", date: now.split("T")[0],
+      completedAt: now,
+      completedBy: user?.name || user?.email || "Unknown",
+      taskTitle: task.title, items,
+      failCount, monitorCount: items.filter(i => i.result === "monitor").length,
+      createdAt: now
+    });
+
     if (task.equipmentId) {
-      const histId = "insp" + Date.now();
+      const histId = "insp" + Date.now() + "eq";
       await setDoc(doc(db, "locations", locId, "equipment", task.equipmentId, "history", histId), {
         id: histId, type: "inspection", date: now.split("T")[0],
         completedBy: user?.name || user?.email || "Unknown",
@@ -6489,6 +6560,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     includeCounts: true,
     includeTasksDone: true,
     includeOpenTasks: true,
+    includeTaskNames: true,
     includeOverdue: true,
     includeEquipment: true,
     overdueTasksAlert: true,
@@ -6596,6 +6668,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
             {(user?.role === "manager" || user?.role === "owner") && <Row label="Car counts" desc="Yesterday's wash counts per location" k="includeCounts" />}
             <Row label="Tasks completed" desc="Tasks finished yesterday" k="includeTasksDone" />
             <Row label="Open tasks" desc="All currently pending or in-progress tasks" k="includeOpenTasks" />
+            <Row label="Show task names" desc="List individual task names (completed and open)" k="includeTaskNames" />
             <Row label="Overdue tasks" desc="Tasks past their due date" k="includeOverdue" />
             {(user?.role === "manager" || user?.role === "owner") && <Row label="Equipment alerts" desc="Any equipment in warning or alert status" k="includeEquipment" />}
           </>
