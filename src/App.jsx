@@ -3543,6 +3543,7 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
   const [sortBy, setSortBy] = useState("date");
   const [filterUser, setFilterUser] = useState("all");
   const [filterEquipment, setFilterEquipment] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
   const [equipmentList, setEquipmentList] = useState([]);
   const [selectedEntry, setSelectedEntry] = useState(null);
 
@@ -3559,6 +3560,7 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
   const filtered = doneTasks
     .filter(t => filterUser === "all" || t.completedBy === filterUser)
     .filter(t => filterEquipment === "all" || t.equipmentId === filterEquipment)
+    .filter(t => filterCategory === "all" || t.category === filterCategory)
     .sort((a, b) => {
       if (sortBy === "date") return (b.completedAt || b.updatedAt || "").localeCompare(a.completedAt || a.updatedAt || "");
       if (sortBy === "user") return (a.completedBy || "").localeCompare(b.completedBy || "");
@@ -3579,6 +3581,15 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
             <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#94a3b8", cursor: "pointer" }}>x</button>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", overflow: "visible" }}>
+            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+             style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#334155", background: "#f8fafc" }}>
+             <option value="all">All Types</option>
+             <option value="cleaning">Cleaning</option>
+             <option value="maintenance">Maintenance</option>
+             <option value="chemicals">Chemicals</option>
+             <option value="inspection">Inspection</option>
+             <option value="equipment">Equipment</option>
+           </select>
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
               style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12, color: "#334155", background: "#f8fafc" }}>
               <option value="date">Sort: Date</option>
