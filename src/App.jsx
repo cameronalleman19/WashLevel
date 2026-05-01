@@ -4207,7 +4207,125 @@ function BarcodeScanner({ onScan, onClose }) {
 }
 
 
-function Inventory({ locId, locationName, user }) {
+function InventoryTransferModal({ item, fromLocId, locations, onClose, user }) {
+  const [toLocId, setToLocId] = useState("");
+  const [qty, setQty] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
+
+  const otherLocs = locations.filter(l => l.id !== fromLocId);
+
+  const handleTransfer = async () => {
+    if (!toLocId || qty <= 0) return;
+    if (qty > item.quantity) { alert("Not enough stock to transfer."); return; }
+    setSaving(true);
+    const now = new Date().toISOString();
+    const fromLoc = locations.find(l => l.id === fromLocId);
+    const toLoc = locations.find(l => l.id === toLocId);
+
+    try {
+      // Deduct from source
+      const newFromQty = item.quantity - qty;
+      await updateDoc(doc(db, "locations", fromLocId, "inventory", item.id), {
+        quantity: newFromQty, updatedAt: now
+      });
+
+      // Log history at source
+      await setDoc(doc(db, "locations", fromLocId, "inventory", item.id, "history", "tr" + Date.now()), {
+        type: "transfer_out", quantity: -qty, newQuantity: newFromQty,
+        toLocation: toLoc?.name || toLocId,
+        note: "Transferred " + qty + " " + item.unit + " to " + (toLoc?.name || toLocId),
+        timestamp: now, by: user?.name || user?.email || "Unknown"
+      });
+
+      // Check if item exists at destination
+      const destSnap = await getDocs(collection(db, "locations", toLocId, "inventory"));
+      const existing = destSnap.docs.find(d => {
+        const data = d.data();
+        return data.name?.toLowerCase() === item.name?.toLowerCase() ||
+               (item.partNumber && data.partNumber === item.partNumber);
+      });
+
+      if (existing) {
+        // Add to existing item
+        const newToQty = (existing.data().quantity || 0) + qty;
+        await updateDoc(doc(db, "locations", toLocId, "inventory", existing.id), {
+          quantity: newToQty, updatedAt: now
+        });
+        // Log history at destination
+        await setDoc(doc(db, "locations", toLocId, "inventory", existing.id, "history", "tr" + Date.now()), {
+          type: "transfer_in", quantity: qty, newQuantity: newToQty,
+          fromLocation: fromLoc?.name || fromLocId,
+          note: "Received " + qty + " " + item.unit + " from " + (fromLoc?.name || fromLocId),
+          timestamp: now, by: user?.name || user?.email || "Unknown"
+        });
+      } else {
+        // Create new item at destination
+        const newId = "inv" + Date.now();
+        await setDoc(doc(db, "locations", toLocId, "inventory", newId), {
+          ...item, id: newId, quantity: qty, createdAt: now, updatedAt: now
+        });
+        // Log history
+        await setDoc(doc(db, "locations", toLocId, "inventory", newId, "history", "tr" + Date.now()), {
+          type: "transfer_in", quantity: qty, newQuantity: qty,
+          fromLocation: fromLoc?.name || fromLocId,
+          note: "Received " + qty + " " + item.unit + " from " + (fromLoc?.name || fromLocId),
+          timestamp: now, by: user?.name || user?.email || "Unknown"
+        });
+      }
+
+      setSaving(false);
+      onClose();
+    } catch(e) {
+      alert("Transfer failed: " + e.message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 400, padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#0f1f35" }}>Transfer Stock</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
+        </div>
+        <div style={{ background: "#f4f6f8", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35" }}>{item.name}</div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Available: {item.quantity} {item.unit}</div>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Transfer To</label>
+          <select value={toLocId} onChange={e => setToLocId(e.target.value)}
+            style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}>
+            <option value="">Select location...</option>
+            {otherLocs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Quantity to Transfer</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => setQty(q => Math.max(1, q - 1))}
+              style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid #e2e8f0", background: "#f1f5f9", fontSize: 18, cursor: "pointer", fontWeight: 700 }}>-</button>
+            <input type="number" min="1" max={item.quantity} value={qty} onChange={e => setQty(Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+              style={{ flex: 1, padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 18, fontWeight: 700, textAlign: "center", outline: "none", color: "#0f1f35" }} />
+            <button onClick={() => setQty(q => Math.min(item.quantity, q + 1))}
+              style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid #e2e8f0", background: "#f1f5f9", fontSize: 18, cursor: "pointer", fontWeight: 700 }}>+</button>
+            <span style={{ fontSize: 13, color: "#64748b" }}>{item.unit}</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={handleTransfer} disabled={!toLocId || saving}
+            style={{ flex: 1, background: !toLocId ? "#e2e8f0" : "#0f1f35", color: !toLocId ? "#94a3b8" : "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: !toLocId ? "not-allowed" : "pointer" }}>
+            {saving ? "Transferring..." : "Transfer"}
+          </button>
+          <button onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Inventory({ locId, locationName, user, locations = [] }) {
   const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
   const [items, setItems] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -4223,6 +4341,7 @@ function Inventory({ locId, locationName, user }) {
   const [editVendorData, setEditVendorData] = useState({});
   const [saving, setSaving] = useState(false);
   const [expandedVendors, setExpandedVendors] = useState({});
+  const [transferItem, setTransferItem] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scanMode, setScanMode] = useState("inventory"); // "inventory" or "attach"
   const [scanResult, setScanResult] = useState(null);
@@ -4617,10 +4736,11 @@ function Inventory({ locId, locationName, user }) {
                           </div>
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => handleSaveEdit(item.id)} disabled={savingEdit} style={{ background: savedEdit ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : savedEdit ? "Saved!" : "Save"}</button>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <button onClick={() => handleSaveEdit(item.id)} disabled={savingEdit} style={{ flex: 1, background: savedEdit ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : savedEdit ? "Saved!" : "Save"}</button>
                         <button onClick={() => setEditingId(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                       </div>
+                      <button onClick={() => { setTransferItem(item); setEditingId(null); }} style={{ width: "100%", background: "#ede9fe", color: "#6366f1", border: "1px solid #c4b5fd", borderRadius: 6, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Transfer Stock to Another Location</button>
                     </div>
                   ) : (
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -4699,6 +4819,7 @@ function Inventory({ locId, locationName, user }) {
         </div>
       )}
 
+      {transferItem && <InventoryTransferModal item={transferItem} fromLocId={locId} locations={locations} user={user} onClose={() => setTransferItem(null)} />}
       {activeTab === "vendors" && (
         <div>
           {showAddVendor && (
@@ -7229,7 +7350,7 @@ return (
 {view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
-{view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} user={user} />}
+{view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} user={user} locations={locations} />}
 {view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} onNavigate={setView} />}
         {view === "alerts" && (
   <AlertSettings locId={locId} locations={locations} user={user} setView={setView} setLocId={setLocId} />
