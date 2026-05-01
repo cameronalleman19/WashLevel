@@ -3113,6 +3113,9 @@ function TimeClock({ locId, locationName, allLocations }) {
   const [savingEdit, setSavingEdit] = useState(false);
   const [payrollPeriodStart, setPayrollPeriodStart] = useState("");
   const [showReport, setShowReport] = useState(false);
+  const [billingStart, setBillingStart] = useState("");
+  const [billingEnd, setBillingEnd] = useState("");
+  const [showBilling, setShowBilling] = useState(false);
 
   const isManager = user?.role === "manager" || user?.role === "owner" || !user?.isTeamMember;
   const today = new Date().toISOString().split("T")[0];
@@ -3552,6 +3555,71 @@ function TimeClock({ locId, locationName, allLocations }) {
               );
             })}
           </div>
+
+          {/* Location Billing Report */}
+         <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginTop: 16 }}>
+           <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Location Billing Report</div>
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+             <div>
+               <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Start Date</label>
+               <input type="date" value={billingStart} onChange={e => { setBillingStart(e.target.value); setShowBilling(false); }}
+                 style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+             </div>
+             <div>
+               <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>End Date</label>
+               <input type="date" value={billingEnd} onChange={e => { setBillingEnd(e.target.value); setShowBilling(false); }}
+                 style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+             </div>
+           </div>
+           <button onClick={() => setShowBilling(true)} disabled={!billingStart || !billingEnd}
+             style={{ background: billingStart && billingEnd ? "#6366f1" : "#e2e8f0", color: billingStart && billingEnd ? "#fff" : "#94a3b8", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: billingStart && billingEnd ? "pointer" : "not-allowed", marginBottom: 16 }}>
+             Generate Location Report
+           </button>
+           {showBilling && billingStart && billingEnd && (() => {
+             const allEntries = [...history, ...teamHistory];
+             const billingEntries = allEntries.filter(e => e.date >= billingStart && e.date <= billingEnd);
+             const locBilling = {};
+             billingEntries.forEach(e => {
+               const locTimes = e.locationTimes || {};
+               Object.entries(locTimes).forEach(([lId, lt]) => {
+                 if (!lt.in || !lt.out) return;
+                 const hrs = (new Date(lt.out) - new Date(lt.in)) / 3600000;
+                 if (!locBilling[lId]) locBilling[lId] = { employees: {} };
+                 if (!locBilling[lId].employees[e.uid]) locBilling[lId].employees[e.uid] = { name: e.name || e.uid, hrs: 0, entries: [] };
+                 locBilling[lId].employees[e.uid].hrs += hrs;
+                 locBilling[lId].employees[e.uid].entries.push({ date: e.date, in: lt.in, out: lt.out, hrs });
+               });
+             });
+             if (Object.keys(locBilling).length === 0) return <div style={{ color: "#94a3b8", fontSize: 13 }}>No location billing data for this period.</div>;
+             return Object.entries(locBilling).map(([lId, locData]) => {
+               const loc = allLocations.find(l => l.id === lId);
+               const totalLocHrs = Object.values(locData.employees).reduce((sum, emp) => sum + emp.hrs, 0);
+               return (
+                 <div key={lId} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                     <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc?.name || lId}</div>
+                     <div style={{ fontSize: 16, fontWeight: 800, color: "#6366f1" }}>{totalLocHrs.toFixed(2)} hrs</div>
+                   </div>
+                   {Object.entries(locData.employees).map(([uid, emp]) => (
+                     <div key={uid} style={{ marginBottom: 10 }}>
+                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                         <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{emp.name}</div>
+                         <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35" }}>{emp.hrs.toFixed(2)} hrs</div>
+                       </div>
+                       {emp.entries.map((entry, i) => (
+                         <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0 4px 12px", borderBottom: "1px solid #f3f4f6", fontSize: 12 }}>
+                           <span style={{ color: "#64748b" }}>{fmtDate(entry.date)}</span>
+                           <span style={{ color: "#94a3b8" }}>{fmt(entry.in)} — {fmt(entry.out)}</span>
+                           <span style={{ fontWeight: 600, color: "#0f1f35" }}>{entry.hrs.toFixed(2)} hrs</span>
+                         </div>
+                       ))}
+                     </div>
+                   ))}
+                 </div>
+               );
+             });
+           })()}
+         </div>
         </div>
       )}
     </div>
