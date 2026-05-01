@@ -295,8 +295,13 @@ const Spinner = () => (
   </div>
 );
 
-function Login({ defaultTab = "login", defaultEmail = "", ownerId = "" }) {
+function Login({ defaultTab = "login", defaultEmail = "", ownerId = "", inviteBiz = "", inviteRole = "", debugRole = "" }) {
   const { login, signup } = useAuth();
+  // Read params directly inside component as fallback
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlRole = inviteRole || urlParams.get("role") || "";
+  const urlBiz = inviteBiz || urlParams.get("biz") || "";
+  const urlOwner = ownerId || urlParams.get("owner") || "";
   const [tab, setTab] = useState(defaultTab);
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
@@ -313,24 +318,27 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "" }) {
   useEffect(() => {
     if (defaultEmail && defaultEmail.includes("@")) {
       setTab("signup");
-      // Auto check invite
-      getDocs(query(collection(db, "invites"), where("email", "==", defaultEmail.toLowerCase()), where("status", "==", "pending"))).then(snap => {
-        if (!snap.empty) {
-          const inv = snap.docs[0].data();
-          const ownerIdToUse = ownerId || inv.ownerId;
-          getDoc(doc(db, "users", ownerIdToUse)).then(ownerSnap => {
-            const biz = ownerSnap.exists() ? ownerSnap.data().bizName || ownerSnap.data().name : "";
-            setInviteData({ ...inv, bizName: biz, ownerId: ownerIdToUse });
+      const loadInvite = async () => {
+        // Use URL params directly — no Firestore needed for unauthenticated users
+        if (urlOwner || urlBiz) {
+          setInviteData({
+            bizName: urlBiz || "your team",
+            ownerId: urlOwner,
+            role: urlRole || "attendant",
+            allowedLocations: []
           });
-        } else if (ownerId) {
-          getDoc(doc(db, "users", ownerId)).then(ownerSnap => {
-            if (ownerSnap.exists()) {
-              const biz = ownerSnap.data().bizName || ownerSnap.data().name || "WashLevel";
-              setInviteData({ bizName: biz, ownerId, role: "attendant" });
-            }
-          });
+          return;
         }
-      });
+        // Fallback: try Firestore
+        try {
+          const invSnap = await getDocs(query(collection(db, "invites"), where("email", "==", defaultEmail.toLowerCase())));
+          if (!invSnap.empty) {
+            const inv = invSnap.docs[0].data();
+            setInviteData({ ...inv, bizName: inv.bizName || "your team", ownerId: inv.ownerId });
+          }
+        } catch(e) {}
+      };
+      loadInvite();
     }
   }, [defaultEmail]);
 
@@ -366,6 +374,8 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "" }) {
           updatedAt: new Date().toISOString()
         });
         await updateDoc(inviteDoc.ref, { status: "accepted", acceptedAt: new Date().toISOString() });
+        window.location.reload();
+        return;
       }
     } catch(e) {
       setError("Invalid email or password.");
@@ -398,6 +408,9 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "" }) {
           setupComplete: true
         });
         await updateDoc(validInvite.ref, { status: "accepted", acceptedAt: new Date().toISOString() });
+        // Force auth state refresh so Dashboard loads with correct user data
+        window.location.reload();
+        return;
       } else {
         const locId = "loc_" + uid.slice(0, 8);
         await setDoc(doc(db, "locations", locId), {
@@ -474,9 +487,17 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "" }) {
             ) : (
               <div>
                 {inviteData && (
-                  <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#166534", marginBottom: 2 }}>You have been invited!</div>
-                    <div style={{ fontSize: 12, color: "#15803d" }}>You are joining <b>{inviteData.bizName || "a team"}</b> as {inviteData.role}. Create your password below to get started.</div>
+                  <div style={{ background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 12, padding: "16px 18px", marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#0f1f35", marginBottom: 4 }}>You have been invited!</div>
+                    <div style={{ fontSize: 13, color: "#15803d", marginBottom: 8 }}>
+                      You are joining <b>{inviteData.bizName || "a team"}</b> as <b style={{ textTransform: "capitalize" }}>{inviteData.role}</b>.
+                    </div>
+                    {inviteData.allowedLocations?.length > 0 && (
+                      <div style={{ fontSize: 12, color: "#166534", background: "#dcfce7", borderRadius: 6, padding: "4px 10px", display: "inline-block" }}>
+                        {inviteData.allowedLocations.length} location{inviteData.allowedLocations.length > 1 ? "s" : ""} assigned
+                      </div>
+                    )}
+                    <div style={{ fontSize: 12, color: "#166534", marginTop: 8 }}>Fill in your name and create a password to get started.</div>
                   </div>
                 )}
                 <div style={{ marginBottom: 14 }}>
@@ -6229,7 +6250,7 @@ function TeamMembers({ user, locations }) {
     try {
       await setDoc(doc(db, "invites", inviteEmail.toLowerCase() + "_" + user.uid), {
         email: inviteEmail.toLowerCase(), ownerId: user.uid, role: inviteRole,
-        allowedLocations: inviteLocs, status: "pending", createdAt: new Date().toISOString()
+        allowedLocations: inviteLocs, status: "pending", bizName: user.bizName || user.name || "", createdAt: new Date().toISOString()
       });
       // Also send invite email automatically
       try {
@@ -6237,7 +6258,7 @@ function TeamMembers({ user, locations }) {
         const biz = user.bizName || user.name || "WashLevel";
         const mgr = user.name || user.email || "Your Manager";
         await sendInvite({ 
-          inviteEmail: inviteEmail.toLowerCase(), inviteRole: inviteRole || "attendant", bizName: biz, managerName: mgr, ownerId: user.uid });
+          inviteEmail: inviteEmail.toLowerCase(), inviteRole: inviteRole || "attendant", bizName: biz, managerName: mgr, ownerId: user.uid, inviteRole: inviteRole || "attendant" });
       } catch(e) { console.log("Email send error:", e.message); }
       setSent(true); setInviteEmail(""); setInviteLocs([]);
       setTimeout(() => setSent(false), 3000);
