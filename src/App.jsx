@@ -1358,6 +1358,10 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
   };
 
   const handleComplete = async () => {
+    if (task.requirePhoto && photos.length === 0) {
+      alert("A photo is required to complete this task. Please upload at least one photo.");
+      return;
+    }
     setSaving(true);
     const duration = task.startedAt ? Math.round((Date.now() - new Date(task.startedAt).getTime()) / 60000) : null;
     const histId = "h" + Date.now();
@@ -1469,8 +1473,13 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
           )}
         </div>
 
+        {task.requirePhoto && photos.length === 0 && (
+          <div style={{ background: "#fef9c3", border: "1px solid #f59e0b", borderRadius: 8, padding: "10px 14px", marginBottom: 10, fontSize: 12, color: "#854d0e", fontWeight: 600 }}>
+            Photo required — upload at least one photo to complete this task.
+          </div>
+        )}
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={handleComplete} disabled={saving} style={{ flex: 1, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          <button onClick={handleComplete} disabled={saving} style={{ flex: 1, background: task.requirePhoto && photos.length === 0 ? "#94a3b8" : "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             {saving ? "Saving..." : "Mark Complete"}
           </button>
           <button onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
@@ -1521,6 +1530,10 @@ setShowHistory(true);
 
 const handleStatus = async (e) => {
 e.stopPropagation();
+if (next === "done" && task.requirePhoto && !(task.mediaUrls?.length) && !(task.attachments?.length)) {
+  alert("A photo is required to complete this task. Please open the task and upload a photo first.");
+  return;
+}
 if (next === "done" && locId) {
 const histId = "h" + Date.now();
 const duration = task.startedAt ? Math.round((Date.now() - new Date(task.startedAt).getTime()) / 60000) : null;
@@ -1671,6 +1684,8 @@ return (
   e.stopPropagation();
   if ((task.type === "inspection" || task.category === "inspection") && task.status !== "done" && task.checklist?.length > 0 && onStartInspection) {
     onStartInspection(task);
+  } else if (next === "done" && task.requirePhoto && !(task.mediaUrls?.length) && !(task.attachments?.length)) {
+    alert("A photo is required to complete this task. Please use the Complete button inside the task to upload a photo first.");
   } else { handleStatus(e); }
 }} style={{ background: task.type === "inspection" && task.status !== "done" ? "#15803d" : btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
   {task.type === "inspection" && task.status !== "done" ? "Inspect" : nextLabel}
@@ -3820,6 +3835,7 @@ const [priority, setPriority] = useState(editTask?.priority || "medium");
 const [shift, setShift] = useState(editTask?.shift || "everyone");
 const [due, setDue] = useState(editTask?.due || new Date().toISOString().split("T")[0]);
 const [saving, setSaving] = useState(false);
+  const [requirePhoto, setRequirePhoto] = useState(editTask?.requirePhoto || false);
   const [equipmentId, setEquipmentId] = useState(preset?.id || "");
   const [equipmentList, setEquipmentList] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -3865,7 +3881,7 @@ const resolvedUserId = (assignTo && !["everyone","attendant","technician","manag
       await updateDoc(doc(db, "locations", locId, "tasks", editTask.id), {
         title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due,
         assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null,
-        recurrence: recurrence || null, updatedAt: new Date().toISOString(),
+        recurrence: recurrence || null, requirePhoto, updatedAt: new Date().toISOString(),
       });
       setSaving(false); onClose(); return;
     }
@@ -3882,7 +3898,7 @@ const resolvedUserId = (assignTo && !["everyone","attendant","technician","manag
       }
     }
 
-    const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, nextCarsDue, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, nextCarsDue, requirePhoto, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
 // Notify assigned user
 if (resolvedUserId) {
@@ -4051,6 +4067,13 @@ return (
                 );
               })()}
 </div>
+<label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, cursor: "pointer", padding: "10px 12px", background: requirePhoto ? "#fef9c3" : "#f8fafc", borderRadius: 10, border: requirePhoto ? "1px solid #f59e0b" : "1px solid #e2e8f0" }}>
+  <input type="checkbox" checked={requirePhoto} onChange={e => setRequirePhoto(e.target.checked)} style={{ width: 16, height: 16, accentColor: "#0f1f35" }} />
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>Require photo to complete</div>
+    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>Staff must upload a photo before marking this task done</div>
+  </div>
+</label>
 <div style={{ display: "flex", gap: 10 }}>
 <button type="submit" disabled={saving} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
 {saving ? "Adding..." : "Add Task"}
