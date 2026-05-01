@@ -1969,6 +1969,8 @@ return (
 
 function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onNavigate }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [newEq, setNewEq] = useState({ name: "", status: "ok", lastService: "", lastServiceCars: 0, nextService: "", nextServiceCars: "", carsCount: 0, tracksCarCount: false });
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState({});
@@ -4329,6 +4331,8 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const ownerId = user?.isTeamMember ? user?.ownerId : user?.uid;
   const [items, setItems] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [newItem, setNewItem] = useState({ name: "", category: "chemicals", quantity: 0, unit: "gal", lowThreshold: 5, partNumber: "", costPerUnit: 0, reorderAt: 0, vendorId: "" });
@@ -4487,7 +4491,46 @@ function Inventory({ locId, locationName, user, locations = [] }) {
         ))}
       </div>
 
-      {activeTab === "inventory" && <>
+      {activeTab === "inventory" && (
+       <div style={{ position: "relative", marginBottom: 14 }}>
+         <input
+           value={searchQuery}
+           onChange={e => setSearchQuery(e.target.value)}
+           onFocus={() => setSearchFocused(true)}
+           onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+           placeholder="Search by name or part number..."
+           style={{ width: "100%", padding: "10px 14px 10px 36px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fff", color: "#0f1f35" }}
+         />
+         <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>⌕</div>
+         {searchQuery && <button onClick={() => setSearchQuery("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16 }}>×</button>}
+         {searchFocused && searchQuery.length > 0 && (
+           <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.1)", zIndex: 100, maxHeight: 240, overflowY: "auto", marginTop: 4 }}>
+             {items.filter(i =>
+               i.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               i.partNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+             ).slice(0, 8).map(i => (
+               <div key={i.id} onMouseDown={() => { setSearchQuery(i.name); setSearchFocused(false); }}
+                 style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                 onMouseEnter={e => e.currentTarget.style.background = "#f4f6f8"}
+                 onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                 <div>
+                   <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{i.name}</div>
+                   {i.partNumber && <div style={{ fontSize: 11, color: "#6366f1" }}>Part #: {i.partNumber}</div>}
+                 </div>
+                 <div style={{ fontSize: 12, color: "#94a3b8" }}>{i.quantity} {i.unit}</div>
+               </div>
+             ))}
+             {items.filter(i =>
+               i.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               i.partNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+             ).length === 0 && (
+               <div style={{ padding: "12px 14px", fontSize: 13, color: "#94a3b8" }}>No items found</div>
+             )}
+           </div>
+         )}
+       </div>
+     )}
+     {activeTab === "inventory" && <>
 
       {/* Barcode Scanner Modal */}
       {showScanner && (
@@ -4668,7 +4711,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
       )}
 
       {CAT_GROUPS.map(cat => {
-        const group = items.filter(i => i.category === cat);
+        const group = items.filter(i => i.category === cat && (!searchQuery || i.name?.toLowerCase().includes(searchQuery.toLowerCase()) || i.partNumber?.toLowerCase().includes(searchQuery.toLowerCase())));
         if (!group.length) return null;
         const isExpanded = expandedCats[cat] !== false;
         return (
