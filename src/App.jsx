@@ -1797,6 +1797,32 @@ View History
     ))}
   </div>
 )}
+{(task.category === "inspection" || task.type === "inspection") && task.status === "done" && task.checklist?.length > 0 && (
+  <div style={{ marginTop: 12, marginBottom: 12 }}>
+    <div style={{ fontWeight: 600, fontSize: 12, color: "#334155", marginBottom: 8 }}>Inspection Results</div>
+    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+      <div style={{ background: "#dcfce7", borderRadius: 7, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#15803d" }}>{task.checklist.filter(i => i.result === "good").length} Passed</div>
+      {task.checklist.filter(i => i.result === "monitor").length > 0 && <div style={{ background: "#fef9c3", borderRadius: 7, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#854d0e" }}>{task.checklist.filter(i => i.result === "monitor").length} Monitor</div>}
+      {task.checklist.filter(i => i.result === "fail").length > 0 && <div style={{ background: "#fee2e2", borderRadius: 7, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#dc2626" }}>{task.checklist.filter(i => i.result === "fail").length} Failed</div>}
+    </div>
+    {task.checklist.map((item, idx) => (
+      <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "7px 0", borderBottom: "1px solid #f1f5f9" }}>
+        <div style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+          background: item.result === "good" ? "#dcfce7" : item.result === "fail" ? "#fee2e2" : "#fef9c3",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700,
+          color: item.result === "good" ? "#15803d" : item.result === "fail" ? "#dc2626" : "#854d0e" }}>
+          {item.result === "good" ? "✓" : item.result === "fail" ? "✕" : "!"}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#0f1f35" }}>{item.label}</div>
+          {item.note && <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{item.note}</div>}
+          {item.photoUrl && <img src={item.photoUrl} alt="inspection" onClick={() => window.open(item.photoUrl)}
+            style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6, marginTop: 4, cursor: "pointer" }} />}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
 {showHistory && (
 <div style={{ marginTop: 12 }}>
 <div style={{ fontWeight: 600, fontSize: 12, color: "#334155", marginBottom: 8 }}>Task History</div>
@@ -3672,10 +3698,18 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
     (task.checklist || []).map(i => ({ ...i, result: null, note: "", photoUrl: null }))
   );
   const [saving, setSaving] = useState(false);
+  const photoMapRef = useRef({});
+  const noteMapRef = useRef({});
 
   const setResult = (id, result) => setItems(p => p.map(i => i.id === id ? { ...i, result } : i));
-  const setNote = (id, note) => setItems(p => p.map(i => i.id === id ? { ...i, note } : i));
-  const setPhoto = (id, photoUrl) => setItems(p => p.map(i => i.id === id ? { ...i, photoUrl } : i));
+  const setNote = (id, note) => {
+    noteMapRef.current[id] = note;
+    setItems(p => p.map(i => i.id === id ? { ...i, note } : i));
+  };
+  const setPhoto = (id, photoUrl) => {
+    photoMapRef.current[id] = photoUrl;
+    setItems(p => p.map(i => i.id === id ? { ...i, photoUrl } : i));
+  };
 
   const allRated = items.length > 0 && items.every(i => i.result !== null);
   const failCount = items.filter(i => i.result === "fail").length;
@@ -3713,6 +3747,21 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
 
   const handleSubmit = async () => {
     if (!allRated || saving) return;
+
+    // Require note AND photo for all failed items
+    const failedItems = items.filter(i => i.result === "fail");
+    const missingNote = failedItems.filter(i => !i.note?.trim());
+    const missingPhoto = failedItems.filter(i => !i.photoUrl && !photoMapRef.current[i.id]);
+
+    if (missingNote.length > 0) {
+      alert("Please add a note for all failed items: " + missingNote.map(i => i.label).join(", "));
+      return;
+    }
+    if (missingPhoto.length > 0) {
+      alert("Please attach a photo for all failed items: " + missingPhoto.map(i => i.label).join(", "));
+      return;
+    }
+
     setSaving(true);
     const now = new Date().toISOString();
 
@@ -3746,12 +3795,18 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
 
     for (const item of items.filter(i => i.result === "fail")) {
       const newId = "t" + Date.now() + Math.random().toString(36).slice(2, 5);
+      const photoUrl = photoMapRef.current[item.id] || item.photoUrl || null;
+      const noteText = noteMapRef.current[item.id] || item.note || "";
       await setDoc(doc(db, "locations", locId, "tasks", newId), {
         id: newId, title: "Fix: " + item.label,
-        category: "equipment", priority: "high", status: "pending",
+        category: "maintenance", priority: "high", status: "pending",
         shift: "everyone", due: now.split("T")[0],
         assignedRole: "manager", equipmentId: task.equipmentId || null,
-        note: item.note || "", createdAt: now, updatedAt: now
+        note: noteText,
+        mediaUrls: photoUrl ? [photoUrl] : [],
+        attachments: photoUrl ? [{ name: "Inspection photo", url: photoUrl, type: "image/jpeg", uploadedAt: now }] : [],
+        inspectionSource: task.title,
+        createdAt: now, updatedAt: now
       });
     }
 
@@ -3793,11 +3848,14 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
               </div>
               {needsNote && (
                 <div>
+                  {cur.result === "fail" && (
+                    <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, marginBottom: 6 }}>Note and photo required for failed items</div>
+                  )}
                   <textarea value={cur.note} onChange={e => setNote(item.id, e.target.value)}
-                    placeholder={cur.result === "fail" ? "Describe what failed..." : "Add notes..."}
-                    rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 8, color: "#0f1f35" }} />
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "#0369a1", fontWeight: 600 }}>
-                    📷 {cur.photoUrl ? "Photo attached ✓" : "Attach photo"}
+                    placeholder={cur.result === "fail" ? "Describe what failed... (required)" : "Add notes..."}
+                    rows={2} style={{ width: "100%", padding: "8px 10px", border: cur.result === "fail" && !cur.note?.trim() ? "1.5px solid #fca5a5" : "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 8, color: "#0f1f35" }} />
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: cur.result === "fail" && !cur.photoUrl ? "#dc2626" : "#0369a1", fontWeight: 600 }}>
+                    {cur.photoUrl ? "Photo attached ✓" : cur.result === "fail" ? "Attach photo (required)" : "Attach photo"}
                     <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
                       onChange={e => handlePhoto(item.id, e.target.files[0])} />
                   </label>
