@@ -3176,6 +3176,16 @@ function TimeClock({ locId, locationName, allLocations }) {
     if (!start || !end) return 0;
     return (new Date(end) - new Date(start)) / 3600000;
   };
+  const entryMs = (e) => {
+    if (e.sessions && e.sessions.length > 0) {
+      return e.sessions.reduce((sum, s) => {
+        if (!s.in || !s.out) return sum;
+        return sum + (new Date(s.out) - new Date(s.in));
+      }, 0);
+    }
+    if (!e.mainClockIn || !e.mainClockOut) return 0;
+    return new Date(e.mainClockOut) - new Date(e.mainClockIn);
+  };
   const totalHours = (entries) => {
     const ms = entries.reduce((sum, e) => {
       if (!e.mainClockIn || !e.mainClockOut) return sum;
@@ -3187,27 +3197,63 @@ function TimeClock({ locId, locationName, allLocations }) {
   };
   const totalHrsNum = (entries) => entries.reduce((sum, e) => sum + elapsedHrs(e.mainClockIn, e.mainClockOut), 0);
 
-  const isClockedIn = clockState?.mainClockIn && !clockState?.mainClockOut;
-  const isClockedOut = clockState?.mainClockIn && clockState?.mainClockOut;
+  const sessions = clockState?.sessions || (clockState?.mainClockIn ? [{ in: clockState.mainClockIn, out: clockState.mainClockOut || null }] : []);
+  const lastSession = sessions[sessions.length - 1];
+  const isClockedIn = lastSession && !lastSession.out;
+  const isClockedOut = sessions.length > 0 && !isClockedIn;
+
+  // Total hours across all sessions today
+  const totalSessionMs = sessions.reduce((sum, s) => {
+    if (!s.in) return sum;
+    const out = s.out ? new Date(s.out) : new Date();
+    return sum + (out - new Date(s.in));
+  }, 0);
+  const totalSessionHrs = (totalSessionMs / 3600000).toFixed(2);
 
   const myOwnerId = user?.isTeamMember ? user?.ownerId : user?.uid;
 
   const handleMainClock = async () => {
-    if (!clockState || !clockState.mainClockIn) {
-      await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, ownerId: myOwnerId, name: user.name || user.email, date: today, mainClockIn: now(), mainClockOut: null, locationTimes: locClocks });
-    } else if (!clockState.mainClockOut) {
-      await updateDoc(doc(db, "timeclock", clockDocId), { mainClockOut: now() });
+    const nowStr = now();
+    if (!clockState || sessions.length === 0) {
+      // First clock in of the day
+      await setDoc(doc(db, "timeclock", clockDocId), {
+        uid: user.uid, ownerId: myOwnerId, name: user.name || user.email, date: today,
+        mainClockIn: nowStr, mainClockOut: null,
+        sessions: [{ in: nowStr, out: null }],
+        locationTimes: locClocks
+      });
+    } else if (isClockedIn) {
+      // Clock out of current session
+      const updatedSessions = sessions.map((s, i) => i === sessions.length - 1 ? { ...s, out: nowStr } : s);
+      await updateDoc(doc(db, "timeclock", clockDocId), {
+        mainClockOut: nowStr,
+        sessions: updatedSessions
+      });
     } else {
-      await updateDoc(doc(db, "timeclock", clockDocId), { mainClockIn: now(), mainClockOut: null });
+      // Start a new session
+      const updatedSessions = [...sessions, { in: nowStr, out: null }];
+      await updateDoc(doc(db, "timeclock", clockDocId), {
+        mainClockIn: nowStr, mainClockOut: null,
+        sessions: updatedSessions
+      });
     }
   };
 
   const handleLocClock = async (lId) => {
     const current = locClocks[lId] || {};
     const updated = { ...locClocks };
-    if (!current.in) updated[lId] = { in: now(), out: null };
-    else if (!current.out) updated[lId] = { ...current, out: now() };
-    else updated[lId] = { in: now(), out: null };
+    if (!current.in || current.out) {
+      // Clocking IN to this location — auto clock out any other active location
+      Object.keys(updated).forEach(otherId => {
+        if (otherId !== lId && updated[otherId]?.in && !updated[otherId]?.out) {
+          updated[otherId] = { ...updated[otherId], out: now() };
+        }
+      });
+      updated[lId] = { in: now(), out: null };
+    } else {
+      // Clocking OUT of this location
+      updated[lId] = { ...current, out: now() };
+    }
     setLocClocks(updated);
     if (clockState) await updateDoc(doc(db, "timeclock", clockDocId), { locationTimes: updated });
     else await setDoc(doc(db, "timeclock", clockDocId), { uid: user.uid, ownerId: myOwnerId, name: user.name || user.email, date: today, mainClockIn: null, mainClockOut: null, locationTimes: updated });
@@ -3289,18 +3335,25 @@ function TimeClock({ locId, locationName, allLocations }) {
         <div>
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 24, marginBottom: 18, textAlign: "center" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Today's Shift</div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: isClockedIn ? "#059669" : isClockedOut ? "#334155" : "#0f1f35", marginBottom: 4 }}>
-              {isClockedIn ? "Clocked In" : isClockedOut ? "Shift Complete" : "Not Clocked In"}
+            <div style={{ fontSize: 32, fontWeight: 800, color: isClockedIn ? "#059669" : "#0f1f35", marginBottom: 4 }}>
+              {isClockedIn ? "Clocked In" : "Clocked Out"}
             </div>
-            {clockState?.mainClockIn && (
-              <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>
-                In: {fmt(clockState.mainClockIn)}{clockState.mainClockOut && <span> | Out: {fmt(clockState.mainClockOut)}</span>}
+            {isClockedIn && lastSession?.in && (
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#0ea5e9", marginBottom: 8 }}>{elapsed(lastSession.in, null)} this session</div>
+            )}
+            {sessions.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                {sessions.map((s, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>
+                    {fmt(s.in)} — {s.out ? fmt(s.out) : <span style={{ color: "#059669", fontWeight: 600 }}>Now</span>}
+                    {s.in && <span style={{ color: "#94a3b8" }}> ({elapsed(s.in, s.out)})</span>}
+                  </div>
+                ))}
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35", marginTop: 6 }}>Total: {totalSessionHrs} hrs</div>
               </div>
             )}
-            {isClockedIn && <div style={{ fontSize: 22, fontWeight: 700, color: "#0ea5e9", marginBottom: 12 }}>{elapsed(clockState.mainClockIn, null)} elapsed</div>}
-            {isClockedOut && <div style={{ fontSize: 18, fontWeight: 700, color: "#334155", marginBottom: 12 }}>Total: {elapsed(clockState.mainClockIn, clockState.mainClockOut)}</div>}
             <button onClick={handleMainClock} style={{ background: isClockedIn ? "#ef4444" : "#059669", color: "#fff", border: "none", borderRadius: 10, padding: "14px 40px", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
-              {isClockedIn ? "Clock Out" : isClockedOut ? "Start New Shift" : "Clock In"}
+              {isClockedIn ? "Clock Out" : "Clock In"}
             </button>
           </div>
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
@@ -3341,18 +3394,27 @@ function TimeClock({ locId, locationName, allLocations }) {
                   <div style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{totalHours(entries)}</div>
                 </div>
                 {entries.map(e => (
-                  <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{fmtDate(e.date)}</div>
-                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "In progress"}</div>
-                      {e.editedBy && (
-                        <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 2 }}>
-                          Edited by manager on {e.editedAt ? new Date(e.editedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " at " + new Date(e.editedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "unknown date"}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35" }}>
-                      {e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : elapsed(e.mainClockIn, null)}
+                  <div key={e.id} style={{ padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35", marginBottom: 2 }}>{fmtDate(e.date)}</div>
+                        {e.sessions && e.sessions.length > 0 ? (
+                          e.sessions.map((s, i) => (
+                            <div key={i} style={{ fontSize: 11, color: "#94a3b8" }}>
+                              Session {i + 1}: {fmt(s.in)} — {s.out ? fmt(s.out) : <span style={{ color: "#059669" }}>Now</span>}
+                              {s.in && <span> ({elapsed(s.in, s.out)})</span>}
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: 11, color: "#94a3b8" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "In progress"}</div>
+                        )}
+                        {e.editedBy && (
+                          <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 2 }}>Edited by manager</div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35" }}>
+                        {entryMs(e) > 0 ? (entryMs(e) / 3600000).toFixed(2) + " hrs" : elapsed(e.mainClockIn, e.mainClockOut)}
+                      </div>
                     </div>
                   </div>
                 ))}
