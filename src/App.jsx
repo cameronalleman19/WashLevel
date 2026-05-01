@@ -4967,85 +4967,181 @@ function Inventory({ locId, locationName, user, locations = [] }) {
 }
 
 function MaterialsModal({ locId, task, onClose }) {
-const [items, setItems] = useState([]);
-const [selected, setSelected] = useState({});
-const [saving, setSaving] = useState(false);
+  const [items, setItems] = useState([]);
+  const [selected, setSelected] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [writeIns, setWriteIns] = useState([{ name: "", qty: "", unit: "" }]);
+  const [saving, setSaving] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
-useEffect(() => {
-if (!locId) return;
-getDocs(collection(db, "locations", locId, "inventory")).then(snap => {
-setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-});
-}, [locId]);
+  useEffect(() => {
+    if (!locId) return;
+    getDocs(collection(db, "locations", locId, "inventory")).then(snap => {
+      setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, [locId]);
 
-const handleQty = (id, val) => {
-setSelected(p => ({ ...p, [id]: parseFloat(val) || 0 }));
-};
+  const handleQty = (id, val) => setSelected(p => ({ ...p, [id]: parseFloat(val) || 0 }));
 
-const handleSave = async () => {
-setSaving(true);
-for (const [itemId, qty] of Object.entries(selected)) {
-if (qty <= 0) continue;
-const item = items.find(i => i.id === itemId);
-if (!item) continue;
-const newQty = Math.max(0, item.quantity - qty);
-await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: newQty, updatedAt: new Date().toISOString() });
-await addDoc(collection(db, "locations", locId, "inventory", itemId, "history"), { type: "task_use", delta: -qty, quantityBefore: item.quantity, quantityAfter: newQty, userId: "task", userName: "Task", timestamp: new Date().toISOString(), note: "Used on task: " + (task?.title || "Unknown"), taskId: task?.id || "" });
-}
-// Save materials used to task
-const usedItems = Object.entries(selected)
-  .filter(([, qty]) => qty > 0)
-  .map(([itemId, qty]) => {
-    const item = items.find(i => i.id === itemId);
-    return { itemId, name: item?.name || itemId, qty, unit: item?.unit || "" };
-  });
-  const existingParts = task.partsUsed || [];
-  const mergedParts = [...existingParts];
-  for (const newItem of usedItems) {
-    const idx = mergedParts.findIndex(p => p.itemId === newItem.itemId);
-    if (idx >= 0) { mergedParts[idx] = { ...mergedParts[idx], qty: mergedParts[idx].qty + newItem.qty }; }
-    else { mergedParts.push(newItem); }
-  }
-  await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
-    partsUsed: mergedParts,
-    updatedAt: new Date().toISOString(),
-  });
-setSaving(false);
-onClose();
-};
+  const handleScan = (barcode) => {
+    setShowScanner(false);
+    const found = items.find(i => i.barcode === barcode);
+    if (found) {
+      setSelected(p => ({ ...p, [found.id]: (p[found.id] || 0) + 1 }));
+    } else {
+      alert("No inventory item found with that barcode.");
+    }
+  };
 
-const inp = { width: 70, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 13, outline: "none" };
+  const filteredItems = items.filter(i =>
+    !searchQuery ||
+    i.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    i.partNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-return (
-<div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-<div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "80vh", overflowY: "auto" }}>
-<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-<div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>Materials Used</div>
-<button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
-</div>
-<div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Task: <b>{task?.title}</b></div>
-{items.length === 0 ? (
-<div style={{ color: "#94a3b8", fontSize: 13 }}>No inventory items found. Add items in the Inventory section first.</div>
-) : items.map(item => (
-<div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
-<div style={{ flex: 1 }}>
-<div style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</div>
-<div style={{ fontSize: 12, color: "#94a3b8" }}>Available: {item.quantity} {item.unit}</div>
-</div>
-<div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#64748b" }}>
-<span>Used:</span>
-<input type="number" min="0" max={item.quantity} value={selected[item.id] || ""} onChange={e => handleQty(item.id, e.target.value)} placeholder="0" style={inp} />
-<span>{item.unit}</span>
-</div>
-</div>
-))}
-<div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-<button onClick={handleSave} disabled={saving} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{saving ? "Saving..." : "Deduct from Inventory"}</button>
-<button onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-</div>
-</div>
-</div>
-);
+  const selectedItems = items.filter(i => selected[i.id] > 0);
+
+  const addWriteIn = () => setWriteIns(p => [...p, { name: "", qty: "", unit: "" }]);
+  const updateWriteIn = (idx, field, val) => setWriteIns(p => p.map((w, i) => i === idx ? { ...w, [field]: val } : w));
+  const removeWriteIn = (idx) => setWriteIns(p => p.filter((_, i) => i !== idx));
+
+  const handleSave = async () => {
+    setSaving(true);
+    for (const [itemId, qty] of Object.entries(selected)) {
+      if (qty <= 0) continue;
+      const item = items.find(i => i.id === itemId);
+      if (!item) continue;
+      const newQty = Math.max(0, item.quantity - qty);
+      await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: newQty, updatedAt: new Date().toISOString() });
+      await addDoc(collection(db, "locations", locId, "inventory", itemId, "history"), {
+        type: "task_use", delta: -qty, quantityBefore: item.quantity, quantityAfter: newQty,
+        timestamp: new Date().toISOString(), note: "Used on task: " + (task?.title || ""), taskId: task?.id || ""
+      });
+    }
+    const usedItems = Object.entries(selected).filter(([, qty]) => qty > 0).map(([itemId, qty]) => {
+      const item = items.find(i => i.id === itemId);
+      return { itemId, name: item?.name || itemId, qty, unit: item?.unit || "" };
+    });
+    const validWriteIns = writeIns.filter(w => w.name.trim() && parseFloat(w.qty) > 0).map(w => ({
+      name: w.name.trim(), qty: parseFloat(w.qty), unit: w.unit || "", writeIn: true
+    }));
+    const allUsed = [...usedItems, ...validWriteIns];
+    const existingParts = task.partsUsed || [];
+    const mergedParts = [...existingParts];
+    for (const newItem of allUsed) {
+      const idx = mergedParts.findIndex(p => p.itemId ? p.itemId === newItem.itemId : p.name === newItem.name);
+      if (idx >= 0) mergedParts[idx] = { ...mergedParts[idx], qty: mergedParts[idx].qty + newItem.qty };
+      else mergedParts.push(newItem);
+    }
+    await updateDoc(doc(db, "locations", locId, "tasks", task.id), { partsUsed: mergedParts, updatedAt: new Date().toISOString() });
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+      {showScanner && <BarcodeScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: "#0f1f35" }}>Materials Used</div>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
+          </div>
+          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>{task?.title}</div>
+
+          {/* Scan + Search */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button onClick={() => setShowScanner(true)}
+              style={{ background: "#f0fdf4", color: "#059669", border: "1.5px solid #bbf7d0", borderRadius: 9, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              Scan
+            </button>
+          </div>
+          {/* Search bar */}
+          <div style={{ position: "relative", marginBottom: 8 }}>
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)} onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+              placeholder="Search inventory by name or part #..."
+              style={{ width: "100%", padding: "9px 14px 9px 34px", border: "1.5px solid #e2e8f0", borderRadius: 9, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
+            <div style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>⌕</div>
+            {searchQuery && <button onClick={() => setSearchQuery("")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16 }}>×</button>}
+            {searchFocused && searchQuery && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.1)", zIndex: 200, maxHeight: 200, overflowY: "auto", marginTop: 4 }}>
+                {filteredItems.slice(0, 8).map(i => (
+                  <div key={i.id} onMouseDown={() => { setSearchQuery(""); setSelected(p => ({ ...p, [i.id]: 1 })); }}
+                    style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#f4f6f8"}
+                    onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{i.name}</div>
+                      {i.partNumber && <div style={{ fontSize: 11, color: "#6366f1" }}>Part #: {i.partNumber}</div>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#94a3b8" }}>{i.quantity} {i.unit}</div>
+                  </div>
+                ))}
+                {filteredItems.length === 0 && <div style={{ padding: "12px 14px", fontSize: 13, color: "#94a3b8" }}>No items found</div>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ overflowY: "auto", padding: "12px 20px", flex: 1 }}>
+          {/* Selected inventory items */}
+          {selectedItems.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>From Inventory</div>
+              {selectedItems.map(item => (
+                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "#0f1f35" }}>{item.name}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>Available: {item.quantity} {item.unit}</div>
+                  </div>
+                  <input type="number" min="0" max={item.quantity} value={selected[item.id] || ""}
+                    onChange={e => handleQty(item.id, e.target.value)}
+                    style={{ width: 60, padding: "5px 8px", border: "1.5px solid #e2e8f0", borderRadius: 6, fontSize: 13, outline: "none", textAlign: "center", color: "#0f1f35" }} />
+                  <span style={{ fontSize: 12, color: "#64748b", minWidth: 24 }}>{item.unit}</span>
+                  <button onClick={() => setSelected(p => { const n = {...p}; delete n[item.id]; return n; })}
+                    style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedItems.length === 0 && !searchQuery && (
+            <div style={{ textAlign: "center", padding: "16px 0", color: "#94a3b8", fontSize: 13 }}>Search above to find inventory items</div>
+          )}
+
+          {/* Write-in section */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Other Materials (write-in)</div>
+            {writeIns.map((w, idx) => (
+              <div key={idx} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                <input value={w.name} onChange={e => updateWriteIn(idx, "name", e.target.value)}
+                  placeholder="Material name..."
+                  style={{ flex: 2, padding: "7px 10px", border: "1.5px solid #e2e8f0", borderRadius: 7, fontSize: 12, outline: "none", color: "#0f1f35" }} />
+                <input type="number" value={w.qty} onChange={e => updateWriteIn(idx, "qty", e.target.value)}
+                  placeholder="Qty"
+                  style={{ width: 52, padding: "7px 8px", border: "1.5px solid #e2e8f0", borderRadius: 7, fontSize: 12, outline: "none", textAlign: "center", color: "#0f1f35" }} />
+                <input value={w.unit} onChange={e => updateWriteIn(idx, "unit", e.target.value)}
+                  placeholder="Unit"
+                  style={{ width: 48, padding: "7px 8px", border: "1.5px solid #e2e8f0", borderRadius: 7, fontSize: 12, outline: "none", color: "#0f1f35" }} />
+                {writeIns.length > 1 && <button onClick={() => removeWriteIn(idx)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16 }}>×</button>}
+              </div>
+            ))}
+            <button onClick={addWriteIn} style={{ fontSize: 12, color: "#6366f1", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: 0 }}>+ Add another</button>
+          </div>
+        </div>
+
+        <div style={{ padding: "12px 20px 20px", borderTop: "1px solid #f1f5f9", flexShrink: 0, display: "flex", gap: 10 }}>
+          <button onClick={handleSave} disabled={saving}
+            style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            {saving ? "Saving..." : "Save Materials"}
+          </button>
+          <button onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 //  CALENDAR
