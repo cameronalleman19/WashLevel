@@ -4460,7 +4460,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   };
 
   const CAT_GROUPS = ["chemicals", "parts", "vending supplies"];
-  const [expandedCats, setExpandedCats] = useState({ chemicals: true, parts: true, "vending supplies": true });
+  const [expandedCats, setExpandedCats] = useState({ chemicals: false, parts: false, "vending supplies": false });
   const CAT_COLORS2 = { chemicals: "#8b5cf6", parts: "#3b82f6", "vending supplies": "#f59e0b" };
   const UNITS = ["gal", "L", "oz", "lbs", "units", "rolls", "boxes"];
   const inp = { padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, background: "#fafafa", outline: "none", width: "100%", boxSizing: "border-box", marginTop: 4, color: "#0f1f35" };
