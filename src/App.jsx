@@ -7238,6 +7238,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
             <Row label="Show task names" desc="List individual task names (completed and open)" k="includeTaskNames" />
             <Row label="Overdue tasks" desc="Tasks past their due date" k="includeOverdue" />
             {(user?.role === "manager" || user?.role === "owner") && <Row label="Equipment alerts" desc="Any equipment in warning or alert status" k="includeEquipment" />}
+           <Row label="Yesterday's weather" desc="High/low temp and precipitation for each location" k="includeWeather" />
           </>
         )}
       </div>

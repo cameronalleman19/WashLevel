@@ -125,6 +125,16 @@ exports.sendPasswordResetEmail = onCall({ secrets: [RESEND_API_KEY] }, async (re
 
 // Receive equipment email and parse car counts
 
+// Zip to lat/lon via zippopotam.us (same source as app calendar)
+async function zipToCoords(zip) {
+  try {
+    const r = await fetch(`https://api.zippopotam.us/us/${zip}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    return { lat: parseFloat(d.places[0].latitude), lon: parseFloat(d.places[0].longitude) };
+  } catch(e) { return null; }
+}
+
 // Send daily summary email
 exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (request) => {
   const { uid, test } = request.data;
@@ -143,7 +153,7 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
   if (!test && !prefs.dailySummaryEnabled) return { skipped: true };
 
   const email = userData.email;
-  const isManager = userData.role === "manager";
+  const isManager = (userData.role === "manager" || userData.role === "owner");
   const ownerId = userData.isTeamMember ? userData.ownerId : uid;
 
   // Get locations
@@ -157,13 +167,16 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
 
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const dateStr = yesterday.toISOString().split("T")[0];
+  const etDate = yesterday.toLocaleString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+  const [etMonth, etDay, etYear] = etDate.split("/");
+  const dateStr = `${etYear}-${etMonth}-${etDay}`;
+  const displayDate = `${parseInt(etMonth)}/${parseInt(etDay)}/${etYear}`;
 
   let html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: #1a3352; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
         <h1 style="color: #fff; margin: 0; font-size: 22px;">WashLevel Daily Summary</h1>
-        <p style="color: #94a3b8; margin: 6px 0 0;">${yesterday.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
+        <p style="color: #94a3b8; margin: 6px 0 0;">${displayDate}</p>
       </div>
       <div style="background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
   `;
@@ -174,7 +187,53 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
   let totalOverdue = 0;
 
   for (const loc of allowedLocs) {
-    html += `<h2 style="color: #1a3352; font-size: 16px; margin: 16px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px;">${loc.name}</h2>`;
+    let weatherHtml = "";
+    if (prefs.includeWeather) {
+      try {
+        let wLat = loc.lat, wLon = loc.lon;
+        if ((!wLat || !wLon) && loc.zipCode) {
+          const coords = await zipToCoords(loc.zipCode);
+          if (coords) { wLat = coords.lat; wLon = coords.lon; }
+        }
+        if (wLat && wLon) {
+          const wRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${wLat}&longitude=${wLon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&hourly=weathercode,precipitation&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FNew_York&start_date=${dateStr}&end_date=${dateStr}`);
+         const wData = await wRes.json();
+         if (wData.daily) {
+           const tMax = Math.round(wData.daily.temperature_2m_max[0]);
+           const tMin = Math.round(wData.daily.temperature_2m_min[0]);
+           const precip = wData.daily.precipitation_sum[0] || 0;
+           const wcode = wData.daily.weathercode[0];
+           const wDesc = wcode <= 1 ? "Clear" : wcode <= 3 ? "Partly Cloudy" : wcode <= 48 ? "Foggy" : wcode <= 67 ? "Rain" : wcode <= 77 ? "Snow" : wcode <= 82 ? "Showers" : "Stormy";
+           const codeToSev = c => c >= 95 ? 7 : c >= 80 ? 6 : c >= 71 ? 5 : c >= 61 ? 4 : c >= 51 ? 3 : c >= 45 ? 2 : c >= 2 ? 1 : 0;
+           const codeToWord = c => c >= 95 ? "Storms" : c >= 80 ? "Showers" : c >= 73 ? "Heavy Snow" : c >= 71 ? "Snow" : c >= 63 ? "Heavy Rain" : c >= 61 ? "Rain" : c >= 51 ? "Drizzle" : c >= 45 ? "Fog" : c >= 3 ? "Cloudy" : "Clear";
+           let periodDesc = "";
+           if (wData.hourly) {
+             const hC = wData.hourly.weathercode || [];
+             const hP = wData.hourly.precipitation || [];
+             const periods = [
+               { label: "Overnight", hours: [0,1,2,3,4,5] },
+               { label: "Morning", hours: [6,7,8,9,10,11] },
+               { label: "Afternoon", hours: [12,13,14,15,16,17] },
+               { label: "Evening", hours: [18,19,20,21,22,23] },
+             ];
+             let bestLabel = "", bestSev = 0, bestWord = "";
+             for (const p of periods) {
+               const maxC = Math.max(...p.hours.map(h => hC[h] || 0));
+               const totP = p.hours.reduce((s,h) => s+(hP[h]||0), 0);
+               const sev = codeToSev(maxC) + (totP > 0.05 ? 1 : 0);
+               if (sev > bestSev) { bestSev = sev; bestLabel = p.label; bestWord = codeToWord(maxC); }
+             }
+             if (bestLabel && bestSev > 1) periodDesc = bestLabel + " " + bestWord;
+           }
+           const wDisplay = periodDesc || wDesc;
+           const wLine = '<div style="font-size:12px;font-weight:700;color:#1a3352;">' + wDisplay + '</div><div style="font-size:20px;font-weight:800;color:#1a3352;">' + tMax + '°F</div><div style="font-size:11px;color:#6b7280;">Low ' + tMin + '°F</div>' + (precip > 0 ? '<div style="font-size:11px;color:#3b82f6;">' + precip.toFixed(2) + '"</div>' : '');
+           weatherHtml = wLine;
+         }
+        }
+      } catch(e) { console.log("Weather error:", e.message); }
+    }
+
+    html += `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8;border:2px solid #1a3352;border-radius:10px;margin:12px 0;"><tr><td style="padding:14px;" valign="top"><div style="font-size:16px;font-weight:700;color:#1a3352;border-bottom:1px solid #c7d2e0;padding-bottom:8px;margin-bottom:10px;">${loc.name}</div>`;
 
     // Car counts (managers only)
     if (isManager && prefs.includeCounts !== false) {
@@ -188,7 +247,6 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
       const hasEqCounts = Object.keys(eqCountData).length > 0;
 
       if (hasEqCounts) {
-        // Load equipment names
         const eqSnap = await db.collection("locations").doc(loc.id).collection("equipment")
           .where("tracksCarCount", "==", true).get();
         const eqMap = {};
@@ -224,7 +282,7 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
       if (prefs.includeTaskNames !== false) {
         html += `<ul style="margin: 2px 0 8px 16px; padding: 0; list-style: none;">`;
         done.forEach(t => {
-          html += `<li style="margin: 2px 0; color: #059669; font-size: 13px;">✓ ${t.title}</li>`;
+          html += `<li style="margin: 2px 0; color: #059669; font-size: 13px;">${t.title}</li>`;
         });
         html += `</ul>`;
       }
@@ -235,7 +293,7 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
         html += `<ul style="margin: 2px 0 8px 16px; padding: 0; list-style: none;">`;
         open.forEach(t => {
           const isOverdue = t.due && t.due < today;
-          html += `<li style="margin: 2px 0; color: ${isOverdue ? '#e74c3c' : '#374151'}; font-size: 13px;">${isOverdue ? '⚠ ' : '• '}${t.title}${t.due ? ' (due ' + t.due + ')' : ''}</li>`;
+          html += `<li style="margin: 2px 0; color: ${isOverdue ? '#e74c3c' : '#374151'}; font-size: 13px;">${t.title}${t.due ? ' (due ' + (()=>{ const p=t.due.split('-'); return parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0]; })() + ')' : ''}</li>`;
         });
         html += `</ul>`;
       }
@@ -250,6 +308,8 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
         html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Equipment Alerts:</strong> ${eqSnap.docs.map(d => d.data().name).join(", ")}</p>`;
       }
     }
+
+    html += `</td>${weatherHtml ? `<td valign="top" width="120" style="padding:14px 14px 14px 0;"><div style="background:#eff6ff;border-radius:8px;padding:10px;text-align:center;">${weatherHtml}</div></td>` : ""}</tr></table>`;
   }
 
   // Totals for managers
@@ -274,7 +334,7 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
   await resend.emails.send({
     from: "WashLevel <noreply@washlevel.com>",
     to: email,
-    subject: `WashLevel Daily Summary — ${yesterday.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+    subject: `WashLevel Daily Summary — ${displayDate}`,
     html
   });
 
@@ -310,7 +370,7 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
 
     // Send the summary using the same logic as sendDailySummary
     try {
-      const isManager = userData.role === "manager";
+      const isManager = (userData.role === "manager" || userData.role === "owner");
       const ownerId = userData.isTeamMember ? userData.ownerId : userDoc.id;
       const email = prefs.summaryEmail || userData.email;
 
@@ -322,14 +382,17 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
 
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const dateStr = yesterday.toISOString().split("T")[0];
+      const etDate2 = yesterday.toLocaleString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+      const [etMonth2, etDay2, etYear2] = etDate2.split("/");
+      const dateStr = `${etYear2}-${etMonth2}-${etDay2}`;
+      const displayDate = `${parseInt(etMonth2)}/${parseInt(etDay2)}/${etYear2}`;
 
       const resend = new Resend(RESEND_API_KEY.value());
 
       let html = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: #1a3352; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
           <h1 style="color: #fff; margin: 0; font-size: 22px;">WashLevel Daily Summary</h1>
-          <p style="color: #94a3b8; margin: 6px 0 0;">${yesterday.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
+          <p style="color: #94a3b8; margin: 6px 0 0;">${displayDate}</p>
         </div>
         <div style="background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">`;
 
@@ -340,13 +403,63 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
       const today = new Date().toISOString().split("T")[0];
 
       for (const loc of allowedLocs) {
-        html += `<h2 style="color: #1a3352; font-size: 16px; margin: 16px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px;">${loc.name}</h2>`;
+        // Fetch weather if enabled and location has zip/coords
+        let weatherHtml = "";
+        if (prefs.includeWeather) {
+          try {
+            let wLat = loc.lat, wLon = loc.lon;
+            if ((!wLat || !wLon) && loc.zipCode) {
+              const coords = await zipToCoords(loc.zipCode);
+              if (coords) { wLat = coords.lat; wLon = coords.lon; }
+            }
+            if (wLat && wLon) {
+              const wRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${wLat}&longitude=${wLon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FNew_York&start_date=${dateStr}&end_date=${dateStr}`);
+              const wData = await wRes.json();
+              if (wData.daily) {
+                const tMax = Math.round(wData.daily.temperature_2m_max[0]);
+                const tMin = Math.round(wData.daily.temperature_2m_min[0]);
+                const precip = wData.daily.precipitation_sum[0] || 0;
+                const wcode = wData.daily.weathercode[0];
+                const wDesc = wcode <= 1 ? "Clear" : wcode <= 3 ? "Partly Cloudy" : wcode <= 48 ? "Foggy" : wcode <= 67 ? "Rain" : wcode <= 77 ? "Snow" : wcode <= 82 ? "Showers" : "Stormy";
+                weatherHtml = `<div style="text-align:center; padding: 8px 12px; background:#eff6ff; border-radius:8px;">
+                  <div style="font-size:13px; font-weight:700; color:#1a3352;">${wDesc}</div>
+                  <div style="font-size:18px; font-weight:800; color:#1a3352;">${tMax}°F</div>
+                  <div style="font-size:11px; color:#6b7280;">Low ${tMin}°F</div>
+                  ${precip > 0 ? `<div style="font-size:11px; color:#3b82f6;">${precip.toFixed(2)}" rain</div>` : ""}
+                </div>`;
+              }
+            }
+          } catch(e) { console.log("Weather error:", e.message); }
+        }
+
+        html += `<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;border:2px solid #1a3352;border-radius:10px;margin:16px 0;">
+            <tr><td style="padding:16px;" valign="top">
+              <h2 style="color:#1a3352;font-size:16px;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid #1a3352;">${loc.name}</h2>`;
 
         if (isManager && prefs.includeCounts !== false) {
           const countSnap = await db.collection("locations").doc(loc.id).collection("daySummaries").doc(dateStr).get();
-          const cars = countSnap.exists ? (countSnap.data().carsWashed || 0) : 0;
+          const summaryData = countSnap.exists ? countSnap.data() : {};
+          const cars = summaryData.carsWashed || 0;
           totalCars += cars;
-          html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars}</p>`;
+
+          const eqCountData = summaryData.equipment || {};
+          const hasEqCounts = Object.keys(eqCountData).length > 0;
+
+          if (hasEqCounts) {
+            const eqSnap = await db.collection("locations").doc(loc.id).collection("equipment")
+              .where("tracksCarCount", "==", true).get();
+            const eqMap = {};
+            eqSnap.docs.forEach(d => { eqMap[d.id] = d.data().name || d.id; });
+            html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars} total</p>`;
+            html += `<div style="margin: 4px 0 8px 16px;">`;
+            for (const [eqId, eqData] of Object.entries(eqCountData)) {
+              const eqName = eqMap[eqId] || eqId;
+              html += `<p style="margin: 2px 0; color: #6b7280; font-size: 13px;">${eqName}: <strong>${eqData.carsWashed || 0}</strong></p>`;
+            }
+            html += `</div>`;
+          } else {
+            html += `<p style="margin: 4px 0; color: #374151;"><strong>Cars Washed:</strong> ${cars}</p>`;
+          }
         }
 
         const tasksSnap = await db.collection("locations").doc(loc.id).collection("tasks").get();
@@ -380,6 +493,8 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
         }
         if (prefs.includeOverdue !== false && overdue.length > 0)
           html += `<p style="margin: 4px 0; color: #e74c3c;"><strong>Overdue Tasks:</strong> ${overdue.length}</p>`;
+
+        html += `</td>${weatherHtml ? `<td valign="top" width="130" style="padding:16px 16px 16px 0;">${weatherHtml}</td>` : ""}</tr></table>`;
 
         if (isManager && prefs.includeEquipment !== false) {
           const eqSnap = await db.collection("locations").doc(loc.id).collection("equipment").where("status", "!=", "ok").get();
