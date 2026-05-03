@@ -5362,8 +5362,8 @@ const fetchWeather = async (dateStr) => {
       const today = new Date().toISOString().split("T")[0];
       const isPast = dateStr < today;
       const endpoint = isPast
-        ? "https://archive-api.open-meteo.com/v1/archive?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr
-        : "https://api.open-meteo.com/v1/forecast?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&timezone=auto&start_date=" + dateStr + "&end_date=" + dateStr;
+        ? "https://archive-api.open-meteo.com/v1/archive?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&hourly=weathercode,precipitation&timezone=America/New_York&start_date=" + dateStr + "&end_date=" + dateStr
+        : "https://api.open-meteo.com/v1/forecast?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&hourly=weathercode,precipitation&timezone=America/New_York&start_date=" + dateStr + "&end_date=" + dateStr;
       const res = await fetch(endpoint);
       const data = await res.json();
       if (data.daily) {
@@ -5376,7 +5376,28 @@ const fetchWeather = async (dateStr) => {
         const snowMM = data.daily.snowfall_sum?.[0] ?? 0;
         const precipIn = Math.round(precipMM * 0.03937 * 100) / 100;
         const precipType = snowMM > 0 ? "Snow" : rainMM > 0 ? "Rain" : precipMM > 0 ? "Mixed" : "None";
-        setWeather(p => ({ ...p, [dateStr]: { max, min, desc, precip: precipIn, precipType } }));
+        let periodDesc = "";
+        if (data.hourly && isPast) {
+          const hC = data.hourly.weathercode || [];
+          const hP = data.hourly.precipitation || [];
+          const periods = [
+            { label: "Overnight", hours: [0,1,2,3,4,5] },
+            { label: "Morning", hours: [6,7,8,9,10,11] },
+            { label: "Afternoon", hours: [12,13,14,15,16,17] },
+            { label: "Evening", hours: [18,19,20,21,22,23] },
+          ];
+          const codeToSev = c => c >= 95 ? 7 : c >= 80 ? 6 : c >= 71 ? 5 : c >= 61 ? 4 : c >= 51 ? 3 : c >= 45 ? 2 : c >= 2 ? 1 : 0;
+          const codeToWord = c => c >= 95 ? "Storms" : c >= 80 ? "Showers" : c >= 73 ? "Heavy Snow" : c >= 71 ? "Snow" : c >= 63 ? "Heavy Rain" : c >= 61 ? "Rain" : c >= 51 ? "Drizzle" : c >= 45 ? "Fog" : c >= 3 ? "Cloudy" : "Clear";
+          let bestLabel = "", bestSev = 0, bestWord = "";
+          for (const p of periods) {
+            const maxC = Math.max(...p.hours.map(h => hC[h] || 0));
+            const totP = p.hours.reduce((s,h) => s+(hP[h]||0), 0);
+            const sev = codeToSev(maxC) + (totP > 0.05 ? 1 : 0);
+            if (sev > bestSev) { bestSev = sev; bestLabel = p.label; bestWord = codeToWord(maxC); }
+          }
+          if (bestLabel && bestSev > 1) periodDesc = bestLabel + " " + bestWord;
+        }
+        setWeather(p => ({ ...p, [dateStr]: { max, min, desc, precip: precipIn, precipType, periodDesc } }));
       }
     } catch(e) { console.log("Weather fetch error:", e.message, e); }
   };
@@ -5489,8 +5510,7 @@ return (
           </div>
           {selWeather && (
             <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
-              <div style={{ fontWeight: 600, color: "#0369a1" }}>{selWeather.desc}</div>
-                  {weather["debug"] && <div style={{ fontSize: 10, color: "#999", wordBreak: "break-all" }}>{weather["debug"]}</div>}
+              <div style={{ fontWeight: 600, color: "#0369a1" }}>{selWeather.periodDesc || selWeather.desc}</div>
               <div style={{ color: "#0284c7" }}>High {selWeather.max}F / Low {selWeather.min}F</div>
                   <div style={{ color: "#0369a1", marginTop: 4, fontSize: 12 }}>
                     {selWeather.precipType === "Snow" ? "Snowfall" : "Precipitation"}: {selWeather.precip !== undefined ? (selWeather.precip > 0 ? selWeather.precip + '"' : "None") : selWeather.desc ? "0\"" : "Loading..."}
