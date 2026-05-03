@@ -291,7 +291,7 @@ const Spinner = () => (
 
   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
     <div style={{ width: 36, height: 36, border: "3px solid #e5e7eb", borderTop: "3px solid #1a3352", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
-    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <style>{`@keyframes spin{to{transform:rotate(360deg)}} input, textarea, select { color: #0f1f35 !important; background-color: #fff !important; } input::placeholder, textarea::placeholder { color: #94a3b8 !important; }`}</style>
   </div>
 );
 
@@ -5002,13 +5002,13 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                 <div key={field} style={{ marginBottom: 10 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>{label}</label>
                   <input type={type} value={newVendor[field]} onChange={e => setNewVendor(p => ({...p, [field]: e.target.value}))}
-                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35", background: "#fff" }} />
                 </div>
               ))}
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Notes</label>
                 <textarea value={newVendor.notes} onChange={e => setNewVendor(p => ({...p, notes: e.target.value}))}
-                  rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "none", color: "#0f1f35" }} />
+                  rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "none", color: "#0f1f35", background: "#fff" }} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={async () => {
@@ -5821,12 +5821,12 @@ function ShellyIntegration({ locations }) {
           <div style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Server URL <span style={{ fontWeight: 400 }}>(e.g. shelly-256-eu.shelly.cloud)</span></label>
             <input value={server} onChange={e => setServer(e.target.value.replace("https://",""))} placeholder="shelly-256-eu.shelly.cloud"
-              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
+              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35", background: "#fff" }} />
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Auth Key</label>
             <input value={authKey} onChange={e => setAuthKey(e.target.value)} placeholder="Paste your Auth Key"
-              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35" }} />
+              style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", color: "#0f1f35", background: "#fff" }} />
           </div>
           <button onClick={handleConnect} disabled={connecting || !authKey || !server}
             style={{ background: authKey && server ? "#0f1f35" : "#e2e8f0", color: authKey && server ? "#fff" : "#94a3b8", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: authKey && server ? "pointer" : "not-allowed" }}>
@@ -6034,7 +6034,7 @@ return (
   <div style={{ marginBottom: 12 }}>
     <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Display Name</label>
     <input value={profileName} onChange={e => setProfileName(e.target.value)}
-      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa" }}
+      style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 6, background: "#fafafa", color: "#0f1f35" }}
       placeholder="Your name" />
   </div>
   <div style={{ marginBottom: 16 }}>
@@ -6123,15 +6123,15 @@ Changes saved!
 <div style={{ fontWeight: 600, fontSize: 13, color: "#6366f1", marginBottom: 12 }}>New Location</div>
 <div style={{ marginBottom: 12 }}>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Location Name</label>
-<input value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. East Side Wash" />
+<input value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff", color: "#0f1f35" }} placeholder="e.g. East Side Wash" />
 </div>
 <div style={{ marginBottom: 12 }}>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Address</label>
-<input value={address} onChange={e => setAddress(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. 999 Main St" />
+<input value={address} onChange={e => setAddress(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff", color: "#0f1f35" }} placeholder="e.g. 999 Main St" />
 </div>
 <div style={{ marginBottom: 14 }}>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Zip Code (for weather)</label>
-<input value={zipCode} onChange={e => setZipCode(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff" }} placeholder="e.g. 90210" maxLength={5} />
+<input value={zipCode} onChange={e => setZipCode(e.target.value)} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", marginTop: 4, background: "#fff", color: "#0f1f35" }} placeholder="e.g. 90210" maxLength={5} />
 </div>
 <div style={{ display: "flex", gap: 8 }}>
 <button onClick={() => handleSave("**new**")} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
