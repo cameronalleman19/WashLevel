@@ -413,22 +413,40 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
               if (coords) { wLat = coords.lat; wLon = coords.lon; }
             }
             if (wLat && wLon) {
-              const wRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${wLat}&longitude=${wLon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FNew_York&start_date=${dateStr}&end_date=${dateStr}`);
-              const wData = await wRes.json();
-              if (wData.daily) {
-                const tMax = Math.round(wData.daily.temperature_2m_max[0]);
-                const tMin = Math.round(wData.daily.temperature_2m_min[0]);
-                const precip = wData.daily.precipitation_sum[0] || 0;
-                const wcode = wData.daily.weathercode[0];
-                const wDesc = wcode <= 1 ? "Clear" : wcode <= 3 ? "Partly Cloudy" : wcode <= 48 ? "Foggy" : wcode <= 67 ? "Rain" : wcode <= 77 ? "Snow" : wcode <= 82 ? "Showers" : "Stormy";
-                weatherHtml = `<div style="text-align:center; padding: 8px 12px; background:#eff6ff; border-radius:8px;">
-                  <div style="font-size:13px; font-weight:700; color:#1a3352;">${wDesc}</div>
-                  <div style="font-size:18px; font-weight:800; color:#1a3352;">${tMax}°F</div>
-                  <div style="font-size:11px; color:#6b7280;">Low ${tMin}°F</div>
-                  ${precip > 0 ? `<div style="font-size:11px; color:#3b82f6;">${precip.toFixed(2)}" rain</div>` : ""}
-                </div>`;
-              }
-            }
+              const wRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${wLat}&longitude=${wLon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&hourly=weathercode,precipitation&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FNew_York&start_date=${dateStr}&end_date=${dateStr}`);
+             const wData = await wRes.json();
+             if (wData.daily) {
+               const tMax = Math.round(wData.daily.temperature_2m_max[0]);
+               const tMin = Math.round(wData.daily.temperature_2m_min[0]);
+               const precip = wData.daily.precipitation_sum[0] || 0;
+               const wcode = wData.daily.weathercode[0];
+               const wDesc = wcode <= 1 ? "Clear" : wcode <= 3 ? "Partly Cloudy" : wcode <= 48 ? "Foggy" : wcode <= 67 ? "Rain" : wcode <= 77 ? "Snow" : wcode <= 82 ? "Showers" : "Stormy";
+               const codeToSev = c => c >= 95 ? 7 : c >= 80 ? 6 : c >= 71 ? 5 : c >= 61 ? 4 : c >= 51 ? 3 : c >= 45 ? 2 : c >= 2 ? 1 : 0;
+               const codeToWord = c => c >= 95 ? "Storms" : c >= 80 ? "Showers" : c >= 73 ? "Heavy Snow" : c >= 71 ? "Snow" : c >= 63 ? "Heavy Rain" : c >= 61 ? "Rain" : c >= 51 ? "Drizzle" : c >= 45 ? "Fog" : c >= 3 ? "Cloudy" : "Clear";
+               let periodDesc = "";
+               if (wData.hourly) {
+                 const hC = wData.hourly.weathercode || [];
+                 const hP = wData.hourly.precipitation || [];
+                 const periods = [
+                   { label: "Overnight", hours: [0,1,2,3,4,5] },
+                   { label: "Morning", hours: [6,7,8,9,10,11] },
+                   { label: "Afternoon", hours: [12,13,14,15,16,17] },
+                   { label: "Evening", hours: [18,19,20,21,22,23] },
+                 ];
+                 let bestLabel = "", bestSev = 0, bestWord = "";
+                 for (const p of periods) {
+                   const maxC = Math.max(...p.hours.map(h => hC[h] || 0));
+                   const totP = p.hours.reduce((s,h) => s+(hP[h]||0), 0);
+                   const sev = codeToSev(maxC) + (totP > 0.05 ? 1 : 0);
+                   if (sev > bestSev) { bestSev = sev; bestLabel = p.label; bestWord = codeToWord(maxC); }
+                 }
+                 if (bestLabel && bestSev > 1) periodDesc = bestLabel + " " + bestWord;
+               }
+               const wDisplay = periodDesc || wDesc;
+               const wLine = '<div style="font-size:12px;font-weight:700;color:#1a3352;">' + wDisplay + '</div><div style="font-size:20px;font-weight:800;color:#1a3352;">' + tMax + '°F</div><div style="font-size:11px;color:#6b7280;">Low ' + tMin + '°F</div>' + (precip > 0 ? '<div style="font-size:11px;color:#3b82f6;">' + precip.toFixed(2) + '"</div>' : '');
+               weatherHtml = wLine;
+             }
+             }
           } catch(e) { console.log("Weather error:", e.message); }
         }
 
