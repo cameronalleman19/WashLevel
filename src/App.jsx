@@ -3191,15 +3191,12 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
     return new Date(e.mainClockOut) - new Date(e.mainClockIn);
   };
   const totalHours = (entries) => {
-    const ms = entries.reduce((sum, e) => {
-      if (!e.mainClockIn || !e.mainClockOut) return sum;
-      return sum + (new Date(e.mainClockOut) - new Date(e.mainClockIn));
-    }, 0);
+    const ms = entries.reduce((sum, e) => sum + entryMs(e), 0);
     const h = Math.floor(ms / 3600000);
     const m = Math.floor((ms % 3600000) / 60000);
     return h + "h " + m + "m";
   };
-  const totalHrsNum = (entries) => entries.reduce((sum, e) => sum + elapsedHrs(e.mainClockIn, e.mainClockOut), 0);
+  const totalHrsNum = (entries) => entries.reduce((sum, e) => sum + entryMs(e) / 3600000, 0);
 
   const sessions = clockState?.sessions || (clockState?.mainClockIn ? [{ in: clockState.mainClockIn, out: clockState.mainClockOut || null }] : []);
   const lastSession = sessions[sessions.length - 1];
@@ -3463,7 +3460,30 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
                     <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: 8, marginBottom: 6 }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{e.name || e.uid?.slice(0,8)}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "Still clocked in"}</div>
+                        {(() => {
+                          const ss = (e.sessions && e.sessions.length > 0)
+                            ? e.sessions
+                            : (e.mainClockIn ? [{ in: e.mainClockIn, out: e.mainClockOut }] : []);
+                          const dayMs = ss.reduce((sum, s) => s.in && s.out ? sum + (new Date(s.out) - new Date(s.in)) : sum, 0);
+                          const dayHrs = Math.floor(dayMs / 3600000);
+                          const dayMin = Math.floor((dayMs % 3600000) / 60000);
+                          return (
+                            <div>
+                              {ss.map((s, i) => (
+                                <div key={i} style={{ fontSize: 11, color: "#94a3b8" }}>
+                                  {ss.length > 1 && <span style={{ color: "#cbd5e1" }}>S{i+1}: </span>}
+                                  {fmt(s.in)} — {s.out ? fmt(s.out) : <span style={{ color: "#10b981" }}>Active</span>}
+                                  {s.in && s.out && <span style={{ color: "#64748b", marginLeft: 4 }}>({elapsed(s.in, s.out)})</span>}
+                                </div>
+                              ))}
+                              {ss.length > 1 && dayMs > 0 && (
+                                <div style={{ fontSize: 11, fontWeight: 700, color: "#0f1f35", marginTop: 2 }}>
+                                  Total: {dayHrs}h {dayMin}m
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {e.editedBy && (
                           <div style={{ fontSize: 10, color: "#f59e0b" }}>
                             Edited {e.editedAt ? new Date(e.editedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(e.editedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
@@ -3520,7 +3540,14 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
               <button onClick={() => {
                 const text = Object.entries(payrollByEmployee).map(([uid, emp]) => {
                   const hrs = totalHrsNum(emp.entries);
-                  const lines = emp.entries.map(e => fmtDate(e.date) + ": " + elapsed(e.mainClockIn, e.mainClockOut)).join("\n");
+                  const lines = emp.entries.map(e => {
+                    const ss = (e.sessions && e.sessions.length > 0) ? e.sessions : (e.mainClockIn ? [{ in: e.mainClockIn, out: e.mainClockOut }] : []);
+                    const sessionLines = ss.map((s, i) => "  Session " + (i+1) + ": " + fmt(s.in) + " — " + (s.out ? fmt(s.out) : "active") + " (" + (s.in && s.out ? elapsed(s.in, s.out) : "ongoing") + ")").join("\n");
+                    const dayMs = ss.reduce((sum, s) => s.in && s.out ? sum + (new Date(s.out) - new Date(s.in)) : sum, 0);
+                    const dayHrs = Math.floor(dayMs / 3600000);
+                    const dayMin = Math.floor((dayMs % 3600000) / 60000);
+                    return fmtDate(e.date) + " — Total: " + dayHrs + "h " + dayMin + "m\n" + sessionLines;
+                  }).join("\n");
                   return emp.name + "\nTotal: " + hrs.toFixed(2) + " hrs\n" + lines;
                 }).join("\n\n");
                 const blob = new Blob([text], { type: "text/plain" });
@@ -3546,13 +3573,29 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
                       {isOT && <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>Overtime: {(hrs - 40).toFixed(2)} hrs over 40</div>}
                     </div>
                   </div>
-                  {emp.entries.map(e => (
-                    <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f3f4f6", fontSize: 13 }}>
-                      <span style={{ color: "#64748b" }}>{fmtDate(e.date)}</span>
-                      <span style={{ color: "#94a3b8" }}>{fmt(e.mainClockIn)} — {e.mainClockOut ? fmt(e.mainClockOut) : "—"}</span>
-                      <span style={{ fontWeight: 600, color: "#0f1f35" }}>{e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : "—"}</span>
+                  {emp.entries.map(e => {
+                    const daySessions = (e.sessions && e.sessions.length > 0)
+                      ? e.sessions
+                      : (e.mainClockIn ? [{ in: e.mainClockIn, out: e.mainClockOut }] : []);
+                    const dayMs = daySessions.reduce((sum, s) => s.in && s.out ? sum + (new Date(s.out) - new Date(s.in)) : sum, 0);
+                    const dayHrs = Math.floor(dayMs / 3600000);
+                    const dayMin = Math.floor((dayMs % 3600000) / 60000);
+                    return (
+                    <div key={e.id} style={{ borderBottom: "1px solid #f3f4f6", padding: "8px 0" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: daySessions.length > 1 ? 4 : 0 }}>
+                        <span style={{ color: "#64748b", fontWeight: 600 }}>{fmtDate(e.date)}</span>
+                        <span style={{ fontWeight: 700, color: "#0f1f35" }}>{dayMs > 0 ? dayHrs + "h " + dayMin + "m" : "—"}</span>
+                      </div>
+                      {daySessions.map((s, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#94a3b8", paddingLeft: 10, marginBottom: 2 }}>
+                          <span>Session {i + 1}</span>
+                          <span>{fmt(s.in)} — {s.out ? fmt(s.out) : <span style={{ color: "#10b981" }}>Active</span>}</span>
+                          <span style={{ color: "#64748b" }}>{s.in && s.out ? elapsed(s.in, s.out) : s.in ? "ongoing" : "—"}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               );
             })}
