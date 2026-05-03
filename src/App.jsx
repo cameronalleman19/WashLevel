@@ -3145,11 +3145,12 @@ function TimeClock({ locId, locationName, allLocations }) {
     const managerUid = user.isTeamMember ? user.ownerId : user.uid;
     let unsubClock = () => {};
     getDocs(query(collection(db, "users"), where("ownerId", "==", managerUid))).then(membersSnap => {
-      const uids = [managerUid, ...membersSnap.docs.map(d => d.id)];
+      const allUids = [managerUid, ...membersSnap.docs.map(d => d.id)];
+      const uids = [...new Set([...allUids, user.uid])];
       unsubClock = onSnapshot(
         query(collection(db, "timeclock"), where("uid", "in", uids.slice(0, 30))),
         snap => {
-          setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date > a.date ? 1 : -1));
+setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date > a.date ? 1 : -1));
         }
       );
     });
@@ -3330,7 +3331,7 @@ function TimeClock({ locId, locationName, allLocations }) {
       <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb", marginBottom: 20, background: "#f8fafc", borderRadius: "10px 10px 0 0", overflow: "hidden" }}>
         <button style={tabStyle("clock")} onClick={() => setActiveTab("clock")}>My Clock</button>
         <button style={tabStyle("history")} onClick={() => setActiveTab("history")}>My History</button>
-        {isManager && <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>Team</button>}
+        {(user?.role === "owner" || (isManager && user?.canViewTeam)) && <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>Team</button>}
         {(user?.role === "owner" || (isManager && user?.payrollAccess)) && <button style={tabStyle("payroll")} onClick={() => setActiveTab("payroll")}>Payroll</button>}
       </div>
 
@@ -3427,8 +3428,9 @@ function TimeClock({ locId, locationName, allLocations }) {
         </div>
       )}
 
-      {activeTab === "team" && isManager && (
+      {activeTab === "team" && (user?.role === "owner" || (isManager && user?.canViewTeam)) && (
         <div>
+
           {editEntry && (
             <div style={{ background: "#fff", border: "2px solid #1a3352", borderRadius: 16, padding: 20, marginBottom: 16 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 12 }}>Edit Entry — {editEntry.name} — {fmtDate(editEntry.date)}</div>
@@ -6612,6 +6614,7 @@ function TeamMembers({ user, locations }) {
   const [editSensorAccess, setEditSensorAccess] = useState(false);
   const [editInventoryAccess, setEditInventoryAccess] = useState(false);
   const [editEquipmentAccess, setEditEquipmentAccess] = useState(false);
+  const [editCanViewTeam, setEditCanViewTeam] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [inviteRole, setInviteRole] = useState("attendant");
   const [inviteLocs, setInviteLocs] = useState([]);
@@ -6706,6 +6709,7 @@ function TeamMembers({ user, locations }) {
             ))}
           </div>
           {(editRole === "manager" && user?.role === "owner") && (
+            <>
             <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f4f6f8", borderRadius: 8, border: "1px solid #e5e7eb" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -6718,6 +6722,19 @@ function TeamMembers({ user, locations }) {
                 </div>
               </div>
             </div>
+            <div style={{ marginBottom: 14, padding: "12px 14px", background: "#f4f6f8", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>Team Access</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Allow this manager to view the Team tab in Time Clock</div>
+                </div>
+                <div onClick={() => setEditCanViewTeam(p => !p)}
+                  style={{ width: 44, height: 24, borderRadius: 12, background: editCanViewTeam ? "#0f1f35" : "#e2e8f0", cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                  <div style={{ position: "absolute", top: 2, left: editCanViewTeam ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                </div>
+              </div>
+            </div>
+            </>
           )}
           {editRole !== "manager" && (
             <div style={{ marginBottom: 14 }}>
@@ -6745,14 +6762,15 @@ function TeamMembers({ user, locations }) {
             <button onClick={async () => {
               setSavingEdit(true);
               const payrollAccess = editRole === "manager" ? editPayrollAccess : false;
+              const canViewTeam = editRole === "manager" ? editCanViewTeam : false;
               const carCountAccess = editRole === "manager" ? true : editCarCountAccess;
               const sensorAccess = editRole === "manager" ? true : editSensorAccess;
               const inventoryAccess = editRole === "manager" ? true : editInventoryAccess;
               const equipmentAccess = editRole === "manager" ? true : editEquipmentAccess;
               try {
-                await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess, updatedAt: new Date().toISOString() });
+                await updateDoc(doc(db, "users", editingMember.uid), { allowedLocations: editLocs, role: editRole, payrollAccess, canViewTeam, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess, updatedAt: new Date().toISOString() });
                 setEditingMember(null);
-                setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess } : m));
+                setMembers(p => p.map(m => m.uid === editingMember.uid ? { ...m, allowedLocations: editLocs, role: editRole, payrollAccess, canViewTeam, carCountAccess, sensorAccess, inventoryAccess, equipmentAccess } : m));
               } catch(e) { alert("Save error: " + e.message); }
               setSavingEdit(false);
             }} disabled={savingEdit}
@@ -6783,7 +6801,8 @@ function TeamMembers({ user, locations }) {
                 <button onClick={() => handleRemove(m.uid, m.name || m.email)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Remove</button>
               )}
               {m.role !== "owner" && (
-                <button onClick={() => { setEditingMember(m); setEditLocs(m.allowedLocations || []); setEditRole(m.role || "attendant"); setEditPayrollAccess(m.payrollAccess || false); setEditCarCountAccess(m.carCountAccess || false); setEditSensorAccess(m.sensorAccess || false); setEditInventoryAccess(m.inventoryAccess || false); setEditEquipmentAccess(m.equipmentAccess || false); }}
+                <button onClick={() => { setEditingMember(m); setEditLocs(m.allowedLocations || []); setEditRole(m.role || "attendant"); setEditPayrollAccess(m.payrollAccess || false);
+        setEditCanViewTeam(m.canViewTeam || false); setEditCarCountAccess(m.carCountAccess || false); setEditSensorAccess(m.sensorAccess || false); setEditInventoryAccess(m.inventoryAccess || false); setEditEquipmentAccess(m.equipmentAccess || false); }}
                   style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit Access</button>
               )}
             </div>

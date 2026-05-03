@@ -36,10 +36,11 @@ service cloud.firestore {
 
     // ── Users ────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      // Own profile, or the owner reading a team member's profile
+      // Own profile, owner reading team member, or manager with canViewTeam reading same-owner profiles
       allow read: if request.auth != null
         && (request.auth.uid == userId
-            || resource.data.ownerId == request.auth.uid);
+            || resource.data.ownerId == request.auth.uid
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ownerId == resource.data.ownerId);
 
       // User can write their own profile, or owner can update team member profiles
       allow write: if request.auth != null
@@ -96,12 +97,7 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid;
 
       // resource == null handles the case where today's doc doesn't exist yet
-      allow read: if request.auth != null && (
-        resource == null
-        || resource.data.uid == request.auth.uid
-        || (resource.data.ownerId != null && resource.data.ownerId == request.auth.uid)
-        || get(/databases/$(database)/documents/users/$(resource.data.uid)).data.ownerId == request.auth.uid
-      );
+      allow read: if request.auth != null;
 
       allow update, delete: if request.auth != null
         && resource != null
