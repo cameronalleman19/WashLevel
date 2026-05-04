@@ -1210,7 +1210,8 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
 
 function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSensorNavigate }) {
   const isManager = user?.role === "manager" || user?.role === "owner";
-  const done = tasks.filter(t => t.status === "done").length;
+  const todayStr = new Date().toISOString().split("T")[0];
+  const done = tasks.filter(t => t.status === "done" && t.completedAt && t.completedAt.startsWith(todayStr)).length;
   const inprog = tasks.filter(t => t.status === "in-progress").length;
   const eqBad = equipment.filter(e => e.status !== "ok").length;
   const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
@@ -1715,6 +1716,30 @@ return (
   <button onClick={async (e) => {
     e.stopPropagation();
     await updateDoc(doc(db, "locations", locId, "tasks", task.id), { archived: true, archivedAt: new Date().toISOString() });
+    if (task.recurrence && !task.recurrence.includes("cars")) {
+      const nextDue = new Date();
+      if (task.recurrence === "daily") nextDue.setDate(nextDue.getDate() + 1);
+      else if (task.recurrence === "weekly") nextDue.setDate(nextDue.getDate() + 7);
+      else if (task.recurrence === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
+      else if (task.recurrence === "quarterly") nextDue.setMonth(nextDue.getMonth() + 3);
+      else if (task.recurrence === "annually") nextDue.setFullYear(nextDue.getFullYear() + 1);
+      const newId = "t" + Date.now();
+      await setDoc(doc(db, "locations", locId, "tasks", newId), {
+        ...task,
+        id: newId,
+        status: "pending",
+        completedAt: null,
+        completedBy: null,
+        startedAt: null,
+        archived: false,
+        archivedAt: null,
+        due: nextDue.toISOString().split("T")[0],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        note: "",
+        attachments: [],
+      });
+    }
   }} style={{ background: "#d1fae5", color: "#065f46", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Approve</button>
 )}
 {(user?.role === "manager" || user?.role === "owner") && (
