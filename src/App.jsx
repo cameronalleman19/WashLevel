@@ -1211,10 +1211,12 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
 function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSensorNavigate }) {
   const isManager = user?.role === "manager" || user?.role === "owner";
   const todayStr = new Date().toISOString().split("T")[0];
-  const done = tasks.filter(t => t.status === "done" && t.completedAt && t.completedAt.startsWith(todayStr)).length;
+  const todayTasks = tasks.filter(t => !t.archived && t.due && t.due <= todayStr);
+  const totalToday = todayTasks.length;
+  const done = todayTasks.filter(t => t.status === "done").length;
   const inprog = tasks.filter(t => t.status === "in-progress").length;
   const eqBad = equipment.filter(e => e.status !== "ok").length;
-  const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+  const pct = totalToday ? Math.round(done / totalToday * 100) : 0;
   const [todaySummary, setTodaySummary] = useState(null);
   const today = new Date().toISOString().split("T")[0];
   const [editMode, setEditMode] = useState(false);
