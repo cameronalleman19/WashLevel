@@ -1296,7 +1296,7 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
       {[visible.cars, visible.tasksDone, visible.inprog, visible.equip].some(Boolean) && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 13, marginBottom: 22 }}>
           {visible.cars && (isManager || user?.carCountAccess) && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("carcounts")}><StatCard label="Cars Today" value={todaySummary?.carsWashed ?? "-"} accent="#00d4aa" /></div>}
-          {visible.tasksDone && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + tasks.length} sub={pct + "% complete"} accent="#00d4aa" /></div>}
+          {visible.tasksDone && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("tasks")}><StatCard label="Tasks Done" value={done + "/" + totalToday} sub={pct + "% complete"} accent="#00d4aa" /></div>}
           {visible.inprog    && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("all-tasks")}><StatCard label="In Progress" value={inprog} accent="#f59e0b" /></div>}
           {visible.equip && (isManager || user?.equipmentAccess) && <div style={{ cursor: "pointer" }} onClick={() => onNavigate("equipment")}><StatCard label="Equip Alerts" value={eqBad} alert={eqBad > 0} accent="#ef4444" /></div>}
         </div>
