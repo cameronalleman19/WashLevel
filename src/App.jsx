@@ -4528,6 +4528,8 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [scanQty, setScanQty] = useState(1);
   const [attachingBarcode, setAttachingBarcode] = useState(null); // itemId being attached
   const [savingEdit, setSavingEdit] = useState(false);
+  const [expandedSds, setExpandedSds] = useState(null);
+  const [uploadingSds, setUploadingSds] = useState(false);
   const [savedEdit, setSavedEdit] = useState(false);
   const [showItemHistory, setShowItemHistory] = useState(false);
   const [itemHistory, setItemHistory] = useState([]);
@@ -4961,31 +4963,72 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                       <button onClick={() => { setTransferItem(item); setEditingId(null); }} style={{ width: "100%", background: "#ede9fe", color: "#6366f1", border: "1px solid #c4b5fd", borderRadius: 6, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Transfer Stock to Another Location</button>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: "#0f1f35" }}>{item.name}</div>
-                        {item.partNumber && <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, marginTop: 1 }}>Part #: {item.partNumber}</div>}
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>
-                          {item.costPerUnit ? <span>${item.costPerUnit}/{item.unit} </span> : null}
-                          {item.reorderAt ? <span> Reorder at: {item.reorderAt}</span> : null}
-                        </div>
-                        {low && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                            <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700 }}>LOW STOCK</span>
-                            <button onClick={() => handleReorder(item)} style={{ fontSize: 10, background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 4, padding: "1px 7px", cursor: "pointer", fontWeight: 600 }}>Flag Reorder</button>
+                    <div>
+                      <div onClick={() => setExpandedSds(expandedSds === item.id ? null : item.id)} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#0f1f35" }}>{item.name}</div>
+                          {item.partNumber && <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, marginTop: 1 }}>Part #: {item.partNumber}</div>}
+                          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>
+                            {item.costPerUnit ? <span>${item.costPerUnit}/{item.unit} </span> : null}
+                            {item.reorderAt ? <span> Reorder at: {item.reorderAt}</span> : null}
                           </div>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <button onClick={() => handleUpdate(item.id, Math.max(0, item.quantity - 1))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f1f5f9", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
-                        <div style={{ textAlign: "center", minWidth: 65 }}>
-                          <span style={{ fontWeight: 700, fontSize: 16, color: low ? "#ef4444" : "#0f1f35" }}>{item.quantity}</span>
-                          <span style={{ fontSize: 12, color: "#94a3b8" }}> {item.unit}</span>
+                          {low && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                              <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700 }}>LOW STOCK</span>
+                              <button onClick={e => { e.stopPropagation(); handleReorder(item); }} style={{ fontSize: 10, background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 4, padding: "1px 7px", cursor: "pointer", fontWeight: 600 }}>Flag Reorder</button>
+                            </div>
+                          )}
                         </div>
-                        <button onClick={() => handleUpdate(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f1f5f9", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-                        {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => { setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); }} style={{ background: "#0f1f35", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>}
-                        {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => handleDelete(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Del</button>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <button onClick={e => { e.stopPropagation(); handleUpdate(item.id, Math.max(0, item.quantity - 1)); }} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f1f5f9", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
+                          <div style={{ textAlign: "center", minWidth: 65 }}>
+                            <span style={{ fontWeight: 700, fontSize: 16, color: low ? "#ef4444" : "#0f1f35" }}>{item.quantity}</span>
+                            <span style={{ fontSize: 12, color: "#94a3b8" }}> {item.unit}</span>
+                          </div>
+                          <button onClick={e => { e.stopPropagation(); handleUpdate(item.id, item.quantity + 1); }} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f1f5f9", cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                          {(user?.role === "manager" || user?.role === "owner") && <button onClick={e => { e.stopPropagation(); setEditingId(item.id); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); }} style={{ background: "#0f1f35", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 600 }}>Edit</button>}
+                          {(user?.role === "manager" || user?.role === "owner") && <button onClick={e => { e.stopPropagation(); handleDelete(item.id); }} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Del</button>}
+                        </div>
                       </div>
+                      {expandedSds === item.id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>SDS/MSDS:</span>
+                          {item.sdsUrl ? (
+                            <>
+                              <a href={item.sdsUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 12px", fontWeight: 600, textDecoration: "none" }}>📄 View File</a>
+                              {(user?.role === "manager" || user?.role === "owner") && (
+                                <label style={{ fontSize: 11, background: "#f8fafc", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 12px", fontWeight: 600, cursor: "pointer" }}>
+                                  {uploadingSds === item.id ? "Uploading..." : "Replace"}
+                                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={async e => {
+                                    const file = e.target.files[0]; if (!file) return;
+                                    setUploadingSds(item.id);
+                                    const storageRef = ref(storage, `locations/${locId}/inventory/${item.id}/sds_${Date.now()}_${file.name}`);
+                                    await uploadBytes(storageRef, file);
+                                    const url = await getDownloadURL(storageRef);
+                                    await updateDoc(doc(db, "locations", locId, "inventory", item.id), { sdsUrl: url });
+                                    setUploadingSds(false);
+                                  }} />
+                                </label>
+                              )}
+                            </>
+                          ) : (
+                            (user?.role === "manager" || user?.role === "owner") ? (
+                              <label style={{ fontSize: 11, background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 12px", fontWeight: 600, cursor: uploadingSds === item.id ? "wait" : "pointer" }}>
+                                {uploadingSds === item.id ? "Uploading..." : "⬆ Upload SDS"}
+                                <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={async e => {
+                                  const file = e.target.files[0]; if (!file) return;
+                                  setUploadingSds(item.id);
+                                  const storageRef = ref(storage, `locations/${locId}/inventory/${item.id}/sds_${Date.now()}_${file.name}`);
+                                  await uploadBytes(storageRef, file);
+                                  const url = await getDownloadURL(storageRef);
+                                  await updateDoc(doc(db, "locations", locId, "inventory", item.id), { sdsUrl: url });
+                                  setUploadingSds(false);
+                                }} />
+                              </label>
+                            ) : <span style={{ fontSize: 11, color: "#94a3b8" }}>No file uploaded</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -6679,6 +6722,8 @@ function TeamMembers({ user, locations }) {
   const [editEquipmentAccess, setEditEquipmentAccess] = useState(false);
   const [editCanViewTeam, setEditCanViewTeam] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [expandedSds, setExpandedSds] = useState(null);
+  const [uploadingSds, setUploadingSds] = useState(false);
   const [inviteRole, setInviteRole] = useState("attendant");
   const [inviteLocs, setInviteLocs] = useState([]);
   const [sending, setSending] = useState(false);
