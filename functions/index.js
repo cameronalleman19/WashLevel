@@ -1156,3 +1156,16 @@ exports.pressureLevel = onRequest({ cors: true }, async (req, res) => {
     res.status(500).send("Internal server error");
   }
 });
+
+exports.updateTimeclockEntry = onCall(async (request) => {
+  if (!request.auth) throw new Error("Unauthorized");
+  const { docId, locationTimes, mainClockIn, mainClockOut, sessions, editedBy, editedAt } = request.data;
+  if (!docId) throw new Error("Missing docId");
+  const update = { editedBy, editedAt };
+  if (locationTimes !== undefined) update.locationTimes = locationTimes;
+  if (mainClockIn !== undefined) update.mainClockIn = mainClockIn;
+  if (mainClockOut !== undefined) update.mainClockOut = mainClockOut;
+  if (sessions !== undefined) update.sessions = sessions;
+  await db.collection("timeclock").doc(docId).update(update);
+  return { ok: true };
+});

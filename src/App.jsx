@@ -834,10 +834,11 @@ function SensorDetailModal({ sensor, locId, onClose }) {
     setHistData([]);
     getDocs(query(
       collection(db, "locations", locId, "sensorReadings", sensor.id, "history"),
-      orderBy("timestamp", "desc"),
-      limit(500)
+      where("timestamp", ">=", startISO),
+      orderBy("timestamp", "asc"),
+      limit(2000)
     )).then(snap => {
-      const pts = snap.docs.map(d => d.data()).filter(d => d.timestamp >= startISO).reverse();
+      const pts = snap.docs.map(d => d.data());
       setHistData(pts);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -3138,6 +3139,11 @@ function TimeClock({ locId, locationName, allLocations }) {
   const [editIn, setEditIn] = useState("");
   const [editOut, setEditOut] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [editLocEntry, setEditLocEntry] = useState(null); // { docId, date, name, locId, locName, in, out }
+  const [editLocIn, setEditLocIn] = useState("");
+  const [editLocOut, setEditLocOut] = useState("");
+  const [savingLocEdit, setSavingLocEdit] = useState(false);
+  const [savedLocEdit, setSavedLocEdit] = useState(null);
   const [payrollPeriodStart, setPayrollPeriodStart] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [billingStart, setBillingStart] = useState("");
@@ -3292,9 +3298,38 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
     setSavingEdit(true);
     const inIso = new Date(editEntry.date + "T" + editIn).toISOString();
     const outIso = editOut ? new Date(editEntry.date + "T" + editOut).toISOString() : null;
-    await updateDoc(doc(db, "timeclock", editEntry.id), { mainClockIn: inIso, mainClockOut: outIso, editedBy: user.uid, editedAt: now() });
+    // Also update first session to keep sessions array in sync
+    const existingSessions = editEntry.sessions || (editEntry.mainClockIn ? [{ in: editEntry.mainClockIn, out: editEntry.mainClockOut }] : []);
+    const updatedSessions = existingSessions.length > 0
+      ? existingSessions.map((s, i) => i === 0 ? { ...s, in: inIso, out: outIso } : s)
+      : [{ in: inIso, out: outIso }];
+    const updateTimeclock = httpsCallable(functions, "updateTimeclockEntry");
+    await updateTimeclock({ docId: editEntry.id, mainClockIn: inIso, mainClockOut: outIso, sessions: updatedSessions, editedBy: user.uid, editedAt: now() });
     setSavingEdit(false);
     setEditEntry(null);
+  };
+
+  const handleSaveLocEdit = async () => {
+    if (!editLocEntry) return;
+    setSavingLocEdit(true);
+    try {
+      const inIso = new Date(editLocEntry.date + "T" + editLocIn).toISOString();
+      const outIso = editLocOut ? new Date(editLocEntry.date + "T" + editLocOut).toISOString() : null;
+      const updatedLocationTimes = {
+        ...editLocEntry.locationTimes,
+        [editLocEntry.locId]: { in: inIso, out: outIso }
+      };
+      const updateTimeclock = httpsCallable(functions, "updateTimeclockEntry");
+      await updateTimeclock({ docId: editLocEntry.docId, locationTimes: updatedLocationTimes, editedBy: user.uid, editedAt: now() });
+      const key = editLocEntry.docId + editLocEntry.locId;
+      setSavedLocEdit(key);
+      setTimeout(() => setSavedLocEdit(null), 2500);
+      setEditLocEntry(null);
+    } catch(err) {
+      alert("Save failed: " + err.message);
+    } finally {
+      setSavingLocEdit(false);
+    }
   };
 
   const savePayrollSettings = async (settings) => {
@@ -3455,24 +3490,26 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
       {activeTab === "team" && (user?.role === "owner" || (isManager && user?.canViewTeam)) && (
         <div>
 
-          {editEntry && (
+
+          {editLocEntry && (
             <div style={{ background: "#fff", border: "2px solid #1a3352", borderRadius: 16, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 12 }}>Edit Entry — {editEntry.name} — {fmtDate(editEntry.date)}</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Edit Location Entry</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>{editLocEntry.name} — {fmtDate(editLocEntry.date)} — {editLocEntry.locName}</div>
               <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Clock In</label>
-                  <input type="time" value={editIn} onChange={e => setEditIn(e.target.value)}
+                  <input type="time" value={editLocIn} onChange={e => setEditLocIn(e.target.value)}
                     style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Clock Out</label>
-                  <input type="time" value={editOut} onChange={e => setEditOut(e.target.value)}
+                  <input type="time" value={editLocOut} onChange={e => setEditLocOut(e.target.value)}
                     style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={handleSaveEdit} disabled={savingEdit} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : "Save Changes"}</button>
-                <button onClick={() => setEditEntry(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button onClick={handleSaveLocEdit} disabled={savingLocEdit} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{savingLocEdit ? "Saving..." : "Save Changes"}</button>
+                <button onClick={() => setEditLocEntry(null)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
               </div>
             </div>
           )}
@@ -3483,8 +3520,11 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
               return Object.entries(byDate).map(([date, entries]) => (
                 <div key={date} style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{fmtDate(date)}</div>
-                  {entries.map(e => (
-                    <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: 8, marginBottom: 6 }}>
+                  {entries.map(e => {
+                    const locEntries = e.locationTimes ? Object.entries(e.locationTimes) : [];
+                    return (
+                    <div key={e.id} style={{ marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: 8 }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{e.name || e.uid?.slice(0,8)}</div>
                         {(() => {
@@ -3522,13 +3562,92 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
                           {e.mainClockOut ? elapsed(e.mainClockIn, e.mainClockOut) : elapsed(e.mainClockIn, null)}
                         </div>
                         <button onClick={() => {
+                          if (editEntry?.id === e.id) { setEditEntry(null); return; }
                           setEditEntry(e);
                           setEditIn(e.mainClockIn ? new Date(e.mainClockIn).toTimeString().slice(0,5) : "");
                           setEditOut(e.mainClockOut ? new Date(e.mainClockOut).toTimeString().slice(0,5) : "");
-                        }} style={{ background: "#f1f5f9", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#334155" }}>Edit</button>
+                        }} style={{ background: editEntry?.id === e.id ? "#e2e8f0" : "#f1f5f9", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#334155" }}>{editEntry?.id === e.id ? "Cancel" : "Edit"}</button>
                       </div>
                     </div>
-                  ))}
+                    {editEntry?.id === e.id && (
+                      <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", margin: "6px 0" }}>
+                        {(() => {
+                          const ss = (e.sessions && e.sessions.length > 0) ? e.sessions : (e.mainClockIn ? [{ in: e.mainClockIn, out: e.mainClockOut }] : []);
+                          return ss.map((s, i) => (
+                            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: i < ss.length - 1 ? 8 : 0 }}>
+                              {ss.length > 1 && <div style={{ fontSize: 11, color: "#94a3b8", paddingBottom: 7, minWidth: 20 }}>S{i+1}</div>}
+                              <div style={{ flex: 1 }}>
+                                {i === 0 && <label style={{ fontSize: 11, fontWeight: 600, color: "#334155", display: "block", marginBottom: 3 }}>In</label>}
+                                <input type="time" defaultValue={s.in ? new Date(s.in).toTimeString().slice(0,5) : ""}
+                                  onChange={ev => { if (i === 0) setEditIn(ev.target.value); }}
+                                  style={{ width: "100%", padding: "6px 8px", border: "1.5px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                {i === 0 && <label style={{ fontSize: 11, fontWeight: 600, color: "#334155", display: "block", marginBottom: 3 }}>Out</label>}
+                                <input type="time" defaultValue={s.out ? new Date(s.out).toTimeString().slice(0,5) : ""}
+                                  onChange={ev => { if (i === 0) setEditOut(ev.target.value); }}
+                                  style={{ width: "100%", padding: "6px 8px", border: "1.5px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                              </div>
+                              {i === 0 && (
+                                <button onClick={handleSaveEdit} disabled={savingEdit}
+                                  style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                  {savingEdit ? "..." : "Save"}
+                                </button>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                    {e.locationTimes && Object.keys(e.locationTimes).length > 0 && (
+                      <div style={{ marginTop: 4, paddingLeft: 10, borderLeft: "2px solid #e5e7eb" }}>
+                        {Object.entries(e.locationTimes).sort(([,a],[,b]) => (a.in||"") > (b.in||"") ? 1 : -1).map(([lId, lt]) => {
+                          const loc = allLocations.find(l => l.id === lId);
+                          const isEditingThis = editLocEntry?.docId === e.id && editLocEntry?.locId === lId;
+                          const justSaved = savedLocEdit === e.id + lId;
+                          return (
+                            <div key={lId}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
+                                <div style={{ fontSize: 11, color: "#64748b" }}>
+                                  <span style={{ fontWeight: 600 }}>{loc?.name || lId}:</span>{" "}
+                                  {fmt(lt.in)} — {lt.out ? fmt(lt.out) : <span style={{ color: "#10b981" }}>Active</span>}
+                                  {lt.in && lt.out && <span style={{ color: "#94a3b8", marginLeft: 4 }}>({elapsed(lt.in, lt.out)})</span>}
+                                </div>
+                                <button onClick={() => {
+                                  if (isEditingThis) { setEditLocEntry(null); return; }
+                                  setEditLocEntry({ docId: e.id, date: e.date, name: e.name, locId: lId, locName: loc?.name || lId, locationTimes: e.locationTimes });
+                                  setEditLocIn(lt.in ? new Date(lt.in).toTimeString().slice(0,5) : "");
+                                  setEditLocOut(lt.out ? new Date(lt.out).toTimeString().slice(0,5) : "");
+                                }} style={{ background: isEditingThis ? "#e2e8f0" : "#f1f5f9", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, fontWeight: 600, cursor: "pointer", color: "#334155", whiteSpace: "nowrap", marginLeft: 8 }}>{isEditingThis ? "Cancel" : "Edit"}</button>
+                                {justSaved && <span style={{ fontSize: 10, color: "#10b981", fontWeight: 600, marginLeft: 6 }}>✓ Saved</span>}
+                              </div>
+                              {isEditingThis && (
+                                <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", margin: "6px 0" }}>
+                                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                                    <div style={{ flex: 1 }}>
+                                      <label style={{ fontSize: 11, fontWeight: 600, color: "#334155", display: "block", marginBottom: 3 }}>In</label>
+                                      <input type="time" value={editLocIn} onChange={ev => setEditLocIn(ev.target.value)}
+                                        style={{ width: "100%", padding: "6px 8px", border: "1.5px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <label style={{ fontSize: 11, fontWeight: 600, color: "#334155", display: "block", marginBottom: 3 }}>Out</label>
+                                      <input type="time" value={editLocOut} onChange={ev => setEditLocOut(ev.target.value)}
+                                        style={{ width: "100%", padding: "6px 8px", border: "1.5px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "flex-end" }}>
+                                      <button onClick={handleSaveLocEdit} disabled={savingLocEdit} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{savingLocEdit ? "..." : "Save"}</button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    </div>
+                  );
+                  })}
                 </div>
               ));
             })()}
