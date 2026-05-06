@@ -1979,10 +1979,8 @@ return (
   <select value={fCat} onChange={e => setFC(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", cursor: "pointer", outline: "none" }}>
     <option value="all">All Types</option>
     <option value="cleaning">Cleaning</option>
-    <option value="equipment">Equipment</option>
     <option value="maintenance">Maintenance</option>
     <option value="chemicals">Chemicals</option>
-    <option value="supplies">Supplies</option>
     <option value="inspection">Inspection</option>
   </select>
 </div>
