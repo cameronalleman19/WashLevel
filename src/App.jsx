@@ -3694,7 +3694,11 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
                     const dayMin = Math.floor((dayMs % 3600000) / 60000);
                     return fmtDate(e.date) + " — Total: " + dayHrs + "h " + dayMin + "m\n" + sessionLines;
                   }).join("\n");
-                  return emp.name + "\nTotal: " + hrs.toFixed(2) + " hrs\n" + lines;
+                  const wkMap = {};
+                  emp.entries.forEach(e => { const d = new Date(e.date+"T12:00:00"); const wk = new Date(new Date(d).setDate(d.getDate()-d.getDay())).toISOString().slice(0,10); wkMap[wk]=(wkMap[wk]||0)+entryMs(e)/3600000; });
+                  const otHrs = Object.values(wkMap).reduce((s,w)=>s+Math.max(0,w-40),0);
+                  const otLine = otHrs > 0 ? "\nOvertime: " + otHrs.toFixed(2) + " hrs" : "";
+                  return emp.name + "\nTotal: " + hrs.toFixed(2) + " hrs" + otLine + "\n" + lines;
                 }).join("\n\n");
                 const blob = new Blob([text], { type: "text/plain" });
                 const url = URL.createObjectURL(blob);
@@ -3709,14 +3713,26 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
             )}
             {showReport && Object.entries(payrollByEmployee).map(([uid, emp]) => {
               const hrs = totalHrsNum(emp.entries);
-              const isOT = hrs > 40;
+              // Calculate OT per Sun-Sat week
+              const weekMap = {};
+              emp.entries.forEach(e => {
+                const d = new Date(e.date + "T12:00:00");
+                const day = d.getDay(); // 0=Sun
+                const weekStart = new Date(d);
+                weekStart.setDate(d.getDate() - day);
+                const wk = weekStart.toISOString().slice(0,10);
+                if (!weekMap[wk]) weekMap[wk] = 0;
+                weekMap[wk] += entryMs(e) / 3600000;
+              });
+              const totalOT = Object.values(weekMap).reduce((sum, wkHrs) => sum + Math.max(0, wkHrs - 40), 0);
+              const isOT = totalOT > 0;
               return (
                 <div key={uid} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{emp.name}</div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 18, fontWeight: 800, color: isOT ? "#f59e0b" : "#0f1f35" }}>{hrs.toFixed(2)} hrs</div>
-                      {isOT && <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>Overtime: {(hrs - 40).toFixed(2)} hrs over 40</div>}
+                      {isOT && <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>Overtime: {totalOT.toFixed(2)} hrs</div>}
                     </div>
                   </div>
                   {emp.entries.map(e => {
