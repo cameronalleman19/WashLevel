@@ -1784,6 +1784,12 @@ return (
 {task.completedAt && <span><b>Completed:</b> {new Date(task.completedAt).toLocaleDateString()}</span>}
 {task.duration != null && <span><b>Duration:</b> {task.duration} min</span>}
 </div>
+        {task.instructions && (
+          <div style={{ marginBottom: 10, padding: "10px 14px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 5 }}>📋 Instructions / SOP</div>
+            <div style={{ fontSize: 12, color: "#0f1f35", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{task.instructions}</div>
+          </div>
+        )}
 <div style={{ marginBottom: 10 }}>
 <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Notes</label>
 <textarea
