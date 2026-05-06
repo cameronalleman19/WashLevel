@@ -1913,6 +1913,7 @@ function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, 
 const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
+const [fSort, setFSort] = useState("date");
 const [inspectionTask, setInspectionTask] = useState(null);
 const [showArchived, setShowArchived] = useState(false);
 const [showHistory, setShowHistory] = useState(false);
@@ -1942,6 +1943,11 @@ if (fStatus === "overdue") {
 if (fCat !== "all" && t.category !== fCat) return false;
 return true;
 });
+const PRI_ORDER = { high: 0, medium: 1, low: 2 };
+const filteredSorted = [...filtered].sort((a, b) => {
+  if (fSort === "priority") return (PRI_ORDER[a.priority] ?? 1) - (PRI_ORDER[b.priority] ?? 1);
+  return (a.due || "").localeCompare(b.due || "");
+});
 const done = mine.filter(t => t.status === "done").length;
 const pct = mine.length ? Math.round(done / mine.length * 100) : 0;
 
@@ -1962,10 +1968,13 @@ return (
 <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
   <select value={fStatus} onChange={e => setFS(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", cursor: "pointer", outline: "none" }}>
     <option value="all">All Status</option>
-    <option value="pending">Pending</option>
-    <option value="in-progress">In Progress</option>
-    <option value="done">Done</option>
     <option value="overdue">Overdue</option>
+    <option value="on-hold">On Hold</option>
+    <option value="done">Done</option>
+  </select>
+  <select value={fSort} onChange={e => setFSort(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", cursor: "pointer", outline: "none" }}>
+    <option value="date">Sort: Date</option>
+    <option value="priority">Sort: Priority</option>
   </select>
   <select value={fCat} onChange={e => setFC(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", cursor: "pointer", outline: "none" }}>
     <option value="all">All Types</option>
@@ -1985,7 +1994,7 @@ return (
         <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
         <button onClick={onAddTask} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
-    ) : filtered.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} />)}
+    ) : filteredSorted.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} />)}
     {showHistory && (
   <TaskHistoryModal
     tasks={tasks}
