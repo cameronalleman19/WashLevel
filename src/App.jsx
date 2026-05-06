@@ -1458,6 +1458,14 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
           )}
         </div>
 
+        {task.instructions && (
+          <div style={{ marginBottom: 16, padding: "12px 14px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#0369a1", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              📋 Instructions / SOP
+            </div>
+            <div style={{ fontSize: 13, color: "#0f1f35", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{task.instructions}</div>
+          </div>
+        )}
         {/* Parts used */}
         <div style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Parts / Materials Used</label>
@@ -4277,6 +4285,7 @@ const [saving, setSaving] = useState(false);
   }, [locId]);
 
   const [recurrence, setRecurrence] = useState("");
+const [instructions, setInstructions] = useState(editTask?.instructions || "");
 const [customCars, setCustomCars] = useState("");
 const [checklistItems, setChecklistItems] = useState([]);
 const [newCheckItem, setNewCheckItem] = useState("");
@@ -4299,7 +4308,7 @@ const resolvedUserId = (assignTo && !["everyone","attendant","technician","manag
       await updateDoc(doc(db, "locations", locId, "tasks", editTask.id), {
         title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due,
         assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null,
-        recurrence: recurrence || null, requirePhoto, updatedAt: new Date().toISOString(),
+        recurrence: recurrence || null, requirePhoto, instructions: instructions.trim() || null, updatedAt: new Date().toISOString(),
       });
       setSaving(false); onClose(); return;
     }
@@ -4316,7 +4325,7 @@ const resolvedUserId = (assignTo && !["everyone","attendant","technician","manag
       }
     }
 
-    const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, nextCarsDue, requirePhoto, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const task = { id, title: title.trim(), category, priority, shift: resolvedUserId ? "user" : shift, due, assignedUserId: resolvedUserId || null, assignedUserName: resolvedUserName || null, status: "pending", assignedRole: "attendant", recurrence: recurrence || null, equipmentId: equipmentId || null, nextCarsDue, requirePhoto, instructions: instructions.trim() || null, ...(category === "inspection" ? { type: "inspection", checklist: checklistItems } : {}), equipmentId: equipmentId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 await setDoc(doc(db, "locations", locId, "tasks", id), task);
 // Notify assigned user
 if (resolvedUserId) {
@@ -4492,6 +4501,10 @@ return (
     <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>Staff must upload a photo before marking this task done</div>
   </div>
 </label>
+<div style={{ marginBottom: 14 }}>
+  <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Instructions / SOP <span style={{ fontWeight: 400, color: "#94a3b8" }}>(optional)</span></label>
+  <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Enter step-by-step instructions or standard operating procedures for this task..." rows={4} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fafafa", marginTop: 4, color: "#0f1f35", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+</div>
 <div style={{ display: "flex", gap: 10 }}>
 <button type="submit" disabled={saving} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
 {saving ? "Adding..." : "Add Task"}
