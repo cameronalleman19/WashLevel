@@ -1219,7 +1219,7 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
   const eqBad = equipment.filter(e => e.status !== "ok").length;
   const pct = totalToday ? Math.round(done / totalToday * 100) : 0;
   const [todaySummary, setTodaySummary] = useState(null);
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA"); // local date YYYY-MM-DD
   const [editMode, setEditMode] = useState(false);
 
   const ALL_TILES = [
