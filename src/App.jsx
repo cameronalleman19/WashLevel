@@ -2003,6 +2003,7 @@ return (
 {inspectionTask && locId && (
   <InspectionModal
     task={inspectionTask}
+    equipment={equipment}
     locId={locId}
     user={user}
     onClose={() => setInspectionTask(null)}
@@ -4074,9 +4075,9 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
   );
 }
 
-function InspectionModal({ task, locId, user, onClose, onComplete }) {
+function InspectionModal({ task, locId, user, onClose, onComplete, equipment }) {
   const [items, setItems] = useState(
-    (task.checklist || []).map(i => ({ ...i, result: null, note: "", photoUrl: null }))
+    (task.checklist || []).map(i => ({ ...i, result: null, note: "", photoUrl: null, equipmentId: i.equipmentId || null }))
   );
   const [saving, setSaving] = useState(false);
   const photoMapRef = useRef({});
@@ -4163,6 +4164,7 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
       createdAt: now
     });
 
+    // Write task-level equipment history (all items)
     if (task.equipmentId) {
       const histId = "insp" + Date.now() + "eq";
       await setDoc(doc(db, "locations", locId, "equipment", task.equipmentId, "history", histId), {
@@ -4173,6 +4175,22 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
         createdAt: now
       });
     }
+    // Write per-item equipment overrides to their own equipment history
+    const overrideItems = items.filter(i => i.equipmentId && i.equipmentId !== task.equipmentId);
+    for (const item of overrideItems) {
+      if (item.result === "monitor" || item.result === "fail") {
+        const oHistId = "insp" + Date.now() + Math.random().toString(36).slice(2, 5);
+        await setDoc(doc(db, "locations", locId, "equipment", item.equipmentId, "history", oHistId), {
+          id: oHistId, type: "inspection", date: now.split("T")[0],
+          completedBy: user?.name || user?.email || "Unknown",
+          taskTitle: task.title + " — " + item.label,
+          items: [item],
+          failCount: item.result === "fail" ? 1 : 0,
+          monitorCount: item.result === "monitor" ? 1 : 0,
+          createdAt: now
+        });
+      }
+    }
 
     for (const item of items.filter(i => i.result === "fail")) {
       const newId = "t" + Date.now() + Math.random().toString(36).slice(2, 5);
@@ -4182,7 +4200,7 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
         id: newId, title: "Fix: " + item.label,
         category: "maintenance", priority: "high", status: "pending",
         shift: "everyone", due: now.split("T")[0],
-        assignedRole: "manager", equipmentId: task.equipmentId || null,
+        assignedRole: "manager", equipmentId: item.equipmentId || task.equipmentId || null,
         note: noteText,
         mediaUrls: photoUrl ? [photoUrl] : [],
         attachments: photoUrl ? [{ name: "Inspection photo", url: photoUrl, type: "image/jpeg", uploadedAt: now }] : [],
@@ -4214,14 +4232,27 @@ function InspectionModal({ task, locId, user, onClose, onComplete }) {
           <div style={{ fontWeight: 700, fontSize: 17, color: "#0f1f35" }}>{task.title}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, color: "#94a3b8", cursor: "pointer" }}>×</button>
         </div>
-        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>Inspection • {items.length} items</div>
+        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: task.equipmentId ? 8 : 20 }}>Inspection • {items.length} items</div>
+        {task.equipmentId && (() => {
+          const eq = (equipment || []).find(e => e.id === task.equipmentId);
+          const eqName = eq?.name || task.equipmentId;
+          return (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dbeafe", borderRadius: 8, padding: "5px 10px", marginBottom: 20, fontSize: 12, color: "#1d4ed8", fontWeight: 600 }}>
+              {eqName}
+            </div>
+          );
+        })()}
 
         {items.map(item => {
           const cur = items.find(i => i.id === item.id);
           const needsNote = cur?.result === "monitor" || cur?.result === "fail";
           return (
             <div key={item.id} style={{ background: "#f8fafc", borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35", marginBottom: 10 }}>{item.label}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35", marginBottom: item.equipmentId && item.equipmentId !== task.equipmentId ? 4 : 10 }}>{item.label}</div>
+              {item.equipmentId && item.equipmentId !== task.equipmentId && (() => {
+                const ieq = (equipment || []).find(e => e.id === item.equipmentId);
+                return ieq ? <div style={{ fontSize: 11, color: "#1d4ed8", fontWeight: 600, background: "#dbeafe", borderRadius: 6, padding: "2px 8px", display: "inline-block", marginBottom: 8 }}>{ieq.name}</div> : null;
+              })()}
               <div style={{ display: "flex", gap: 8, marginBottom: needsNote ? 10 : 0 }}>
                 <RBtn id={item.id} val="good" label="✓ Good" color="#15803d" bg="#f0fdf4" />
                 <RBtn id={item.id} val="monitor" label="⚠ Monitor" color="#d97706" bg="#fffbeb" />
@@ -4445,9 +4476,22 @@ return (
   <div style={{ marginBottom: 14 }}>
     <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 8 }}>Checklist Items</label>
     {checklistItems.map(item => (
-      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#f8fafc", borderRadius: 8, padding: "6px 10px" }}>
-        <span style={{ flex: 1, fontSize: 13, color: "#334155" }}>{item.label}</span>
-        <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16 }}>×</button>
+      <div key={item.id} style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 10px", marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ flex: 1, fontSize: 13, color: "#334155" }}>{item.label}</span>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748b", cursor: "pointer", whiteSpace: "nowrap" }}>
+            <input type="checkbox" checked={!!item.equipmentOverride} onChange={e => setChecklistItems(p => p.map(i => i.id === item.id ? { ...i, equipmentOverride: e.target.checked, equipmentId: e.target.checked ? i.equipmentId : undefined } : i))} />
+            Link equipment
+          </label>
+          <button type="button" onClick={() => removeCheckItem(item.id)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16 }}>×</button>
+        </div>
+        {item.equipmentOverride && (
+          <select value={item.equipmentId || ""} onChange={e => setChecklistItems(p => p.map(i => i.id === item.id ? { ...i, equipmentId: e.target.value } : i))}
+            style={{ width: "100%", marginTop: 6, padding: "6px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, outline: "none", background: "#fff", color: "#0f1f35", cursor: "pointer" }}>
+            <option value="">Select equipment...</option>
+            {equipmentList.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
+          </select>
+        )}
       </div>
     ))}
     <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
