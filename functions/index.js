@@ -1188,3 +1188,84 @@ exports.updateTimeclockEntry = onCall(async (request) => {
   await db.collection("timeclock").doc(docId).update(update);
   return { ok: true };
 });
+
+
+// ── Stripe ────────────────────────────────────────────────────────────────────
+const stripe = require("stripe");
+const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
+const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
+const STRIPE_PRICE_ID = "price_1TZEzsERWU7SaCxDl4sHacyY";
+
+exports.createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
+  const uid = request.auth.uid;
+  const { email } = request.data;
+  const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+
+  const session = await stripeClient.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "subscription",
+    customer_email: email,
+    line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+    metadata: { firebaseUid: uid },
+    success_url: "https://washlevel.com/?sms_success=1",
+    cancel_url: "https://washlevel.com/?sms_cancel=1",
+  });
+
+  return { url: session.url };
+});
+
+exports.createPortalSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
+  const uid = request.auth.uid;
+  const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+  const subSnap = await db.collection("subscriptions").doc(uid).get();
+  if (!subSnap.exists || !subSnap.data().stripeCustomerId) throw new HttpsError("not-found", "No subscription found");
+  const session = await stripeClient.billingPortal.sessions.create({
+    customer: subSnap.data().stripeCustomerId,
+    return_url: "https://washlevel.com/",
+  });
+  return { url: session.url };
+});
+
+exports.stripeWebhook = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET] }, async (req, res) => {
+  const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+  let event;
+  try {
+    event = stripeClient.webhooks.constructEvent(req.rawBody, req.headers["stripe-signature"], STRIPE_WEBHOOK_SECRET.value());
+  } catch (err) {
+    console.error("Webhook signature failed:", err.message);
+    return res.status(400).send("Webhook Error");
+  }
+
+  const sub = event.data.object;
+  let uid = sub.metadata?.firebaseUid;
+
+  // If not on subscription, look it up from the checkout session
+  if (!uid && sub.customer) {
+    const stripeClient2 = stripe(STRIPE_SECRET_KEY.value());
+    const sessions = await stripeClient2.checkout.sessions.list({ customer: sub.customer, limit: 5 });
+    const session = sessions.data.find(s => s.metadata?.firebaseUid);
+    uid = session?.metadata?.firebaseUid;
+  }
+
+  if (!uid) return res.json({ received: true });
+
+  const subRef = db.collection("subscriptions").doc(uid);
+
+  if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
+    const active = sub.status === "active" || sub.status === "trialing";
+    const until = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await subRef.set({
+      smsEnabled: active,
+      smsEnabledUntil: until,
+      stripeCustomerId: sub.customer,
+      stripeSubscriptionId: sub.id,
+      stripeStatus: sub.status,
+    }, { merge: true });
+  } else if (event.type === "customer.subscription.deleted") {
+    await subRef.set({ smsEnabled: false, stripeStatus: "canceled" }, { merge: true });
+  }
+
+  res.json({ received: true });
+});

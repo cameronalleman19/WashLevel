@@ -7733,6 +7733,26 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     setCouponLoading(false);
   };
 
+  const startCheckout = async () => {
+    try {
+      const fn = httpsCallable(functions, "createCheckoutSession");
+      const result = await fn({ email: user.email });
+      window.location.href = result.data.url;
+    } catch(e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  const openBillingPortal = async () => {
+    try {
+      const fn = httpsCallable(functions, "createPortalSession");
+      const result = await fn({});
+      window.location.href = result.data.url;
+    } catch(e) {
+      alert("Error: " + e.message);
+    }
+  };
+
   const updateSmsUser = async (uid, field, value) => {
     const ref = doc(db, "users", uid);
     await updateDoc(ref, { [`smsPrefs.${field}`]: value });
@@ -7955,7 +7975,10 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
         <div>
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>Text Alerts Active</div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>Expires {new Date(smsSubscription.smsEnabledUntil).toLocaleDateString()}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {smsSubscription.stripeSubscriptionId && <button onClick={openBillingPortal} style={{ fontSize: 12, color: "#0f1f35", fontWeight: 600, background: "none", border: "1px solid #0f1f35", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Manage Billing</button>}
+              <div style={{ fontSize: 12, color: "#64748b" }}>Expires {new Date(smsSubscription.smsEnabledUntil).toLocaleDateString()}</div>
+            </div>
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35", marginBottom: 12 }}>Team Members</div>
           {smsUsers.length === 0 && <div style={{ fontSize: 13, color: "#94a3b8" }}>No team members found.</div>}
@@ -8017,7 +8040,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
             <div style={{ fontSize: 12, color: "#94a3b8" }}>Per account · All locations included</div>
           </div>
           <button style={{ width: "100%", padding: "13px", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}
-            onClick={() => alert("Billing coming soon! Use a coupon code below to get started.")}>
+            onClick={startCheckout}>
             Add Text Alerts — $5/mo
           </button>
           <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 20 }}>
