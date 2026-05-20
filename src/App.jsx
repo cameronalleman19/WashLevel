@@ -2842,7 +2842,7 @@ function Sensors({ sensors, locationName, locId, onNavigate, uid, locations, ini
           <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Sensor Dashboard</div>
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
-        {activeTab === "shelly" && <button onClick={() => setShowAddShelly(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Device</button>}
+        {activeTab === "shelly" && <button onClick={() => onNavigate("settings", { tab: "integrations" })} style={{ background: "#f3f4f6", color: "#1a3352", border: "1px solid #d1d5db", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Manage in Settings</button>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -6580,8 +6580,9 @@ function SpSensorMini({ sensors, onNavigate, locId, uid }) {
     </div>
   );
 }
-function Settings({ locations, onUpdateLocation, user }) {
+function Settings({ locations, onUpdateLocation, user, initialTab }) {
 const { refreshUser } = useAuth();
+const [settingsTab, setSettingsTab] = useState(initialTab || "profile");
 const [editing, setEditing] = useState(null);
 const [name, setName] = useState("");
 const [address, setAddress] = useState("");
@@ -6670,11 +6671,16 @@ const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb",
 
 return (
 <div>
-<div style={{ marginBottom: 22 }}>
+<div style={{ marginBottom: 18 }}>
 <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Settings</div>
 <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Manage locations and preferences</div>
 </div>
-<div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
+<div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+  {[["profile","Profile"],["locations","Locations"],["integrations","Integrations"]].map(([id,label]) => (
+    <button key={id} onClick={() => setSettingsTab(id)} style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: settingsTab === id ? "#0f1f35" : "#f3f4f6", color: settingsTab === id ? "#fff" : "#6b7280" }}>{label}</button>
+  ))}
+</div>
+{settingsTab === "profile" && <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
   <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Your Profile</div>
   <div style={{ marginBottom: 12 }}>
     <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Display Name</label>
@@ -6699,13 +6705,9 @@ return (
   <button onClick={handleSaveProfile} style={{ background: profileSaved ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
     {profileSaved ? "Saved!" : "Save Profile"}
   </button>
-</div>
-{(user?.role === "manager" || user?.role === "owner") && <TeamMembers user={user} locations={locations} />}
-{saved && (
-<div style={{ background: "#d1fae5", color: "#065f46", padding: "10px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
-Changes saved!
-</div>
-)}
+</div>}
+{settingsTab === "profile" && (user?.role === "manager" || user?.role === "owner") && <TeamMembers user={user} locations={locations} />}
+{settingsTab === "locations" && (
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>Locations</div>
@@ -6785,11 +6787,14 @@ Changes saved!
 </div>
 )}
 </div>
+)}
+{settingsTab === "integrations" && (
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Integrations</div>
 <SensorPushIntegration locations={locations} />
-            <ShellyIntegration locations={locations} />
+<ShellyIntegration locations={locations} />
 </div>
+)}
 
 </div>
 );
@@ -8386,6 +8391,7 @@ const [tasks, setTasks] = useState({});
 const [sensors, setSensors] = useState({});
 const [equipment, setEquipment] = useState({});
 const [view, setView] = useState(() => new URLSearchParams(window.location.search).get("view") || "overview");
+const [settingsInitialTab, setSettingsInitialTab] = useState("profile");
 const [locId, setLocId] = useState(() => new URLSearchParams(window.location.search).get("loc") || null);
 const [ready, setReady] = useState(false);
 const [showAddTask, setShowAddTask] = useState(false);
@@ -8575,8 +8581,8 @@ return (
 )}
 {view === "calendar"  && <Calendar locId={locId} locationName={curLoc?.name} tasks={curTasks} sensors={curSens} location={curLoc} />}
         {view === "carcounts" && <CarCounts locations={locations} />}
-{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={setView} uid={user?.isTeamMember ? user?.ownerId : user?.uid} locations={locations} initialTab={sensorTab} onTabChange={setSensorTab} />}
-{view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} />}
+{view === "sensors"   && <Sensors sensors={curSens} locationName={curLoc?.name} locId={locId} onNavigate={(v, opts) => { if (opts?.tab) setSettingsInitialTab(opts.tab); setView(v); }} uid={user?.isTeamMember ? user?.ownerId : user?.uid} locations={locations} initialTab={sensorTab} onTabChange={setSensorTab} />}
+{view === "settings"  && <Settings locations={locations} onUpdateLocation={handleUpdateLocation} user={user} initialTab={settingsInitialTab} />}
 </main>
 {showAddTask && <AddTaskModal locId={locId} onClose={() => { setShowAddTask(false); setTaskPreset(null); setEditTask(null); }} onAdd={() => {}} preset={taskPreset} user={user} editTask={editTask} />}
 {materialsTask && <MaterialsModal locId={locId} task={materialsTask} onClose={() => setMaterialsTask(null)} />}
