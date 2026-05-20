@@ -4751,8 +4751,70 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [editingVendorId, setEditingVendorId] = useState(null);
   const [editVendorData, setEditVendorData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [groceryItems, setGroceryItems] = useState([]);
+  const [groceryHistory, setGroceryHistory] = useState([]);
+  const [newGroceryItem, setNewGroceryItem] = useState("");
+  const [reorderSubTab, setReorderSubTab] = useState("reorder");
+  const [groceryHistorySearch, setGroceryHistorySearch] = useState("");
+  const [groceryHistoryFilter, setGroceryHistoryFilter] = useState("all");
   const [expandedVendors, setExpandedVendors] = useState({});
   const [transferItem, setTransferItem] = useState(null);
+
+  const handleAddGroceryItem = async () => {
+    if (!newGroceryItem.trim()) return;
+    const id = "groc" + Date.now();
+    const itemData = {
+      id, name: newGroceryItem.trim(),
+      addedBy: user?.displayName || (user?.email ? user.email.split("@")[0] : "Unknown"),
+      addedById: user?.uid,
+      createdAt: new Date().toISOString(),
+      ordered: false, orderedBy: null, orderedAt: null,
+    };
+    await setDoc(doc(db, "locations", locId, "groceryList", id), itemData);
+    setNewGroceryItem("");
+    try {
+      const { getFunctions, httpsCallable } = await import("firebase/functions");
+      const fns = getFunctions();
+      const notify = httpsCallable(fns, "createNotification");
+      await notify({
+        ownerId,
+        role: "manager",
+        title: "Grocery List Item Added",
+        message: (user?.displayName || user?.email || "Someone") + " added \"" + itemData.name + "\" to the grocery list at " + locationName,
+        locId,
+        type: "grocery",
+      });
+    } catch(e) { console.log("Notify error", e); }
+  };
+
+  const handleGroceryOrdered = async (item) => {
+    if (item.ordered) {
+      await updateDoc(doc(db, "locations", locId, "groceryList", item.id), {
+        ordered: false, orderedBy: null, orderedAt: null,
+      });
+    } else {
+      await updateDoc(doc(db, "locations", locId, "groceryList", item.id), {
+        ordered: true,
+        orderedBy: user?.displayName || (user?.email ? user.email.split("@")[0] : "Unknown"),
+        orderedAt: new Date().toISOString(),
+      });
+    }
+  };
+
+  const handleGroceryReceived = async (item) => {
+    const { deleteDoc } = await import("firebase/firestore");
+    await setDoc(doc(db, "locations", locId, "groceryHistory", item.id), {
+      ...item,
+      receivedBy: user?.displayName || (user?.email ? user.email.split("@")[0] : "Unknown"),
+      receivedAt: new Date().toISOString(),
+    });
+    await deleteDoc(doc(db, "locations", locId, "groceryList", item.id));
+  };
+
+  const handleGroceryDelete = async (itemId) => {
+    const { deleteDoc } = await import("firebase/firestore");
+    await deleteDoc(doc(db, "locations", locId, "groceryList", itemId));
+  };
   const [showScanner, setShowScanner] = useState(false);
   const [scanMode, setScanMode] = useState("inventory"); // "inventory" or "attach"
   const [scanResult, setScanResult] = useState(null);
@@ -4780,7 +4842,15 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     const unsub = onSnapshot(collection(db, "locations", locId, "inventory"), snap => {
       setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name)));
     });
-    return unsub;
+    const unsubGrocery = onSnapshot(
+      collection(db, 'locations', locId, 'groceryList'),
+      snap => setGroceryItems(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.createdAt.localeCompare(a.createdAt)))
+    );
+    const unsubGroceryHistory = onSnapshot(
+      collection(db, 'locations', locId, 'groceryHistory'),
+      snap => setGroceryHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.receivedAt.localeCompare(a.receivedAt)))
+    );
+    return () => { unsub(); unsubGrocery(); unsubGroceryHistory(); };
   }, [locId]);
 
   const handleAdd = async () => {
@@ -5275,7 +5345,18 @@ function Inventory({ locId, locationName, user, locations = [] }) {
 
       {activeTab === "reorder" && (
         <div>
-          {(() => {
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {["reorder", "grocery", "history"].map(st => (
+              <button key={st} onClick={() => setReorderSubTab(st)}
+                style={{ padding: "6px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  background: reorderSubTab === st ? "#1a3352" : "#f3f4f6",
+                  color: reorderSubTab === st ? "#fff" : "#6b7280" }}>
+                {st === "reorder" ? "Low Stock" : st === "grocery" ? "Grocery List" : "History"}
+              </button>
+            ))}
+          </div>
+
+          {reorderSubTab === "reorder" && (() => {
             const lowItems = items.filter(i => i.reorderAt > 0 && i.quantity <= i.reorderAt);
             if (lowItems.length === 0) return <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No items need reordering right now.</div>;
             const byVendor = {};
@@ -5309,6 +5390,97 @@ function Inventory({ locId, locationName, user, locations = [] }) {
               </div>
             ));
           })()}
+
+          {reorderSubTab === "grocery" && (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <input
+                  value={newGroceryItem}
+                  onChange={e => setNewGroceryItem(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleAddGroceryItem()}
+                  placeholder="Add item to grocery list..."
+                  style={{ flex: 1, border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "9px 13px", fontSize: 13, outline: "none" }}
+                />
+                <button onClick={handleAddGroceryItem}
+                  style={{ background: "#1a3352", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Add
+                </button>
+              </div>
+              {groceryItems.length === 0 && (
+                <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Grocery list is empty.</div>
+              )}
+              {groceryItems.map(item => (
+                <div key={item.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 14px", marginBottom: 8, opacity: item.ordered ? 0.7 : 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input type="checkbox" checked={!!item.ordered} onChange={() => handleGroceryOrdered(item)}
+                      style={{ width: 17, height: 17, cursor: "pointer", accentColor: "#1a3352" }} />
+                    <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>Ordered</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35", textDecoration: item.ordered ? "line-through" : "none" }}>{item.name}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                        Added by {item.addedBy} · {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ""}
+                      </div>
+                      {item.ordered && item.orderedBy && (
+                        <div style={{ fontSize: 10, color: "#6366f1", marginTop: 2 }}>
+                          Ordered by {item.orderedBy} · {item.orderedAt ? new Date(item.orderedAt).toLocaleString() : ""}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => handleGroceryReceived(item)}
+                      style={{ background: "#dcfce7", color: "#16a34a", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      Received
+                    </button>
+                    <button onClick={() => handleGroceryDelete(item.id)}
+                      style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {reorderSubTab === "history" && (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                <input
+                  value={groceryHistorySearch}
+                  onChange={e => setGroceryHistorySearch(e.target.value)}
+                  placeholder="Search history..."
+                  style={{ flex: 1, minWidth: 160, border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "8px 13px", fontSize: 13, outline: "none" }}
+                />
+                <select value={groceryHistoryFilter} onChange={e => setGroceryHistoryFilter(e.target.value)}
+                  style={{ border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "8px 12px", fontSize: 13, background: "#fff", cursor: "pointer" }}>
+                  <option value="all">All Time</option>
+                  <option value="7">Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                </select>
+              </div>
+              {(() => {
+                const now = new Date();
+                const filtered = groceryHistory.filter(h => {
+                  const matchSearch = !groceryHistorySearch || h.name.toLowerCase().includes(groceryHistorySearch.toLowerCase()) ||
+                    (h.addedBy || "").toLowerCase().includes(groceryHistorySearch.toLowerCase()) ||
+                    (h.orderedBy || "").toLowerCase().includes(groceryHistorySearch.toLowerCase()) ||
+                    (h.receivedBy || "").toLowerCase().includes(groceryHistorySearch.toLowerCase());
+                  const matchDate = groceryHistoryFilter === "all" || (h.receivedAt && (now - new Date(h.receivedAt)) / 86400000 <= parseInt(groceryHistoryFilter));
+                  return matchSearch && matchDate;
+                });
+                if (filtered.length === 0) return <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No history found.</div>;
+                return filtered.map(h => (
+                  <div key={h.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35" }}>{h.name}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span>Added by {h.addedBy} · {h.createdAt ? new Date(h.createdAt).toLocaleDateString() : ""}</span>
+                      {h.orderedBy && <span>Ordered by {h.orderedBy} · {h.orderedAt ? new Date(h.orderedAt).toLocaleString() : ""}</span>}
+                      <span style={{ color: "#16a34a", fontWeight: 600 }}>Received by {h.receivedBy} · {h.receivedAt ? new Date(h.receivedAt).toLocaleString() : ""}</span>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
         </div>
       )}
 
