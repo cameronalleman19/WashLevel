@@ -4765,7 +4765,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     const id = "groc" + Date.now();
     const itemData = {
       id, name: newGroceryItem.trim(),
-      addedBy: user?.displayName || (user?.email ? user.email.split("@")[0] : "Unknown"),
+      addedBy: user?.name || user?.email || "Unknown",
       addedById: user?.uid,
       createdAt: new Date().toISOString(),
       ordered: false, orderedBy: null, orderedAt: null,
@@ -4780,7 +4780,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
         ownerId,
         role: "manager",
         title: "Grocery List Item Added",
-        message: (user?.displayName || user?.email || "Someone") + " added \"" + itemData.name + "\" to the grocery list at " + locationName,
+        message: (user?.name || user?.email || "Someone") + " added \"" + itemData.name + "\" to the grocery list at " + locationName,
         locId,
         type: "grocery",
       });
@@ -4795,7 +4795,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     } else {
       await updateDoc(doc(db, "locations", locId, "groceryList", item.id), {
         ordered: true,
-        orderedBy: user?.displayName || (user?.email ? user.email.split("@")[0] : "Unknown"),
+        orderedBy: user?.name || user?.email || "Unknown",
         orderedAt: new Date().toISOString(),
       });
     }
@@ -4805,7 +4805,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     const { deleteDoc } = await import("firebase/firestore");
     await setDoc(doc(db, "locations", locId, "groceryHistory", item.id), {
       ...item,
-      receivedBy: user?.displayName || (user?.email ? user.email.split("@")[0] : "Unknown"),
+      receivedBy: user?.name || user?.email || "Unknown",
       receivedAt: new Date().toISOString(),
     });
     await deleteDoc(doc(db, "locations", locId, "groceryList", item.id));
