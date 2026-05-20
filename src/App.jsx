@@ -7754,11 +7754,16 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
   };
 
   const updateSmsUser = async (uid, field, value) => {
-    const ref = doc(db, "users", uid);
-    await updateDoc(ref, { [`smsPrefs.${field}`]: value });
-    if (field === "phone") {
-      setSmsUsers(prev => prev.map(u => u.id === uid ? { ...u, phone: value } : u));
-    }
+    try {
+      const ref = doc(db, "users", uid);
+      if (field === "phone") {
+        await updateDoc(ref, { phone: value });
+        setSmsUsers(prev => prev.map(u => u.id === uid ? { ...u, phone: value } : u));
+      } else {
+        await updateDoc(ref, { [`smsPrefs.${field}`]: value });
+        setSmsUsers(prev => prev.map(u => u.id === uid ? { ...u, smsPrefs: { ...(u.smsPrefs || {}), [field]: value } } : u));
+      }
+    } catch(e) { alert("Save error: " + e.message); }
   };
 
   const markRead = async (notifId) => {
@@ -7984,21 +7989,46 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
           {smsUsers.length === 0 && <div style={{ fontSize: 13, color: "#94a3b8" }}>No team members found.</div>}
           {smsUsers.map(u => (
             <div key={u.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 18, marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{u.name || u.email}</div>
                   <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "capitalize" }}>{u.role}</div>
                 </div>
+                <div onClick={() => updateSmsUser(u.id, "smsEnabled", !(u.smsPrefs?.smsEnabled ?? true))}
+                  style={{ width: 44, height: 24, borderRadius: 12, background: (u.smsPrefs?.smsEnabled ?? true) ? "#0f1f35" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: 3, left: (u.smsPrefs?.smsEnabled ?? true) ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                </div>
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Phone Number</label>
-                <input
-                  type="tel"
-                  defaultValue={u.phone || ""}
-                  placeholder="+1 (555) 000-0000"
-                  onBlur={e => updateSmsUser(u.id, "phone", e.target.value)}
-                  style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, width: "100%", boxSizing: "border-box", outline: "none" }}
-                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="tel"
+                    defaultValue={u.phone || ""}
+                    placeholder="+15550000000"
+                    onBlur={async e => {
+                      const val = e.target.value;
+                      if (val) {
+                        await updateSmsUser(u.id, "phone", val);
+                        e.target.style.borderColor = "#16a34a";
+                        setTimeout(() => { e.target.style.borderColor = "#e5e7eb"; }, 2000);
+                      }
+                    }}
+                    style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, flex: 1, outline: "none", transition: "border-color 0.3s" }}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!u.phone) { alert("Save a phone number first."); return; }
+                      try {
+                        const fn = httpsCallable(functions, "sendAlertSms");
+                        await fn({ phone: u.phone, message: "WashLevel: Test message — your text alerts are working!" });
+                        alert("Test text sent!");
+                      } catch(e) { alert("Error: " + e.message); }
+                    }}
+                    style={{ padding: "8px 12px", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    Send Test
+                  </button>
+                </div>
               </div>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 10 }}>Alert Types</div>
               {[
@@ -8014,8 +8044,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
                   </div>
                   <div
                     onClick={() => updateSmsUser(u.id, key, !(u.smsPrefs?.[key] ?? false))}
-                    style={{ width: 44, height: 24, borderRadius: 12, background: u.smsPrefs?.[key] ? "#0f1f35" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}
-                  >
+                    style={{ width: 44, height: 24, borderRadius: 12, background: u.smsPrefs?.[key] ? "#0f1f35" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                     <div style={{ position: "absolute", top: 3, left: u.smsPrefs?.[key] ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                   </div>
                 </div>

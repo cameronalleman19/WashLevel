@@ -1269,3 +1269,34 @@ exports.stripeWebhook = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_
 
   res.json({ received: true });
 });
+
+
+// ── Telnyx SMS ────────────────────────────────────────────────────────────────
+const TELNYX_API_KEY = defineSecret("TELNYX_API_KEY");
+const TELNYX_FROM_NUMBER = "+17175500089";
+
+async function sendSms(toNumber, message, apiKey) {
+  const response = await fetch("https://api.telnyx.com/v2/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      from: TELNYX_FROM_NUMBER,
+      to: toNumber,
+      text: message
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(JSON.stringify(data.errors));
+  return data;
+}
+
+exports.sendAlertSms = onCall({ secrets: [TELNYX_API_KEY] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
+  const { phone, message } = request.data;
+  if (!phone || !message) throw new HttpsError("invalid-argument", "Phone and message required");
+  await sendSms(phone, message, TELNYX_API_KEY.value());
+  return { success: true };
+});
