@@ -1522,9 +1522,19 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
   );
 }
 
-function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onEdit, onStartInspection, equipment }) {
+function TaskRow({ task, onStatus, onSaveNote, locId, onSelectMaterials, onEdit, onStartInspection, equipment, highlightTaskId, onClearHighlight }) {
 const { user } = useAuth();
 const [open, setOpen] = useState(false);
+const taskRowRef = useRef(null);
+useEffect(() => {
+ if (highlightTaskId === task.id) {
+   setOpen(true);
+   setTimeout(() => {
+     taskRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+     if (onClearHighlight) onClearHighlight();
+   }, 200);
+ }
+}, [highlightTaskId]);
 const [note, setNote] = useState(task.note || "");
 const [showHistory, setShowHistory] = useState(false);
 const [history, setHistory] = useState([]);
@@ -1586,6 +1596,32 @@ duration: duration,
 updatedAt: new Date().toISOString(),
 note: note,
 });
+
+// Notify owners/managers of task completion
+try {
+  const completionOwnerId = user?.ownerId || user?.uid;
+  const allCompUsers = await getDocs(query(collection(db, "users"), where("ownerId", "==", completionOwnerId)));
+  const compOwnerDoc = await getDoc(doc(db, "users", completionOwnerId));
+  const allCompDocs = compOwnerDoc.exists() ? [{ id: completionOwnerId, data: () => compOwnerDoc.data() }, ...allCompUsers.docs] : allCompUsers.docs;
+  const locSnap = await getDoc(doc(db, "locations", locId));
+  const locName = locSnap.exists() ? locSnap.data().name : locId;
+  for (const memberDoc of allCompDocs) {
+    if (memberDoc.id === user?.uid) continue;
+    const md = memberDoc.data();
+    const isOwner = md.role === "owner";
+    const isManager = md.role === "manager";
+    if (!isOwner && !isManager) continue;
+    if (!isOwner) {
+      const hasAccess = !md.allowedLocations || md.allowedLocations.includes(locId);
+      if (!hasAccess) continue;
+    }
+    const prefsSnap = await getDoc(doc(db, "users", memberDoc.id, "prefs", "alerts"));
+    const prefs = prefsSnap.exists() ? prefsSnap.data() : {};
+    if (prefs.taskCompletedAlert !== false) {
+      await writeNotif(memberDoc.id, { type: "task_completed", title: "Task Completed", body: (user?.name || user?.email || "Someone") + " completed '" + task.title + "' at " + locName, locationId: locId, taskId: task.id });
+    }
+  }
+} catch(e) { console.log("Completion notif error:", e.message); }
 
 // Auto-create next occurrence for recurring tasks
 if (task.recurrence && !task.recurrence.includes("cars")) {
@@ -1693,7 +1729,7 @@ const recurrenceLabel = task.recurrence ? "Repeats: " + task.recurrence : null;
 const carsDueLabel = task.nextCarsDue ? "Due at " + Number(task.nextCarsDue).toLocaleString() + " cars" : null;
 
 return (
-<div style={{ background: task.status === "done" ? "#fafafa" : "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, overflow: "hidden", opacity: task.status === "done" ? 0.72 : 1 }}>
+<div ref={taskRowRef} style={{ background: task.status === "done" ? "#fafafa" : "#fff", border: highlightTaskId === task.id ? "2px solid #3b82f6" : "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, overflow: "hidden", opacity: task.status === "done" ? 0.72 : 1 }}>
 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", cursor: "pointer" }} onClick={() => setOpen(!open)}>
 <div style={{ width: 9, height: 9, borderRadius: "50%", background: st.dot, flexShrink: 0 }} />
 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1909,7 +1945,7 @@ View History
 );
 }
 
-function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, locId, onSelectMaterials, onEdit, equipment }) {
+function Tasks({ tasks, onStatus, showAll, locationName, onAddTask, onSaveNote, locId, onSelectMaterials, onEdit, equipment, highlightTaskId, onClearHighlight }) {
 const { user } = useAuth();
 const [fStatus, setFS] = useState("all");
 const [fCat, setFC] = useState("all");
@@ -1992,7 +2028,7 @@ return (
         <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
         <button onClick={onAddTask} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
-    ) : filteredSorted.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} />)}
+    ) : filteredSorted.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} highlightTaskId={highlightTaskId} onClearHighlight={onClearHighlight} />)}
     {showHistory && (
   <TaskHistoryModal
     tasks={tasks}
@@ -2006,6 +2042,7 @@ return (
     equipment={equipment}
     locId={locId}
     user={user}
+    locationName={locationName}
     onClose={() => setInspectionTask(null)}
     onComplete={() => setInspectionTask(null)}
   />
@@ -4075,7 +4112,7 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
   );
 }
 
-function InspectionModal({ task, locId, user, onClose, onComplete, equipment }) {
+function InspectionModal({ task, locId, user, onClose, onComplete, equipment, locationName }) {
   const [items, setItems] = useState(
     (task.checklist || []).map(i => ({ ...i, result: null, note: "", photoUrl: null, equipmentId: i.equipmentId || null }))
   );
@@ -4164,6 +4201,32 @@ function InspectionModal({ task, locId, user, onClose, onComplete, equipment }) 
       createdAt: now
     });
 
+    // Notify owners/managers of monitor items (one notif for whole inspection)
+    const monitorItems = items.filter(i => i.result === "monitor");
+    if (monitorItems.length > 0) {
+      try {
+        const ownerId = user?.ownerId || user?.uid;
+        const allUsers = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId)));
+        const ownerDoc = await getDoc(doc(db, "users", ownerId));
+        const allDocs = ownerDoc.exists() ? [{ id: ownerId, data: () => ownerDoc.data() }, ...allUsers.docs] : allUsers.docs;
+        for (const memberDoc of allDocs) {
+          const md = memberDoc.data();
+          const isOwner = md.role === "owner";
+          const isManager = md.role === "manager";
+          if (!isOwner && !isManager) continue;
+          if (!isOwner) {
+            const hasAccess = !md.allowedLocations || md.allowedLocations.includes(locId);
+            if (!hasAccess) continue;
+          }
+          const prefsSnap = await getDoc(doc(db, "users", memberDoc.id, "prefs", "alerts"));
+          const prefs = prefsSnap.exists() ? prefsSnap.data() : {};
+          if (prefs.inspectionMonitorAlert !== false) {
+            await writeNotif(memberDoc.id, { type: "inspection_monitor", title: "Inspection Monitor Item", body: (user?.name || user?.email || "Someone") + " completed '" + task.title + "' — " + monitorItems.length + " monitor item(s) at " + (locationName || locId), locationId: locId, taskId: task.id });
+          }
+        }
+      } catch(e) { console.log("Monitor notif error:", e.message); }
+    }
+
     // Write task-level equipment history (all items)
     if (task.equipmentId) {
       const histId = "insp" + Date.now() + "eq";
@@ -4193,6 +4256,29 @@ function InspectionModal({ task, locId, user, onClose, onComplete, equipment }) 
     }
 
     for (const item of items.filter(i => i.result === "fail")) {
+      // Notify owners/managers per fail item
+      try {
+        const ownerId2 = user?.ownerId || user?.uid;
+        const allUsers2 = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId2)));
+        const ownerDoc2 = await getDoc(doc(db, "users", ownerId2));
+        const allDocs2 = ownerDoc2.exists() ? [{ id: ownerId2, data: () => ownerDoc2.data() }, ...allUsers2.docs] : allUsers2.docs;
+        for (const memberDoc of allDocs2) {
+          const md = memberDoc.data();
+          const isOwner = md.role === "owner";
+          const isManager = md.role === "manager";
+          if (!isOwner && !isManager) continue;
+          if (!isOwner) {
+            const hasAccess = !md.allowedLocations || md.allowedLocations.includes(locId);
+            if (!hasAccess) continue;
+          }
+          const prefsSnap = await getDoc(doc(db, "users", memberDoc.id, "prefs", "alerts"));
+          const prefs = prefsSnap.exists() ? prefsSnap.data() : {};
+          if (prefs.inspectionFailAlert !== false) {
+            await writeNotif(memberDoc.id, { type: "inspection_fail", title: "Inspection Fail: " + item.label, body: (user?.name || user?.email || "Someone") + ": '" + item.label + "' failed on '" + task.title + "' at " + (locationName || locId), locationId: locId, taskId: task.id });
+          }
+        }
+      } catch(e) { console.log("Fail notif error:", e.message); }
+
       const newId = "t" + Date.now() + Math.random().toString(36).slice(2, 5);
       const photoUrl = photoMapRef.current[item.id] || item.photoUrl || null;
       const noteText = noteMapRef.current[item.id] || item.note || "";
@@ -7592,6 +7678,8 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [notifDetail, setNotifDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -7654,6 +7742,9 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     lowInventoryAlert: true,
     equipmentAlert: true,
     newTaskAlert: false,
+    taskCompletedAlert: true,
+    inspectionMonitorAlert: true,
+    inspectionFailAlert: true,
     sensorPushAlert: true,
     chemLevelAlert: true,
     shellyAlert: true,
@@ -7715,13 +7806,26 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
         ) : notifications.map(n => (
           <div key={n.id} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 10, display: "flex", gap: 12, alignItems: "flex-start" }}>
             <div style={{ fontSize: 20 }}>📋</div>
-            <div style={{ flex: 1, cursor: "pointer" }} onClick={() => {
+            <div style={{ flex: 1, cursor: "pointer" }} onClick={async () => {
               markRead(n.id);
-              if (n.locationId) setLocId(n.locationId);
-              if (n.view) setView(n.view);
-              else if (n.type === "sensor_alert") setView("sensors");
-              else if (n.type === "grocery") setView("inventory");
-              else if (n.locationId) setView("tasks");
+              if (n.taskId && n.locationId) {
+                setDetailLoading(true);
+                setNotifDetail({ notif: n, task: null, history: [] });
+                try {
+                  const taskSnap = await getDoc(doc(db, "locations", n.locationId, "tasks", n.taskId));
+                  const task = taskSnap.exists() ? { id: taskSnap.id, ...taskSnap.data() } : null;
+                  const histSnap = await getDocs(query(collection(db, "locations", n.locationId, "tasks", n.taskId, "history"), orderBy("createdAt", "desc")));
+                  const history = histSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                  setNotifDetail({ notif: n, task, history });
+                } catch(e) { console.log("Detail error:", e.message); }
+                setDetailLoading(false);
+              } else {
+                if (n.locationId) setLocId(n.locationId);
+                if (n.view) setView(n.view);
+                else if (n.type === "sensor_alert") setView("sensors");
+                else if (n.type === "grocery") setView("inventory");
+                else if (n.locationId) setView("tasks");
+              }
             }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35" }}>{n.title}</div>
               <div style={{ fontSize: 13, color: "#334155", marginTop: 2 }}>{n.body}</div>
@@ -7734,7 +7838,61 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
           </div>
         ))}
       </div>
-      <div style={{ display: notifTab === "settings" ? "block" : "none" }}>
+      {notifDetail && (
+       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+         <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+           <div style={{ padding: "20px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+             <div>
+               <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>{notifDetail.notif.title}</div>
+               <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{notifDetail.notif.body}</div>
+               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{notifDetail.notif.createdAt ? new Date(notifDetail.notif.createdAt).toLocaleString() : ""}</div>
+             </div>
+             <button onClick={() => setNotifDetail(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1, marginLeft: 12 }}>✕</button>
+           </div>
+           {detailLoading && <div style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>Loading...</div>}
+           {!detailLoading && notifDetail.task && (
+             <div style={{ padding: 20 }}>
+               <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                 <div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35", marginBottom: 4 }}>{notifDetail.task.title}</div>
+                 <div style={{ fontSize: 12, color: "#64748b" }}>Status: <span style={{ fontWeight: 600, color: notifDetail.task.status === "done" ? "#16a34a" : "#f59e0b" }}>{notifDetail.task.status}</span></div>
+                 {notifDetail.task.completedBy && <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Completed by: {notifDetail.task.completedBy}</div>}
+                 {notifDetail.task.completedAt && <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Completed: {new Date(notifDetail.task.completedAt).toLocaleString()}</div>}
+                 {notifDetail.task.note && <div style={{ fontSize: 12, color: "#334155", marginTop: 8, padding: "8px 10px", background: "#fff", borderRadius: 8, border: "1px solid #e5e7eb" }}>{notifDetail.task.note}</div>}
+               </div>
+               {notifDetail.history.length > 0 && (
+                 <div>
+                   <div style={{ fontWeight: 600, fontSize: 13, color: "#0f1f35", marginBottom: 10 }}>History</div>
+                   {notifDetail.history.map(h => (
+                     <div key={h.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                       <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>{h.completedBy} — {h.completedAt ? new Date(h.completedAt).toLocaleString() : h.date}</div>
+                       {h.type === "inspection" && h.items && (
+                         <div>
+                           {h.items.map((item, idx) => (
+                             <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10, padding: "8px 10px", background: item.result === "fail" ? "#fef2f2" : item.result === "monitor" ? "#fffbeb" : "#f0fdf4", borderRadius: 8 }}>
+                               <div style={{ fontSize: 16, flexShrink: 0 }}>{item.result === "fail" ? "❌" : item.result === "monitor" ? "⚠️" : "✅"}</div>
+                               <div style={{ flex: 1 }}>
+                                 <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{item.label}</div>
+                                 {item.note && <div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>{item.note}</div>}
+                                 {item.photoUrl && <img src={item.photoUrl} alt="" style={{ marginTop: 6, width: "100%", maxWidth: 280, borderRadius: 8, border: "1px solid #e5e7eb" }} />}
+                               </div>
+                             </div>
+                           ))}
+                         </div>
+                       )}
+                       {h.note && h.type !== "inspection" && <div style={{ fontSize: 12, color: "#334155", padding: "6px 10px", background: "#f8fafc", borderRadius: 8 }}>{h.note}</div>}
+                     </div>
+                   ))}
+                 </div>
+               )}
+             </div>
+           )}
+           {!detailLoading && !notifDetail.task && notifDetail.notif.taskId && (
+             <div style={{ padding: 32, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Task details not available.</div>
+           )}
+         </div>
+       </div>
+     )}
+     <div style={{ display: notifTab === "settings" ? "block" : "none" }}>
 
       {/* Daily Summary Email */}
       <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
@@ -7772,6 +7930,9 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
         {(user?.role === "manager" || user?.role === "owner") && <Row label="Low inventory" desc="Item falls below low stock threshold" k="lowInventoryAlert" />}
         {(user?.role === "manager" || user?.role === "owner") && <Row label="Equipment alerts" desc="Equipment status changes to warning or alert" k="equipmentAlert" />}
         <Row label="New task assigned" desc="New task added at your location" k="newTaskAlert" />
+        {(user?.role === "manager" || user?.role === "owner") && <Row label="Task completed" desc="Notified when a task is marked complete" k="taskCompletedAlert" />}
+        {(user?.role === "manager" || user?.role === "owner") && <Row label="Inspection monitor item" desc="Inspection completed with one or more monitor items" k="inspectionMonitorAlert" />}
+        {(user?.role === "manager" || user?.role === "owner") && <Row label="Inspection fail item" desc="Individual inspection item marked as fail" k="inspectionFailAlert" />}
       </div>
 
       {/* Sensor Alerts */}
@@ -8059,6 +8220,7 @@ const [materialsTask, setMaterialsTask] = useState(null);
     setTimeout(() => setAlertSaved(false), 3000);
   };
 const [sidebarOpen, setSidebarOpen] = useState(false);
+const [highlightTaskId, setHighlightTaskId] = useState(null);
 const isMobile = useIsMobile();
 
 useEffect(() => {
@@ -8201,8 +8363,8 @@ return (
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}
 {locId !== "all" && view === "overview" && <Overview location={curLoc} tasks={curTasks} sensors={curSens} equipment={curEquip} onNavigate={setView} user={user} onSensorNavigate={(tab) => { setSensorTab(tab); setTimeout(() => setView("sensors"), 0); }} />}
-{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
-{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} />}
+{view === "tasks"     && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={false} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} highlightTaskId={highlightTaskId} onClearHighlight={() => setHighlightTaskId(null)} />}
+{view === "all-tasks" && <Tasks tasks={curTasks} onStatus={handleStatus} onEdit={t => { setEditTask(t); setShowAddTask(true); }} showAll={true} locationName={curLoc?.name} onAddTask={() => setShowAddTask(true)} onSaveNote={handleSaveNote} locId={locId} onSelectMaterials={setMaterialsTask} equipment={curEquip} highlightTaskId={highlightTaskId} onClearHighlight={() => setHighlightTaskId(null)} />}
 {view === "timeclock" && <TimeClock locId={locId} locationName={curLoc?.name} allLocations={locations} />}
 {view === "inventory" && <Inventory locId={locId} locationName={curLoc?.name} user={user} locations={locations} />}
 {view === "equipment" && <Equipment equipment={curEquip} locationName={curLoc?.name} locId={locId} allTasks={curTasks} onCreateTask={eq => { setTaskPreset(eq); setShowAddTask(true); }} onNavigate={setView} />}
