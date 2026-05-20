@@ -7825,6 +7825,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
       <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Equipment Car Count Alerts</div>
         <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Get notified when car-based recurring tasks are due or approaching</div>
+        <Row label="Grocery list alerts" desc="Notify when an item is added to the grocery list" k="groceryListAlert" />
         <Row label="Task due alert" desc="Notify when a car-recurrence task becomes due" k="carRecurrenceDueAlert" />
         <Row label="Upcoming task warning" desc="Notify when a task is approaching its car count threshold" k="carRecurrenceWarningAlert" />
         {prefs.carRecurrenceWarningAlert && (
