@@ -867,7 +867,10 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     if (fetchError) { console.log("Fetch error:", JSON.stringify(fetchError)); res.status(200).send("Fetch error"); return; }
     console.log("Full email object:", JSON.stringify(emailFull).slice(0, 2000));
     const toFull = toAddress;
-    const body = emailFull?.text || emailFull?.html || "";
+    let body = emailFull?.text || emailFull?.html || "";
+    // Strip Gmail forward quote prefixes ("> " at start of lines)
+    body = body.split("\n").map(l => l.replace(/^>+\s?/, "")).join("\n");
+    console.log("Parsed body:", JSON.stringify(body.slice(0, 500)));
     const subject = emailFull?.subject || "";
 
     // Skip WashWorld (and any other machine) weekly/monthly summary emails — only process daily totals
@@ -904,10 +907,10 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       if (todaysTotalMatch) count = parseInt(todaysTotalMatch[1]);
     }
 
-    // Format 3: Package rows - sum last column (FreeStyler)
-    // Handles "PACKAGE1  15364  9" and "1  15364  9" formats
+    // Format 3: Package rows - sum last column (FreeStyler + WASH DATA formats)
+    // Handles "PACKAGE1  15364  9", "1  15364  9", and "1  ###  033" formats
     if (count === null && /PACKAGE RUNNING TODAY/i.test(body)) {
-      const rows = body.match(/^\s*(?:PACKAGE)?\d+\s+\d+\s+(\d+)\s*$/gim);
+      const rows = body.match(/^\s*(?:PACKAGE)?\d+\s+[\d#]+\s+(\d+)\s*$/gim);
       if (rows && rows.length > 0) {
         count = rows.reduce((sum, row) => {
           const parts = row.trim().split(/\s+/);
@@ -960,9 +963,10 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
     // We sum the last column of each package row (more accurate, enables future breakdown)
     if (count === null && /WASH DATA/i.test(body) && /PACKAGE RUNNING TODAY/i.test(body)) {
       const pkgRows = [...body.matchAll(/^\s*(\d+)\s+[\d#]+\s+(\d+)\s*$/gim)];
+      console.log("Format7 pkgRows found:", pkgRows.length, pkgRows.map(m => m[0].trim()));
       if (pkgRows.length > 0) {
         count = pkgRows.reduce((sum, m) => sum + parseInt(m[2]), 0);
-        // Store package breakdown for future reporting
+        console.log("Format7 count:", count);
         const packages = {};
         pkgRows.forEach(m => { packages["pkg" + m[1]] = { count: parseInt(m[2]) }; });
         if (Object.keys(packages).length > 0) extraData = { packages };
