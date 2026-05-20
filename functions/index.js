@@ -953,6 +953,21 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       const washMatch = body.match(/total\s*washes?\s*[:\-=]?\s*(\d+)/i);
       if (washMatch) count = parseInt(washMatch[1]);
     }
+
+    // Format 7: WASH DATA / PACKAGE RUNNING TODAY with two-column rows
+    // e.g. "  1      ###    033" or "  8      044    000"
+    // TOTAL line: "TOTAL  016992    074" — second number is today's count
+    // We sum the last column of each package row (more accurate, enables future breakdown)
+    if (count === null && /WASH DATA/i.test(body) && /PACKAGE RUNNING TODAY/i.test(body)) {
+      const pkgRows = [...body.matchAll(/^\s*(\d+)\s+[\d#]+\s+(\d+)\s*$/gim)];
+      if (pkgRows.length > 0) {
+        count = pkgRows.reduce((sum, m) => sum + parseInt(m[2]), 0);
+        // Store package breakdown for future reporting
+        const packages = {};
+        pkgRows.forEach(m => { packages["pkg" + m[1]] = { count: parseInt(m[2]) }; });
+        if (Object.keys(packages).length > 0) extraData = { packages };
+      }
+    }
     if (count === null) { console.log("No count in body:", body.slice(0,200)); res.status(200).send("No count found"); return; }
     
     // Use yesterday's date
