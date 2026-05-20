@@ -633,7 +633,7 @@ boxShadow: open ? "6px 0 32px rgba(0,0,0,0.3)" : "none"
 <div style={{ padding: "6px 12px", flex: 1, borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 4 }}>
 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, marginTop: 10 }}>Menu</div>
 {nav.map(item => (
-<button key={item.id} onClick={() => { setView(item.id); if(isMobile) onClose(); }} style={{ width: "100%", textAlign: "left", padding: "9px 14px", borderRadius: 8, border: "none", background: view === item.id ? "rgba(125,211,252,0.15)" : "transparent", color: view === item.id ? "#7dd3fc" : "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 700 : 400, marginBottom: 1, borderLeft: view === item.id ? "2px solid #7dd3fc" : "2px solid transparent", transition: "all 0.15s" }}>
+<button key={item.id} onClick={() => { setView(item.id); onClose(); }} style={{ width: "100%", textAlign: "left", padding: "9px 14px", borderRadius: 8, border: "none", background: view === item.id ? "rgba(125,211,252,0.15)" : "transparent", color: view === item.id ? "#7dd3fc" : "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 13, fontWeight: view === item.id ? 700 : 400, marginBottom: 1, borderLeft: view === item.id ? "2px solid #7dd3fc" : "2px solid transparent", transition: "all 0.15s" }}>
 {item.label}
 </button>
 ))}
@@ -5295,7 +5295,6 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                         <div style={{ fontWeight: 600, fontSize: 13, color: "#334155" }}>Editing: {item.name}</div>
-                        <button onClick={async () => { const next = !showItemHistory; setShowItemHistory(next); if (next) { setLoadingHistory(true); const snap = await getDocs(collection(db, "locations", locId, "inventory", item.id, "history")); setItemHistory(snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.timestamp.localeCompare(a.timestamp))); setLoadingHistory(false); } }} style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>History</button>
                       </div>
                         <button onClick={async () => { const next = !showItemHistory; setShowItemHistory(next); if (next) { setLoadingHistory(true); const snap = await getDocs(collection(db, "locations", locId, "inventory", item.id, "history")); setItemHistory(snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.timestamp.localeCompare(a.timestamp))); setLoadingHistory(false); } }} style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>History</button>
                       </div>
