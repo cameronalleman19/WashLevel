@@ -4759,6 +4759,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [groceryHistoryFilter, setGroceryHistoryFilter] = useState("all");
   const [expandedVendors, setExpandedVendors] = useState({});
   const [transferItem, setTransferItem] = useState(null);
+  const [modalItem, setModalItem] = useState(null);
 
   const handleAddGroceryItem = async () => {
     if (!newGroceryItem.trim()) return;
@@ -5377,13 +5378,15 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                   </div>
                 )}
                 {group.items.map(item => (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid #f3f4f6" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{item.name}</div>
-                      <div style={{ fontSize: 11, color: "#94a3b8" }}>Have: {item.quantity} {item.unit} — Reorder at: {item.reorderAt}{item.partNumber ? " | #" + item.partNumber : ""}</div>
+                  <div key={item.id} onClick={() => { setModalItem(item); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); setShowItemHistory(false); }} style={{ cursor: "pointer", borderTop: "1px solid #f3f4f6" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0" }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{item.name}</div>
+                          <div style={{ fontSize: 11, color: "#94a3b8" }}>Have: {item.quantity} {item.unit} — Reorder at: {item.reorderAt}{item.partNumber ? " | #" + item.partNumber : ""}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, background: "#fee2e2", padding: "3px 8px", borderRadius: 6 }}>LOW</div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, background: "#fee2e2", padding: "3px 8px", borderRadius: 6 }}>LOW</div>
-                  </div>
                 ))}
               </div>
             ));
@@ -5482,6 +5485,54 @@ function Inventory({ locId, locationName, user, locations = [] }) {
         </div>
       )}
 
+      {modalItem && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => { setModalItem(null); setEditingId(null); }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>Editing: {modalItem.name}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setModalItem(null); setEditingId(null); }} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>×</button>
+              </div>
+            </div>
+            {showItemHistory && (
+              <div style={{ background: "#f8fafc", borderRadius: 8, padding: 10, marginBottom: 12, maxHeight: 180, overflowY: "auto" }}>
+                {loadingHistory ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Loading...</div> : itemHistory.length === 0 ? <div style={{ fontSize: 12, color: "#94a3b8" }}>No history yet.</div> : itemHistory.map((h,i) => (
+                  <div key={i} style={{ fontSize: 11, color: "#334155", borderBottom: "1px solid #f1f5f9", paddingBottom: 4, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600 }}>{h.type}</span> {h.quantity > 0 ? "+" : ""}{h.quantity} → {h.newQuantity} {modalItem.unit} · {h.note || ""} · {h.by || ""} · {h.timestamp ? new Date(h.timestamp).toLocaleString() : ""}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Category</label><select value={editData.category || "chemicals"} onChange={e => setEditData(p => ({...p, category: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}><option value="chemicals">Chemicals</option><option value="parts">Parts</option><option value="vending supplies">Vending Supplies</option></select></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Quantity</label><input type="number" value={editData.quantity || 0} onChange={e => setEditData(p => ({...p, quantity: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Unit</label><select value={editData.unit || "gal"} onChange={e => setEditData(p => ({...p, unit: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Barcode</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                  {modalItem.barcode ? (
+                    <><div style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>✓ {modalItem.barcode}</div>
+                    <button onClick={() => { setAttachingBarcode(modalItem.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Rescan</button>
+                    <button onClick={() => updateDoc(doc(db, "locations", locId, "inventory", modalItem.id), { barcode: null })} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Remove</button>
+                    <button onClick={() => printBarcode(modalItem)} style={{ background: "#f0fdf4", color: "#059669", border: "1px solid #bbf7d0", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>🖨️ Print</button></>
+                  ) : (
+                    <><button onClick={() => { setAttachingBarcode(modalItem.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 5, padding: "5px 8px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>📷 Scan Existing</button>
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, color: "#334155", fontWeight: 600 }}><input type="checkbox" checked={editData.generateBarcode || false} onChange={e => setEditData(p => ({...p, generateBarcode: e.target.checked}))} style={{ width: 13, height: 13, accentColor: "#0f1f35" }} />Generate</label></>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button onClick={() => { setModalItem(null); setEditingId(null); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            </div>
+            <button onClick={() => { setTransferItem(modalItem); setModalItem(null); setEditingId(null); }} style={{ width: "100%", background: "#ede9fe", color: "#6366f1", border: "1px solid #c4b5fd", borderRadius: 6, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Transfer Stock to Another Location</button>
+          </div>
+        </div>
+      )}
       {transferItem && <InventoryTransferModal item={transferItem} fromLocId={locId} locations={locations} user={user} onClose={() => setTransferItem(null)} />}
       {activeTab === "vendors" && (
         <div>
@@ -5560,14 +5611,16 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                         {expandedVendors[v.id] && vendorItems.length > 0 && (
                           <div style={{ marginTop: 8, borderTop: "1px solid #f3f4f6", paddingTop: 8 }}>
                             {vendorItems.map(item => (
-                              <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #f9fafb" }}>
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#0f1f35" }}>{item.name}</div>
-                                  {item.partNumber && <div style={{ fontSize: 11, color: "#94a3b8" }}>Part #: {item.partNumber}</div>}
-                                </div>
-                                <div style={{ textAlign: "right" }}>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: item.quantity <= (item.lowThreshold || 0) ? "#dc2626" : "#059669" }}>{item.quantity} {item.unit}</div>
-                                  {item.costPerUnit ? <div style={{ fontSize: 11, color: "#94a3b8" }}>${item.costPerUnit}/{item.unit}</div> : null}
+                              <div key={item.id} onClick={() => { setModalItem(item); setEditData({ name: item.name, partNumber: item.partNumber||"", category: item.category||"chemicals", quantity: item.quantity, unit: item.unit||"gal", costPerUnit: item.costPerUnit||0, lowThreshold: item.lowThreshold||0, reorderAt: item.reorderAt||0, vendorId: item.vendorId||"" }); setShowItemHistory(false); }} style={{ cursor: "pointer", borderBottom: "1px solid #f9fafb" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0" }}>
+                                  <div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: "#0f1f35" }}>{item.name}</div>
+                                    {item.partNumber && <div style={{ fontSize: 11, color: "#94a3b8" }}>Part #: {item.partNumber}</div>}
+                                  </div>
+                                  <div style={{ textAlign: "right" }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: item.quantity <= (item.lowThreshold || 0) ? "#dc2626" : "#059669" }}>{item.quantity} {item.unit}</div>
+                                    {item.costPerUnit ? <div style={{ fontSize: 11, color: "#94a3b8" }}>${item.costPerUnit}/{item.unit}</div> : null}
+                                  </div>
                                 </div>
                               </div>
                             ))}
