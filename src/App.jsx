@@ -4773,17 +4773,15 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     await setDoc(doc(db, "locations", locId, "groceryList", id), itemData);
     setNewGroceryItem("");
     try {
-      const { getFunctions, httpsCallable } = await import("firebase/functions");
-      const fns = getFunctions();
-      const notify = httpsCallable(fns, "createNotification");
-      await notify({
-        ownerId,
-        role: "manager",
-        title: "Grocery List Item Added",
-        message: (user?.name || user?.email || "Someone") + " added \"" + itemData.name + "\" to the grocery list at " + locationName,
-        locId,
+      const managersSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId), where("role", "in", ["manager", "owner"])));
+      const uids = new Set([ownerId]);
+      managersSnap.docs.forEach(d => uids.add(d.id));
+      await Promise.all([...uids].map(uid => writeNotif(uid, {
         type: "grocery",
-      });
+        title: "Grocery List Item Added",
+        body: (user?.name || user?.email || "Someone") + " added \"" + itemData.name + "\" to the grocery list at " + locationName,
+        locationId: locId,
+      })));
     } catch(e) { console.log("Notify error", e); }
   };
 
@@ -7669,6 +7667,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
               if (n.locationId) setLocId(n.locationId);
               if (n.view) setView(n.view);
               else if (n.type === "sensor_alert") setView("sensors");
+              else if (n.type === "grocery") setView("inventory");
               else if (n.locationId) setView("tasks");
             }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: "#0f1f35" }}>{n.title}</div>
