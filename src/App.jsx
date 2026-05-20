@@ -7672,6 +7672,12 @@ function SetupWizard({ user, logout }) {
 function AlertSettings({ locId, locations, user, setView, setLocId }) {
   const [prefs, setPrefs] = useState(null);
   const [notifTab, setNotifTab] = useState("inbox");
+  const [smsTab, setSmsTab] = useState(false);
+  const [smsSubscription, setSmsSubscription] = useState(null);
+  const [smsUsers, setSmsUsers] = useState([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponError, setCouponError] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -7686,6 +7692,54 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
     );
     return () => unsub();
   }, [user?.uid]);
+
+  const VALID_COUPONS = { "WASHLEVEL-SMS": 2, "BETA-TEXT-2025": 2, "CAMERON-TEST": 2 };
+
+  useEffect(() => {
+    if (!user?.uid || user?.role !== "owner") return;
+    const subUnsub = onSnapshot(doc(db, "subscriptions", user.uid), snap => {
+      setSmsSubscription(snap.exists() ? snap.data() : null);
+    });
+    const usersUnsub = onSnapshot(query(collection(db, "users"), where("ownerId", "==", user.uid)), snap => {
+      const teamMembers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      getDoc(doc(db, "users", user.uid)).then(ownerSnap => {
+        if (ownerSnap.exists()) {
+          setSmsUsers([{ id: ownerSnap.id, ...ownerSnap.data() }, ...teamMembers]);
+        } else {
+          setSmsUsers(teamMembers);
+        }
+      });
+    });
+    return () => { subUnsub(); usersUnsub(); };
+  }, [user?.uid, user?.role]);
+
+  const redeemCoupon = async () => {
+    setCouponError("");
+    const code = couponCode.trim().toUpperCase();
+    if (!VALID_COUPONS[code]) { setCouponError("Invalid coupon code."); return; }
+    const subRef = doc(db, "subscriptions", user.uid);
+    const subSnap = await getDoc(subRef);
+    if (subSnap.exists() && subSnap.data().couponUsed) { setCouponError("A coupon has already been used on this account."); return; }
+    setCouponLoading(true);
+    try {
+      const months = VALID_COUPONS[code];
+      const until = new Date();
+      until.setMonth(until.getMonth() + months);
+      await setDoc(subRef, { smsEnabled: true, smsEnabledUntil: until.toISOString(), couponUsed: code }, { merge: true });
+      setCouponCode("");
+    } catch(e) {
+      setCouponError("Error: " + e.message);
+    }
+    setCouponLoading(false);
+  };
+
+  const updateSmsUser = async (uid, field, value) => {
+    const ref = doc(db, "users", uid);
+    await updateDoc(ref, { [`smsPrefs.${field}`]: value });
+    if (field === "phone") {
+      setSmsUsers(prev => prev.map(u => u.id === uid ? { ...u, phone: value } : u));
+    }
+  };
 
   const markRead = async (notifId) => {
     await updateDoc(doc(db, "users", user.uid, "notifications", notifId), { read: true });
@@ -7792,6 +7846,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button onClick={() => setNotifTab("inbox")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "inbox" ? "#0f1f35" : "#f1f5f9", color: notifTab === "inbox" ? "#fff" : "#64748b" }}>Inbox {notifications.filter(n => !n.read).length > 0 ? "(" + notifications.filter(n => !n.read).length + ")" : ""}</button>
         <button onClick={() => setNotifTab("settings")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "settings" ? "#0f1f35" : "#f1f5f9", color: notifTab === "settings" ? "#fff" : "#64748b" }}>Alert Settings</button>
+        <button onClick={() => setNotifTab("sms")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "sms" ? "#0f1f35" : "#f1f5f9", color: notifTab === "sms" ? "#fff" : "#64748b" }}>Text Alerts</button>
       </div>
       <div style={{ display: notifTab === "inbox" ? "block" : "none" }}>
         {notifications.length === 0 ? (
@@ -7889,6 +7944,105 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
          </div>
        </div>
      )}
+     <div style={{ display: notifTab === "sms" ? "block" : "none" }}>
+      {user?.role !== "owner" ? (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 32, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}></div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Text Alerts</div>
+          <div style={{ fontSize: 13, color: "#64748b" }}>Only account owners can manage text alert settings.</div>
+        </div>
+      ) : smsSubscription?.smsEnabled && smsSubscription?.smsEnabledUntil && new Date(smsSubscription.smsEnabledUntil) > new Date() ? (
+        <div>
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>Text Alerts Active</div>
+            <div style={{ fontSize: 12, color: "#64748b" }}>Expires {new Date(smsSubscription.smsEnabledUntil).toLocaleDateString()}</div>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35", marginBottom: 12 }}>Team Members</div>
+          {smsUsers.length === 0 && <div style={{ fontSize: 13, color: "#94a3b8" }}>No team members found.</div>}
+          {smsUsers.map(u => (
+            <div key={u.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 18, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{u.name || u.email}</div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "capitalize" }}>{u.role}</div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>Phone Number</label>
+                <input
+                  type="tel"
+                  defaultValue={u.phone || ""}
+                  placeholder="+1 (555) 000-0000"
+                  onBlur={e => updateSmsUser(u.id, "phone", e.target.value)}
+                  style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, width: "100%", boxSizing: "border-box", outline: "none" }}
+                />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 10 }}>Alert Types</div>
+              {[
+                { key: "equipmentFailures", label: "Equipment Failures", desc: "Equipment status changes to alert" },
+                { key: "sensorAlerts", label: "Sensor Alerts", desc: "Pressure or chemical sensor out of range" },
+                { key: "chemicalLevels", label: "Low Chemical Levels", desc: "Chemical drum running low" },
+                { key: "failedInspections", label: "Failed Inspections", desc: "Inspection item marked as fail" },
+              ].map(({ key, label, desc }) => (
+                <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{label}</div>
+                    <div style={{ fontSize: 12, color: "#94a3b8" }}>{desc}</div>
+                  </div>
+                  <div
+                    onClick={() => updateSmsUser(u.id, key, !(u.smsPrefs?.[key] ?? false))}
+                    style={{ width: 44, height: 24, borderRadius: 12, background: u.smsPrefs?.[key] ? "#0f1f35" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}
+                  >
+                    <div style={{ position: "absolute", top: 3, left: u.smsPrefs?.[key] ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 32 }}>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}></div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: "#0f1f35", marginBottom: 8 }}>Text Alert Notifications</div>
+            <div style={{ fontSize: 13, color: "#64748b", maxWidth: 320, margin: "0 auto", lineHeight: 1.6 }}>Get instant SMS alerts for equipment failures, sensor alerts, low chemical levels, and failed inspections — sent directly to your team's phones.</div>
+          </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 28, flexWrap: "wrap" }}>
+            {["Equipment Failures", "Sensor Alerts", "Low Chemical Levels", "Failed Inspections"].map(f => (
+              <div key={f} style={{ background: "#f1f5f9", borderRadius: 20, padding: "6px 14px", fontSize: 12, fontWeight: 600, color: "#334155" }}>{f}</div>
+            ))}
+          </div>
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: 20, marginBottom: 20, textAlign: "center" }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#0f1f35", marginBottom: 2 }}>$5<span style={{ fontSize: 14, fontWeight: 600, color: "#64748b" }}>/month</span></div>
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>Per account · All locations included</div>
+          </div>
+          <button style={{ width: "100%", padding: "13px", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}
+            onClick={() => alert("Billing coming soon! Use a coupon code below to get started.")}>
+            Add Text Alerts — $5/mo
+          </button>
+          <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 10 }}>Have a coupon code?</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                value={couponCode}
+                onChange={e => { setCouponCode(e.target.value); setCouponError(""); }}
+                placeholder="Enter code"
+                style={{ flex: 1, padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none" }}
+              />
+              <button
+                onClick={redeemCoupon}
+                onClick={redeemCoupon}
+                disabled={couponLoading}
+                style={{ padding: "9px 18px", background: couponLoading ? "#e5e7eb" : "#0f1f35", color: couponLoading ? "#94a3b8" : "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: couponLoading ? "not-allowed" : "pointer" }}>
+                {couponLoading ? "..." : "Apply"}
+              </button>
+            </div>
+            {couponError && <div style={{ fontSize: 12, color: "#ef4444", marginTop: 8 }}>{couponError}</div>}
+          </div>
+        </div>
+      )}
+     </div>
      <div style={{ display: notifTab === "settings" ? "block" : "none" }}>
 
       {/* Daily Summary Email */}
