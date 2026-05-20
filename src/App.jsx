@@ -1743,9 +1743,6 @@ return (
             {task.due && task.due.includes("-") && task.status !== "done" && new Date(task.due + "T23:59:59") < new Date() && (
               <span style={{ fontSize: 11, color: "#dc2626", background: "#fee2e2", padding: "1px 7px", borderRadius: 99, fontWeight: 700 }}>Overdue</span>
             )}
-            {task.due && task.due.includes("-") && task.status !== "done" && new Date(task.due + "T23:59:59") < new Date() && (
-              <span style={{ fontSize: 11, color: "#dc2626", background: "#fee2e2", padding: "1px 7px", borderRadius: 99, fontWeight: 700 }}>Overdue</span>
-            )}
 </div>
 </div>
 <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "50%" }}>
