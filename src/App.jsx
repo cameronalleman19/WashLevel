@@ -4999,6 +4999,40 @@ function Inventory({ locId, locationName, user, locations = [] }) {
       }
     }
     await updateDoc(doc(db, "locations", locId, "inventory", itemId), updates);
+
+    // Fire low stock / reorder notifications to owners+managers
+    const hitLow = item.lowStockAlert && val <= item.lowStockAlert && qtyBefore > item.lowStockAlert;
+    const hitReorder = item.reorderAt && val <= item.reorderAt && qtyBefore > item.reorderAt;
+    if (hitLow || hitReorder) {
+      try {
+        const ownerId2 = user?.isTeamMember ? user?.ownerId : user?.uid;
+        const teamSnap = await getDocs(query(collection(db, "users"), where("ownerId", "==", ownerId2)));
+        const recipients = [
+          { uid: ownerId2 },
+          ...teamSnap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => m.role === "manager" || m.role === "owner")
+        ];
+        const uniqueRecipients = [...new Map(recipients.map(r => [r.uid, r])).values()];
+        for (const recipient of uniqueRecipients) {
+          const recipPrefs = await getDoc(doc(db, "users", recipient.uid, "prefs", "alerts"));
+          const recipData = recipPrefs.exists() ? recipPrefs.data() : {};
+          const wantsLow = recipData.lowInventoryAlert ?? true;
+          const wantsReorder = recipData.lowInventoryAlert ?? true;
+          if ((hitLow && wantsLow) || (hitReorder && wantsReorder)) {
+            const type = hitLow ? "low_stock" : "reorder";
+            const label = hitLow ? "Low Stock" : "Reorder Needed";
+            await writeNotif(recipient.uid, {
+              type,
+              title: label + ": " + (item.name || "Item"),
+              body: (locationName || locId) + " - " + (item.name || "Item") + " is at " + val + " " + (item.unit || "units"),
+              locId,
+              locationName: locationName || locId,
+              link: "inventory",
+            });
+          }
+        }
+      } catch(e) { console.error("Notif error:", e); }
+    }
+
     await logInventoryHistory(itemId, delta >= 0 ? "add" : "remove", delta, qtyBefore, val, "Manual adjustment");
   };
 
@@ -6669,6 +6703,60 @@ function SpSensorMini({ sensors, onNavigate, locId, uid }) {
     </div>
   );
 }
+function NotificationSettingsTab({ user }) {
+  const [lowStockNotif, setLowStockNotif] = useState(false);
+  const [reorderNotif, setReorderNotif] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db, "users", user.uid)).then(snap => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setLowStockNotif(d.notif_lowStock ?? true);
+        setReorderNotif(d.notif_reorder ?? true);
+      }
+    });
+  }, [user?.uid]);
+
+  const save = async () => {
+    setSaving(true);
+    await updateDoc(doc(db, "users", user.uid), {
+      notif_lowStock: lowStockNotif,
+      notif_reorder: reorderNotif,
+    });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const Toggle = ({ value, onChange, label, desc }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid #f1f5f9" }}>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{label}</div>
+        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{desc}</div>
+      </div>
+      <div onClick={() => onChange(!value)} style={{ width: 44, height: 24, borderRadius: 12, background: value ? "#0f1f35" : "#cbd5e1", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+        <div style={{ position: "absolute", top: 3, left: value ? 23 : 3, width: 18, height: 18, borderRadius: 9, background: "#fff", transition: "left 0.2s" }} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Inventory Notifications</div>
+      <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Receive in-app notifications when inventory hits thresholds.</div>
+      <Toggle value={lowStockNotif} onChange={setLowStockNotif} label="Low Stock Alert" desc="Notify when an item falls below its low stock threshold" />
+      <Toggle value={reorderNotif} onChange={setReorderNotif} label="Reorder Alert" desc="Notify when an item falls below its reorder threshold" />
+      <button onClick={save} disabled={saving} style={{ marginTop: 18, padding: "10px 24px", borderRadius: 10, border: "none", background: "#0f1f35", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+        {saved ? "Saved!" : saving ? "Saving..." : "Save"}
+      </button>
+    </div>
+  );
+}
+
+
 function Settings({ locations, onUpdateLocation, user, initialTab }) {
 const { refreshUser } = useAuth();
 const [settingsTab, setSettingsTab] = useState(initialTab || "profile");
@@ -7975,10 +8063,13 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
           </div>
         ) : notifications.map(n => (
           <div key={n.id} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 10, display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div style={{ fontSize: 20 }}>📋</div>
+            <div style={{ fontSize: 20 }}>{n.link === "inventory" ? "📦" : "📋"}</div>
             <div style={{ flex: 1, cursor: "pointer" }} onClick={async () => {
               markRead(n.id);
-              if (n.taskId && n.locationId) {
+              if (n.link === "inventory" && n.locId) {
+                setLocId(n.locId);
+                setView("inventory");
+              } else if (n.taskId && n.locationId) {
                 setDetailLoading(true);
                 setNotifDetail({ notif: n, task: null, history: [] });
                 try {
@@ -8224,6 +8315,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
         <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Get notified immediately when these occur</div>
         <Row label="Overdue tasks" desc="Task passes due date without completion" k="overdueTasksAlert" />
         {(user?.role === "manager" || user?.role === "owner") && <Row label="Low inventory" desc="Item falls below low stock threshold" k="lowInventoryAlert" />}
+        <Row label="Grocery list alerts" desc="Notify when an item is added to the grocery list" k="groceryListAlert" />
         {(user?.role === "manager" || user?.role === "owner") && <Row label="Equipment alerts" desc="Equipment status changes to warning or alert" k="equipmentAlert" />}
         <Row label="New task assigned" desc="New task added at your location" k="newTaskAlert" />
         {(user?.role === "manager" || user?.role === "owner") && <Row label="Task completed" desc="Notified when a task is marked complete" k="taskCompletedAlert" />}
@@ -8335,7 +8427,6 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
       <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Equipment Car Count Alerts</div>
         <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Get notified when car-based recurring tasks are due or approaching</div>
-        <Row label="Grocery list alerts" desc="Notify when an item is added to the grocery list" k="groceryListAlert" />
         <Row label="Task due alert" desc="Notify when a car-recurrence task becomes due" k="carRecurrenceDueAlert" />
         <Row label="Upcoming task warning" desc="Notify when a task is approaching its car count threshold" k="carRecurrenceWarningAlert" />
         {prefs.carRecurrenceWarningAlert && (
