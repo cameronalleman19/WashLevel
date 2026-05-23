@@ -5254,7 +5254,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
             </div>
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={newItem.vendorId || ""} onChange={e => setNewItem(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
             <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={newItem.lowThreshold} onChange={e => setNewItem(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={inp} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Reorder At (qty)</label><input type="number" value={newItem.reorderAt || ""} onChange={e => setNewItem(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} placeholder="e.g. 5" style={inp} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Reorder At (qty)</label><input type="number" value={newItem.reorderAt ?? ""} onChange={e => setNewItem(p => ({...p, reorderAt: e.target.value === '' ? '' : parseFloat(e.target.value) ?? 0}))} placeholder="e.g. 5" style={inp} /></div>
             <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Barcode</label>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "nowrap" }}>
@@ -5334,7 +5334,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                         </div>
                         <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
                         <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={editData.reorderAt ?? ""} onChange={e => setEditData(p => ({...p, reorderAt: e.target.value === '' ? '' : parseFloat(e.target.value) ?? 0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
                         <div>
                           <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Barcode</label>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "nowrap" }}>
@@ -5456,7 +5456,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
           </div>
 
           {reorderSubTab === "reorder" && (() => {
-            const lowItems = items.filter(i => (i.reorderAt > 0 && i.quantity <= i.reorderAt) || i.manualReorder);
+            const lowItems = items.filter(i => (i.reorderAt != null && i.reorderAt !== "" && i.quantity <= i.reorderAt) || i.manualReorder);
             if (lowItems.length === 0) return <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No items need reordering right now.</div>;
             const byVendor = {};
             lowItems.forEach(item => {
@@ -5611,7 +5611,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Unit</label><select value={editData.unit || "gal"} onChange={e => setEditData(p => ({...p, unit: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Low Stock Alert</label><input type="number" value={editData.lowThreshold || 0} onChange={e => setEditData(p => ({...p, lowThreshold: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
-              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={editData.reorderAt || ""} onChange={e => setEditData(p => ({...p, reorderAt: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={editData.reorderAt ?? ""} onChange={e => setEditData(p => ({...p, reorderAt: e.target.value === '' ? '' : parseFloat(e.target.value) ?? 0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Barcode</label>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
                   {modalItem.barcode ? (
