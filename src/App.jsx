@@ -4956,7 +4956,16 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     const item = items.find(i => i.id === itemId);
     const qtyBefore = item?.quantity || 0;
     const delta = val - qtyBefore;
-    await updateDoc(doc(db, "locations", locId, "inventory", itemId), { quantity: val, updatedAt: new Date().toISOString() });
+    const updates = { quantity: val, updatedAt: new Date().toISOString() };
+    if (item?.manualReorder) {
+      const aboveLow = !item.lowStockAlert || val > item.lowStockAlert;
+      const aboveReorder = !item.reorderAt || val > item.reorderAt;
+      if (aboveLow && aboveReorder) {
+        updates.manualReorder = false;
+        updates.manualReorderAt = null;
+      }
+    }
+    await updateDoc(doc(db, "locations", locId, "inventory", itemId), updates);
     await logInventoryHistory(itemId, delta >= 0 ? "add" : "remove", delta, qtyBefore, val, "Manual adjustment");
   };
 
@@ -5020,8 +5029,17 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     await deleteDoc(doc(db, "locations", locId, "inventory", itemId));
   };
 
-  const handleReorder = (item) => {
-    alert("Reorder flagged: " + item.name + (item.partNumber ? " (Part #: " + item.partNumber + ")" : ""));
+  const handleReorder = async (item) => {
+    try {
+      const { updateDoc, serverTimestamp } = await import("firebase/firestore");
+      await updateDoc(doc(db, "locations", locId, "inventory", item.id), {
+        manualReorder: true,
+        manualReorderAt: serverTimestamp(),
+      });
+      alert("Flagged for reorder: " + item.name);
+    } catch (err) {
+      alert("Error flagging reorder: " + err.message);
+    }
   };
 
   const CAT_GROUPS = ["chemicals", "parts", "vending supplies"];
@@ -5438,7 +5456,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
           </div>
 
           {reorderSubTab === "reorder" && (() => {
-            const lowItems = items.filter(i => i.reorderAt > 0 && i.quantity <= i.reorderAt);
+            const lowItems = items.filter(i => (i.reorderAt > 0 && i.quantity <= i.reorderAt) || i.manualReorder);
             if (lowItems.length === 0) return <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No items need reordering right now.</div>;
             const byVendor = {};
             lowItems.forEach(item => {
