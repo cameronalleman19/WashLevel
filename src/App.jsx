@@ -4660,36 +4660,55 @@ return (
 //  INVENTORY
 const SCANNER_ID = "washlevel-barcode-scanner";
 
-function BarcodeScanner({ onScan, onClose }) {
+function BarcodeScanner({ onScan, onClose, scanLocName, onChangeLoc }) {
+  const html5QrRef = React.useRef(null);
+  const scannedRef = React.useRef(false);
+
   useEffect(() => {
-    let html5Qr = null;
-    let scanned = false;
-    const timer = setTimeout(() => {
-      html5Qr = new Html5Qrcode(SCANNER_ID);
-      html5Qr.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 150 } },
-        (decodedText) => {
-          if (scanned) return;
-          scanned = true;
-          onScan(decodedText);
-        },
-        () => {}
-      ).catch(err => console.log("Scanner start error:", err));
+    scannedRef.current = false;
+    let started = false;
+    const timer = setTimeout(async () => {
+      try {
+        if (!html5QrRef.current) {
+          html5QrRef.current = new Html5Qrcode(SCANNER_ID);
+        }
+        await html5QrRef.current.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 150 } },
+          (decodedText) => {
+            if (scannedRef.current) return;
+            scannedRef.current = true;
+            onScan(decodedText);
+          },
+          () => {}
+        );
+        started = true;
+      } catch(err) {
+        console.log("Scanner start error:", err);
+      }
     }, 300);
 
     return () => {
       clearTimeout(timer);
-      if (html5Qr) html5Qr.stop().catch(() => {});
+      if (html5QrRef.current) {
+        html5QrRef.current.stop().catch(() => {}).finally(() => {
+          try { html5QrRef.current.clear(); } catch(e) {}
+          html5QrRef.current = null;
+        });
+      }
     };
   }, []);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 2000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
       <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "100%", maxWidth: 400, margin: "0 16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>Scan Barcode</div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "6px 10px", marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "#0369a1" }}>Scanning at: <strong>{scanLocName}</strong></div>
+          <button onClick={onChangeLoc} style={{ fontSize: 11, color: "#0369a1", background: "none", border: "1px solid #7dd3fc", borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}>Change</button>
         </div>
         <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, textAlign: "center" }}>Point camera at barcode</div>
         <div id={SCANNER_ID} style={{ width: "100%", borderRadius: 10, overflow: "hidden" }} />
@@ -4903,6 +4922,20 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [scanQtyPrompt, setScanQtyPrompt] = useState(null); // { item, barcode }
   const [scanQty, setScanQty] = useState(1);
   const [attachingBarcode, setAttachingBarcode] = useState(null); // itemId being attached
+  const getScanLoc = () => {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('wl_scan_loc') || 'null');
+      if (stored && stored.locId && (Date.now() - stored.ts) < 15 * 60 * 1000) return stored.locId;
+    } catch(e) {}
+    return null;
+  };
+  const setScanLoc = (id) => {
+    sessionStorage.setItem('wl_scan_loc', JSON.stringify({ locId: id, ts: Date.now() }));
+    setScanLocId(id);
+  };
+  const [scanLocId, setScanLocId] = useState(() => getScanLoc() || locId);
+  const [showLocPrompt, setShowLocPrompt] = useState(false);
+  const [pendingScanMode, setPendingScanMode] = useState(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [expandedSds, setExpandedSds] = useState(null);
   const [uploadingSds, setUploadingSds] = useState(false);
@@ -5056,7 +5089,11 @@ function Inventory({ locId, locationName, user, locations = [] }) {
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
         {activeTab === "vendors" && (user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAddVendor(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
-        {activeTab === "inventory" && (user?.role === "manager" || user?.role === "owner") && <div style={{ display: "flex", gap: 8 }}><button onClick={() => { setScanMode("inventory"); setShowScanner(true); }} style={{ background: "#f0fdf4", color: "#059669", border: "1.5px solid #bbf7d0", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>📷 Scan</button><button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button></div>}
+        {activeTab === "inventory" && (user?.role === "manager" || user?.role === "owner") && <div style={{ display: "flex", gap: 8 }}><button onClick={() => { (() => {
+                    const cur = getScanLoc();
+                    if (!cur) { setPendingScanMode("inventory"); setScanMode("inventory"); setShowLocPrompt(true); }
+                    else { setScanLocId(cur); setScanMode("inventory"); setShowScanner(true); }
+                  })(); }} style={{ background: "#f0fdf4", color: "#059669", border: "1.5px solid #bbf7d0", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>📷 Scan</button><button onClick={() => setShowAdd(!showAdd)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button></div>}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -5111,9 +5148,43 @@ function Inventory({ locId, locationName, user, locations = [] }) {
      )}
      {activeTab === "inventory" && <>
 
+      {/* Scan Location Prompt */}
+      {showLocPrompt && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 360 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35", marginBottom: 6 }}>Which location are you at?</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>This will be remembered for 15 minutes.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {locations.map(loc => (
+                <button key={loc.id} onClick={() => {
+                  setScanLoc(loc.id);
+                  setShowLocPrompt(false);
+                  if (pendingScanMode) {
+                    setScanMode(pendingScanMode);
+                    setPendingScanMode(null);
+                    setTimeout(() => setShowScanner(true), 50);
+                  }
+                }} style={{ padding: "12px 16px", borderRadius: 10, border: "1px solid #e2e8f0", background: scanLocId === loc.id ? "#f0f9ff" : "#fff", color: "#0f1f35", fontSize: 14, fontWeight: 500, cursor: "pointer", textAlign: "left" }}>
+                  {loc.name}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => { setShowLocPrompt(false); setPendingScanMode(null); }} style={{ marginTop: 14, width: "100%", padding: "10px", borderRadius: 10, border: "none", background: "#f1f5f9", color: "#64748b", fontSize: 14, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* Barcode Scanner Modal */}
       {showScanner && (
         <BarcodeScanner
+          scanLocName={locations.find(l => l.id === scanLocId)?.name || locationName}
+          onChangeLoc={() => {
+            setShowScanner(false);
+            setTimeout(() => {
+              setPendingScanMode(scanMode);
+              setShowLocPrompt(true);
+            }, 200);
+          }}
           onScan={(barcode) => {
             setShowScanner(false);
             setTimeout(() => {
@@ -5173,7 +5244,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
               <button onClick={async () => {
                 const qtyBefore = scanQtyPrompt.item.quantity;
                 const newQty = qtyBefore + scanQty;
-                await updateDoc(doc(db, "locations", locId, "inventory", scanQtyPrompt.item.id), { quantity: newQty, updatedAt: new Date().toISOString() });
+                await updateDoc(doc(db, "locations", scanLocId, "inventory", scanQtyPrompt.item.id), { quantity: newQty, updatedAt: new Date().toISOString() });
                 await logInventoryHistory(scanQtyPrompt.item.id, scanQty >= 0 ? "add" : "remove", scanQty, qtyBefore, newQty, "Scanned");
                 setScanQtyPrompt(null);
                 setScanQty(1);
