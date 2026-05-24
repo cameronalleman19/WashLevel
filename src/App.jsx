@@ -1,6 +1,6 @@
 // Paste into App.tsx, then in Dependencies panel add: firebase (10.8.0)
 
-import React, { useState, useEffect, useRef, createContext, useContext, Component } from "react";
+import React, { useState, useEffect, useRef, createContext, useContext, Component, createPortal } from "react";
 import { Html5QrcodeScanner, Html5Qrcode } from "html5-qrcode";
 import JsBarcode from "jsbarcode";
 import { initializeApp, getApps } from "firebase/app";
@@ -4131,6 +4131,7 @@ function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
  const [selectedTask, setSelectedTask] = useState(null);
  const [taskHistoryEntry, setTaskHistoryEntry] = useState(null);
  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [dayPopup, setDayPopup] = useState(null);
 
  const today = new Date().toISOString().split("T")[0];
  const PRI_COLOR = { high: "#dc2626", medium: "#f59e0b", low: "#10b981" };
@@ -4177,7 +4178,7 @@ function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
  const handleSelectTask = async (t) => {
    setSelectedTask(t);
    setTaskHistoryEntry(null);
-   if (t.status === "done" && locId) {
+   if ((t.status === "done" || t.calType === "completed") && locId) {
      setLoadingDetail(true);
      try {
        const snap = await getDocs(collection(db, "locations", locId, "tasks", t.id, "history"));
@@ -4189,8 +4190,8 @@ function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
    }
  };
 
- const passCount = selectedTask?.checklist?.filter(i => i.result === "pass").length || 0;
- const failCount = selectedTask?.checklist?.filter(i => i.result === "fail").length || 0;
+
+ 
 
  return (
    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 8000, display: "flex", alignItems: "stretch", justifyContent: "stretch" }}>
@@ -4222,24 +4223,24 @@ function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
          {viewMode === "calendar" ? (
            <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", overflow: "hidden" }}>
              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-               {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => <div key={d} style={{ padding: "10px 0", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#64748b" }}>{d}</div>)}
+              {["S","M","T","W","T","F","S"].map((d,i) => <div key={i} style={{ padding: "5px 0", textAlign: "center", fontSize: 11, fontWeight: 700, color: "#64748b" }}>{d}</div>)}
              </div>
              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
-               {Array.from({ length: firstDay }).map((_, i) => <div key={"e"+i} style={{ minHeight: 90, borderRight: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", background: "#fafafa" }} />)}
+               {Array.from({ length: firstDay }).map((_, i) => <div key={"e"+i} style={{ minHeight: 60, borderRight: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", background: "#fafafa" }} />)}
                {Array.from({ length: dim }).map((_, i) => {
                  const day = i + 1;
                  const dateStr = `${year}-${monthStr}-${String(day).padStart(2,"0")}`;
                  const dayTasks = getTasksForDay(day);
                  const isToday = dateStr === today;
                  return (
-                   <div key={day} style={{ minHeight: 90, padding: "6px 8px", borderRight: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", background: isToday ? "#f0f9ff" : "#fff" }}>
-                     <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 500, color: isToday ? "#0ea5e9" : "#334155", marginBottom: 4 }}>{day}</div>
-                     {dayTasks.slice(0, 3).map(t => (
-                       <div key={t.id+t.calType} onClick={() => handleSelectTask(t)} style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: getTaskColor(t), borderRadius: 4, padding: "2px 5px", marginBottom: 2, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                   <div key={day} style={{ minHeight: 60, padding: "3px 3px", borderRight: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", background: isToday ? "#f0f9ff" : "#fff" }}>
+                     <div style={{ fontSize: 11, fontWeight: isToday ? 800 : 500, color: isToday ? "#0ea5e9" : "#334155", marginBottom: 2 }}>{day}</div>
+                     {dayTasks.slice(0, 2).map(t => (
+                       <div key={t.id+t.calType} onClick={() => handleSelectTask(t)} style={{ fontSize: 9, fontWeight: 600, color: "#fff", background: getTaskColor(t), borderRadius: 3, padding: "2px 3px", marginBottom: 2, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                          {t.isEstimated ? "~" : ""}{t.title}
                        </div>
                      ))}
-                     {dayTasks.length > 3 && <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600 }}>+{dayTasks.length - 3} more</div>}
+                     {dayTasks.length > 2 && <div onClick={e => { e.stopPropagation(); setDayPopup({ dateStr, tasks: dayTasks }); }} style={{ fontSize: 9, color: "#6366f1", fontWeight: 700, textAlign: "center", cursor: "pointer" }}>+{dayTasks.length - 2} more</div>}
                    </div>
                  );
                })}
@@ -4271,6 +4272,23 @@ function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
        </div>
      </div>
 
+     {dayPopup && (
+       <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 9600, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, transform: "translateZ(0)" }} onClick={() => setDayPopup(null)}>
+         <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "100%", maxWidth: 380, maxHeight: "60vh", overflow: "auto", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", transform: "translateZ(0)" }} onClick={e => e.stopPropagation()}>
+           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+             <div style={{ fontSize: 15, fontWeight: 700, color: "#0f1f35" }}>{new Date(dayPopup.dateStr + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+             <button onClick={() => setDayPopup(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
+           </div>
+           {dayPopup.tasks.map((t) => (
+             <div key={t.id+t.calType} onClick={() => { setDayPopup(null); handleSelectTask(t); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}>
+               <div style={{ width: 10, height: 10, borderRadius: 2, background: getTaskColor(t), flexShrink: 0 }} />
+               <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{t.title}</div>
+               {t.status === "done" && <span style={{ fontSize: 11, color: "#10b981", fontWeight: 600 }}>Done</span>}
+             </div>
+           ))}
+         </div>
+       </div>
+     )}
      {selectedTask && (
        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9500, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setSelectedTask(null)}>
          <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 460, maxWidth: "95vw", maxHeight: "85vh", overflow: "auto", boxShadow: "0 8px 40px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
