@@ -1737,6 +1737,13 @@ return (
 <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
 <Pill label={task.category} bg={CAT[task.category]?.bg} color={CAT[task.category]?.color} />
 <Pill label={task.priority} bg={PRI[task.priority]?.bg} color={PRI[task.priority]?.color} />
+{task.assignedUserName ? (
+  <span style={{ fontSize: 11, color: "#0369a1", background: "#e0f2fe", padding: "1px 7px", borderRadius: 99, fontWeight: 600 }}>{task.assignedUserName}</span>
+) : task.shift && task.shift !== "everyone" ? (
+  <span style={{ fontSize: 11, color: "#6b7280", background: "#f3f4f6", padding: "1px 7px", borderRadius: 99, fontWeight: 600, textTransform: "capitalize" }}>{task.shift}</span>
+) : task.shift === "everyone" ? (
+  <span style={{ fontSize: 11, color: "#6b7280", background: "#f3f4f6", padding: "1px 7px", borderRadius: 99, fontWeight: 600 }}>All</span>
+) : null}
 <span style={{ fontSize: 11, color: "#94a3b8" }}>{task.due && task.due.includes("-") ? new Date(task.due + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : task.due}</span>
 {recurrenceLabel && <span style={{ fontSize: 11, color: "#6366f1", background: "#ede9fe", padding: "1px 7px", borderRadius: 99 }}>{recurrenceLabel}</span>}
 {carsDueLabel && <span style={{ fontSize: 11, color: "#d97706", background: "#fef3c7", padding: "1px 7px", borderRadius: 99 }}>{carsDueLabel}</span>}
@@ -1950,7 +1957,10 @@ const [fSort, setFSort] = useState("date");
 const [inspectionTask, setInspectionTask] = useState(null);
 const [showArchived, setShowArchived] = useState(false);
 const [showHistory, setShowHistory] = useState(false);
+const [showSchedule, setShowSchedule] = useState(false);
+const [showUpcoming, setShowUpcoming] = useState(false);
 const isManager = user?.role === "manager" || user?.role === "owner";
+const isOwner = user?.role === "owner";
 const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
 const isTech = user?.role === "technician";
@@ -1981,6 +1991,32 @@ const filteredSorted = [...filtered].sort((a, b) => {
   if (fSort === "priority") return (PRI_ORDER[a.priority] ?? 1) - (PRI_ORDER[b.priority] ?? 1);
   return (a.due || "").localeCompare(b.due || "");
 });
+// Upcoming threshold comes from user prefs (owner sets, all see)
+const upcomingDaysThreshold = user?.upcomingDaysThreshold ?? 30;
+const upcomingCarsThreshold = user?.upcomingCarsThreshold ?? 1000;
+
+const today2 = new Date().toISOString().split("T")[0];
+
+const isUpcoming = (t) => {
+  if (t.status === "done" || t.archived) return false;
+  // Car-count based: check cars remaining
+  if (t.nextCarsDue && !t.due?.includes("-")) {
+    const eqObj = equipment?.find(e => e.id === t.equipmentId);
+    const currentCars = eqObj?.carsCount || 0;
+    const carsRemaining = t.nextCarsDue - currentCars;
+    return carsRemaining > upcomingCarsThreshold;
+  }
+  // Date based: check days out
+  if (t.due && t.due.includes("-")) {
+    const daysOut = Math.ceil((new Date(t.due + "T12:00:00") - new Date()) / (1000 * 60 * 60 * 24));
+    return daysOut > upcomingDaysThreshold;
+  }
+  return false;
+};
+
+const activeTasks = filteredSorted.filter(t => !isUpcoming(t));
+const upcomingTasks = filteredSorted.filter(t => isUpcoming(t));
+
 const done = mine.filter(t => t.status === "done").length;
 const pct = mine.length ? Math.round(done / mine.length * 100) : 0;
 
@@ -1990,13 +2026,18 @@ const chip = (val, cur, set, label) => (
 
 return (
 <div>
-<div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-<div>
-<div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>"Tasks"</div>
-<div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
-</div>
-<button onClick={onAddTask} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, WebkitAppearance: "none" }}>+ Add Task</button>
-<button onClick={() => setShowHistory(true)} style={{ background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Task History</button>
+<div style={{ marginBottom: 20 }}>
+  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+    <div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Tasks</div>
+      <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
+    </div>
+    <button onClick={onAddTask} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, WebkitAppearance: "none" }}>+ Add Task</button>
+  </div>
+  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+    <button onClick={() => setShowHistory(true)} style={{ background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Task History</button>
+    <button onClick={() => setShowSchedule(true)} style={{ background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Schedule</button>
+  </div>
 </div>
 <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
   <select value={fStatus} onChange={e => setFS(e.target.value)} style={{ padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", cursor: "pointer", outline: "none" }}>
@@ -2020,17 +2061,58 @@ return (
   <div>
     {filtered.length === 0 ? (
       <div style={{ textAlign: "center", padding: "40px 20px" }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>No tasks yet</div>
         <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Add your first task to get started tracking work at this location.</div>
         <button onClick={onAddTask} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add First Task</button>
       </div>
-    ) : filteredSorted.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} highlightTaskId={highlightTaskId} onClearHighlight={onClearHighlight} />)}
+    ) : (
+      <>
+        {activeTasks.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} highlightTaskId={highlightTaskId} onClearHighlight={onClearHighlight} />)}
+        {upcomingTasks.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: showUpcoming ? "10px 10px 0 0" : 10, cursor: "pointer" }} onClick={() => setShowUpcoming(u => !u)}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Upcoming</span>
+                <span style={{ background: "#e2e8f0", color: "#64748b", borderRadius: 99, padding: "1px 9px", fontSize: 12, fontWeight: 600 }}>{upcomingTasks.length}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {isOwner && (
+                  <button onClick={e => { e.stopPropagation(); setShowSchedule("threshold"); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "2px 4px", display: "flex", alignItems: "center" }} title="Upcoming threshold settings">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+                  </button>
+                )}
+                <span style={{ color: "#94a3b8", fontSize: 18, lineHeight: 1 }}>{showUpcoming ? "−" : "+"}</span>
+              </div>
+            </div>
+            {showUpcoming && (
+              <div style={{ border: "1px solid #e2e8f0", borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+                {upcomingTasks.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onSaveNote={onSaveNote} locId={locId} onSelectMaterials={onSelectMaterials} onStartInspection={setInspectionTask} equipment={equipment} onEdit={onEdit} highlightTaskId={highlightTaskId} onClearHighlight={onClearHighlight} />)}
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    )}
     {showHistory && (
   <TaskHistoryModal
     tasks={tasks}
     locId={locId}
     onClose={() => setShowHistory(false)}
+  />
+)}
+{showSchedule === "threshold" && isOwner && (
+  <UpcomingThresholdModal
+    user={user}
+    onClose={() => setShowSchedule(false)}
+  />
+)}
+{showSchedule === true && (
+  <TaskScheduleModal
+    tasks={tasks}
+    locId={locId}
+    equipment={equipment}
+    locationName={locationName}
+    onClose={() => setShowSchedule(false)}
   />
 )}
 {inspectionTask && locId && (
@@ -3994,6 +4076,286 @@ function TaskHistoryDetailModal({ entry, onClose }) {
       </div>
     </div>
   );
+}
+
+
+function UpcomingThresholdModal({ user, onClose }) {
+  const [days, setDays] = useState(user?.upcomingDaysThreshold ?? 30);
+  const [cars, setCars] = useState(user?.upcomingCarsThreshold ?? 1000);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        upcomingDaysThreshold: days,
+        upcomingCarsThreshold: cars,
+      });
+    } catch(e) { console.error(e); }
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 340, boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#0f1f35" }}>Upcoming Threshold</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>x</button>
+        </div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 20 }}>Tasks beyond these thresholds are collapsed into the Upcoming section. This applies to all users on your account.</div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 8 }}>Hide if due more than <span style={{ color: "#0f1f35", fontWeight: 700 }}>{days} days</span> out</div>
+          <input type="range" min={7} max={180} step={1} value={days} onChange={e => setDays(Number(e.target.value))} style={{ width: "100%", accentColor: "#0f1f35" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+            <span>7 days</span><span>180 days</span>
+          </div>
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 8 }}>Hide if more than <span style={{ color: "#0f1f35", fontWeight: 700 }}>{cars.toLocaleString()} cars</span> away</div>
+          <input type="range" min={100} max={5000} step={100} value={cars} onChange={e => setCars(Number(e.target.value))} style={{ width: "100%", accentColor: "#0f1f35" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+            <span>100 cars</span><span>5,000 cars</span>
+          </div>
+        </div>
+        <button onClick={handleSave} disabled={saving} style={{ width: "100%", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{saving ? "Saving..." : "Save"}</button>
+      </div>
+    </div>
+  );
+}
+
+function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
+ const { user } = useAuth();
+ const [viewMode, setViewMode] = useState("calendar");
+ const [calMonth, setCalMonth] = useState(() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() }; });
+ const [selectedTask, setSelectedTask] = useState(null);
+ const [taskHistoryEntry, setTaskHistoryEntry] = useState(null);
+ const [loadingDetail, setLoadingDetail] = useState(false);
+
+ const today = new Date().toISOString().split("T")[0];
+ const PRI_COLOR = { high: "#dc2626", medium: "#f59e0b", low: "#10b981" };
+
+ const estimateDueDate = (task) => {
+   if (task.due && task.due.includes("-")) return { date: task.due, isEstimated: false };
+   if (!task.nextCarsDue) return null;
+   const eq = equipment?.find(e => e.id === task.equipmentId);
+   if (!eq) return null;
+   const currentCars = eq.carsCount || 0;
+   const carsRemaining = task.nextCarsDue - currentCars;
+   if (carsRemaining <= 0) return { date: today, isEstimated: true };
+   const daysOut = Math.ceil(carsRemaining / 150);
+   const est = new Date();
+   est.setDate(est.getDate() + daysOut);
+   return { date: est.toISOString().split("T")[0], isEstimated: true };
+ };
+
+ const scheduledTasks = tasks
+   .filter(t => !t.archived && t.status !== "done")
+   .map(t => { const res = estimateDueDate(t); if (!res) return null; return { ...t, resolvedDue: res.date, isEstimated: res.isEstimated, calType: "scheduled" }; })
+   .filter(Boolean);
+
+ const completedTasks = tasks
+   .filter(t => t.status === "done" && t.completedAt)
+   .map(t => ({ ...t, resolvedDue: t.completedAt.split("T")[0], isEstimated: false, calType: "completed" }));
+
+ const allCalTasks = [...scheduledTasks, ...completedTasks];
+
+ const getTaskColor = (t) => {
+   if (t.calType === "completed") return "#10b981";
+   if (t.resolvedDue < today) return "#dc2626";
+   return "#6366f1";
+ };
+
+ const { year, month } = calMonth;
+ const dim = new Date(year, month + 1, 0).getDate();
+ const firstDay = new Date(year, month, 1).getDay();
+ const monthStr = String(month + 1).padStart(2, "0");
+ const monthLabel = new Date(year, month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+ const getTasksForDay = (day) => { const ds = `${year}-${monthStr}-${String(day).padStart(2,"0")}`; return allCalTasks.filter(t => t.resolvedDue === ds); };
+ const listTasks = [...allCalTasks].sort((a, b) => a.resolvedDue.localeCompare(b.resolvedDue));
+
+ const handleSelectTask = async (t) => {
+   setSelectedTask(t);
+   setTaskHistoryEntry(null);
+   if (t.status === "done" && locId) {
+     setLoadingDetail(true);
+     try {
+       const snap = await getDocs(collection(db, "locations", locId, "tasks", t.id, "history"));
+       const entries = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
+       const match = entries.find(e => e.completedAt?.startsWith(t.completedAt?.split("T")[0])) || entries[0];
+       setTaskHistoryEntry(match || null);
+     } catch(e) { console.error(e); }
+     setLoadingDetail(false);
+   }
+ };
+
+ const passCount = selectedTask?.checklist?.filter(i => i.result === "pass").length || 0;
+ const failCount = selectedTask?.checklist?.filter(i => i.result === "fail").length || 0;
+
+ return (
+   <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 8000, display: "flex", alignItems: "stretch", justifyContent: "stretch" }}>
+     <div style={{ background: "#f8fafc", width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+       <div style={{ background: "#0f1f35", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+           <button onClick={onClose} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 0 }}>x</button>
+           <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Task Schedule</div>
+           <div style={{ fontSize: 13, color: "#94a3b8" }}>{locationName}</div>
+         </div>
+         <div style={{ display: "flex", background: "#1e3a5f", borderRadius: 8, overflow: "hidden" }}>
+           <button onClick={() => setViewMode("calendar")} style={{ padding: "7px 16px", border: "none", background: viewMode === "calendar" ? "#fff" : "transparent", color: viewMode === "calendar" ? "#0f1f35" : "#94a3b8", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Calendar</button>
+           <button onClick={() => setViewMode("list")} style={{ padding: "7px 16px", border: "none", background: viewMode === "list" ? "#fff" : "transparent", color: viewMode === "list" ? "#0f1f35" : "#94a3b8", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>List</button>
+         </div>
+       </div>
+       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap" }}>
+         {viewMode === "calendar" && (<>
+           <button onClick={() => setCalMonth(p => { const d = new Date(p.year, p.month-1, 1); return { year: d.getFullYear(), month: d.getMonth() }; })} style={{ background: "#f1f5f9", border: "none", borderRadius: 7, padding: "6px 14px", cursor: "pointer", fontWeight: 700, color: "#334155" }}>{"<"}</button>
+           <div style={{ fontSize: 15, fontWeight: 700, color: "#0f1f35", minWidth: 160, textAlign: "center" }}>{monthLabel}</div>
+           <button onClick={() => setCalMonth(p => { const d = new Date(p.year, p.month+1, 1); return { year: d.getFullYear(), month: d.getMonth() }; })} style={{ background: "#f1f5f9", border: "none", borderRadius: 7, padding: "6px 14px", cursor: "pointer", fontWeight: 700, color: "#334155" }}>{">"}</button>
+         </>)}
+         <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>
+           <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#334155" }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "#6366f1", display: "inline-block" }} />Scheduled</span>
+           <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#334155" }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "#dc2626", display: "inline-block" }} />Overdue</span>
+           <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#334155" }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "#10b981", display: "inline-block" }} />Completed</span>
+         </div>
+       </div>
+       <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
+         {viewMode === "calendar" ? (
+           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+               {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => <div key={d} style={{ padding: "10px 0", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#64748b" }}>{d}</div>)}
+             </div>
+             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+               {Array.from({ length: firstDay }).map((_, i) => <div key={"e"+i} style={{ minHeight: 90, borderRight: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", background: "#fafafa" }} />)}
+               {Array.from({ length: dim }).map((_, i) => {
+                 const day = i + 1;
+                 const dateStr = `${year}-${monthStr}-${String(day).padStart(2,"0")}`;
+                 const dayTasks = getTasksForDay(day);
+                 const isToday = dateStr === today;
+                 return (
+                   <div key={day} style={{ minHeight: 90, padding: "6px 8px", borderRight: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", background: isToday ? "#f0f9ff" : "#fff" }}>
+                     <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 500, color: isToday ? "#0ea5e9" : "#334155", marginBottom: 4 }}>{day}</div>
+                     {dayTasks.slice(0, 3).map(t => (
+                       <div key={t.id+t.calType} onClick={() => handleSelectTask(t)} style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: getTaskColor(t), borderRadius: 4, padding: "2px 5px", marginBottom: 2, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                         {t.isEstimated ? "~" : ""}{t.title}
+                       </div>
+                     ))}
+                     {dayTasks.length > 3 && <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600 }}>+{dayTasks.length - 3} more</div>}
+                   </div>
+                 );
+               })}
+             </div>
+           </div>
+         ) : (
+           <div>
+             {listTasks.length === 0 ? <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8", fontSize: 14 }}>No scheduled tasks</div> : listTasks.map(t => {
+               const isOverdue = t.resolvedDue < today && t.status !== "done";
+               return (
+                 <div key={t.id+t.calType} onClick={() => handleSelectTask(t)} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: getTaskColor(t), flexShrink: 0 }} />
+                   <div style={{ flex: 1, minWidth: 0 }}>
+                     <div style={{ fontSize: 14, fontWeight: 600, color: t.status === "done" ? "#94a3b8" : "#0f1f35", textDecoration: t.status === "done" ? "line-through" : "none" }}>{t.title}</div>
+                     <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+                       {t.calType === "completed" ? "Completed " : (t.isEstimated ? "~" : "Due ")}
+                       {new Date(t.resolvedDue + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                       {t.isEstimated && <span style={{ marginLeft: 6, color: "#d97706", fontSize: 11 }}>estimated</span>}
+                       {isOverdue && <span style={{ marginLeft: 6, color: "#dc2626", fontSize: 11, fontWeight: 700 }}>overdue</span>}
+                     </div>
+                   </div>
+                   {t.priority && <span style={{ fontSize: 11, fontWeight: 700, color: PRI_COLOR[t.priority], background: "#f8fafc", borderRadius: 6, padding: "2px 8px" }}>{t.priority}</span>}
+                   {t.status === "done" && <span style={{ fontSize: 11, fontWeight: 600, color: "#10b981" }}>Done</span>}
+                 </div>
+               );
+             })}
+           </div>
+         )}
+       </div>
+     </div>
+
+     {selectedTask && (
+       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9500, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setSelectedTask(null)}>
+         <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 460, maxWidth: "95vw", maxHeight: "85vh", overflow: "auto", boxShadow: "0 8px 40px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
+           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+             <div style={{ fontSize: 18, fontWeight: 700, color: "#0f1f35" }}>{selectedTask.title}</div>
+             <button onClick={() => setSelectedTask(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>x</button>
+           </div>
+           {loadingDetail && <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 12 }}>Loading...</div>}
+
+           {taskHistoryEntry && (
+             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+               <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px 16px" }}>
+                 <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Completed</div>
+                 <div style={{ fontSize: 15, fontWeight: 700, color: "#0f1f35" }}>{taskHistoryEntry.completedAt ? new Date(taskHistoryEntry.completedAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }) : "-"}</div>
+               </div>
+               <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px 16px" }}>
+                 <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Completed By</div>
+                 <div style={{ fontSize: 15, fontWeight: 700, color: "#0f1f35" }}>{taskHistoryEntry.completedBy || "-"}</div>
+               </div>
+               {selectedTask.category && (
+                 <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px 16px" }}>
+                   <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Category</div>
+                   <div style={{ fontSize: 15, fontWeight: 700, color: "#0f1f35", textTransform: "capitalize" }}>{selectedTask.category}</div>
+                 </div>
+               )}
+             </div>
+           )}
+           {!taskHistoryEntry && !loadingDetail && (
+             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+               {selectedTask.status && <span style={{ fontSize: 12, fontWeight: 600, background: "#f1f5f9", color: "#334155", borderRadius: 7, padding: "3px 10px" }}>{selectedTask.status}</span>}
+               {selectedTask.priority && <span style={{ fontSize: 12, fontWeight: 600, background: PRI_COLOR[selectedTask.priority]+"22", color: PRI_COLOR[selectedTask.priority], borderRadius: 7, padding: "3px 10px" }}>{selectedTask.priority} priority</span>}
+               {selectedTask.category && <span style={{ fontSize: 12, fontWeight: 600, background: "#f1f5f9", color: "#334155", borderRadius: 7, padding: "3px 10px" }}>{selectedTask.category}</span>}
+               {selectedTask.isEstimated && <span style={{ fontSize: 12, fontWeight: 600, background: "#fef3c7", color: "#d97706", borderRadius: 7, padding: "3px 10px" }}>estimated date</span>}
+             </div>
+           )}
+           {selectedTask.resolvedDue && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>{selectedTask.calType === "completed" ? "Completed: " : "Due: "}{selectedTask.isEstimated ? "~" : ""}{new Date(selectedTask.resolvedDue + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>}
+           {selectedTask.nextCarsDue && <div style={{ fontSize: 13, color: "#d97706", marginBottom: 8 }}>Due at {Number(selectedTask.nextCarsDue).toLocaleString()} cars</div>}
+           {selectedTask.assignedUserName && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>Assigned: {selectedTask.assignedUserName}</div>}
+           {selectedTask.recurrence && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>Recurrence: {selectedTask.recurrence}</div>}
+           {selectedTask.instructions && <div style={{ fontSize: 13, color: "#334155", marginBottom: 12, lineHeight: 1.6 }}>{selectedTask.instructions}</div>}
+           {taskHistoryEntry?.note && <div style={{ fontSize: 13, color: "#334155", background: "#f8fafc", borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>{taskHistoryEntry.note}</div>}
+           {(() => {
+              const inspItems = taskHistoryEntry?.items || selectedTask.checklist;
+              if (!inspItems?.length) return null;
+              const pCount = inspItems.filter(i => i.result === "good").length;
+              const fCount = inspItems.filter(i => i.result === "fail").length;
+              const mCount = inspItems.filter(i => i.result === "monitor").length;
+              return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Inspection Results</div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                    {pCount > 0 && <span style={{ background: "#dcfce7", color: "#15803d", borderRadius: 99, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>{pCount} Passed</span>}
+                    {mCount > 0 && <span style={{ background: "#fef9c3", color: "#854d0e", borderRadius: 99, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>{mCount} Monitor</span>}
+                    {fCount > 0 && <span style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 99, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>{fCount} Failed</span>}
+                  </div>
+                  {inspItems.map((item, idx) => (
+                    <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 0", borderBottom: "1px solid #f1f5f9" }}>
+                      <div style={{ width: 24, height: 24, borderRadius: "50%", background: item.result === "good" ? "#dcfce7" : item.result === "fail" ? "#fee2e2" : "#fef9c3", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                        {item.result === "good" && <span style={{ color: "#15803d", fontSize: 13, fontWeight: 700 }}>✓</span>}
+                        {item.result === "fail" && <span style={{ color: "#dc2626", fontSize: 13, fontWeight: 700 }}>✕</span>}
+                        {item.result === "monitor" && <span style={{ color: "#854d0e", fontSize: 13, fontWeight: 700 }}>!</span>}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{item.label}</div>
+                        {item.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>{item.note}</div>}
+                        {item.photoUrl && <img src={item.photoUrl} alt="inspection" onClick={() => window.open(item.photoUrl)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, marginTop: 8, cursor: "pointer", border: "1px solid #e2e8f0" }} />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+           {taskHistoryEntry?.photos?.length > 0 && (
+             <div style={{ marginTop: 14 }}>
+               <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Photos</div>
+               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                 {taskHistoryEntry.photos.map((url, i) => <img key={i} src={url} alt="photo" onClick={() => window.open(url)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, cursor: "pointer", border: "1px solid #e2e8f0" }} />)}
+               </div>
+             </div>
+           )}
+         </div>
+       </div>
+     )}
+   </div>
+ );
 }
 
 function TaskHistoryModal({ tasks, onClose, locId }) {
