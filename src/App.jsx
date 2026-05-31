@@ -186,7 +186,7 @@ const TrashIcon = () => (
 const CAT = { supplies: { bg: "#fef3c7", color: "#b45309" }, equipment: { bg: "#dbeafe", color: "#1d4ed8" }, cleaning: { bg: "#d1fae5", color: "#065f46" }, chemicals: { bg: "#ede9fe", color: "#5b21b6" }, inspection: { bg: "#f0fdf4", color: "#15803d" } };
 const PRI = { high: { bg: "#fee2e2", color: "#991b1b" }, medium: { bg: "#fef3c7", color: "#92400e" }, low: { bg: "#f1f5f9", color: "#64748b" } };
 const STS = { pending: { bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8", label: "Pending" }, "in-progress": { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b", label: "In Progress" }, "on-hold": { bg: "#fce7f3", color: "#be185d", dot: "#ec4899", label: "On Hold" }, done: { bg: "#d1fae5", color: "#059669", dot: "#10b981", label: "Done" } };
-const EQS = { ok: { bg: "#d1fae5", color: "#059669", icon: "?", label: "OK" }, warning: { bg: "#fef3c7", color: "#d97706", icon: "!", label: "Warning" }, error: { bg: "#fee2e2", color: "#dc2626", icon: "?", label: "Alert" } };
+const EQS = { ok: { bg: "#d1fae5", color: "#059669", icon: "", label: "OK" }, warning: { bg: "#fef3c7", color: "#d97706", icon: "!", label: "Warning" }, error: { bg: "#fee2e2", color: "#dc2626", icon: "", label: "Alert" } };
 
 //  RESPONSIVE HOOK
 function useIsMobile() {
@@ -1326,7 +1326,7 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
                   <div key={eq.id} onClick={() => onNavigate("equipment")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: eq.status !== "ok" ? s.bg + "80" : "#fafafa", borderRadius: 8, border: `1px solid ${eq.status !== "ok" ? s.color + "40" : "#e2e8f0"}`, marginBottom: 7, cursor: "pointer" }}
                     onMouseEnter={e => e.currentTarget.style.background = "#e0f2fe"}
                     onMouseLeave={e => e.currentTarget.style.background = eq.status !== "ok" ? (EQS[eq.status] || EQS.ok).bg + "80" : "#fafafa"}>
-                    <span style={{ fontWeight: 700, color: s.color, fontSize: 13, width: 16, textAlign: "center" }}>{s.icon}</span>
+                    
                     <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#334155" }}>{eq.name}</span>
                     <span style={{ fontSize: 11, color: "#94a3b8" }}>{eq.nextService}</span>
                     <Pill label={s.label} bg={s.bg} color={s.color} />
