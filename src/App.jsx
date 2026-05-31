@@ -6113,6 +6113,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <button onClick={() => { setModalItem(null); setEditingId(null); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => handleSaveEdit(modalItem.id)} disabled={savingEdit} style={{ flex: 1, background: savedEdit ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : savedEdit ? "Saved!" : "Save"}</button>
             </div>
             <button onClick={() => { setTransferItem(modalItem); setModalItem(null); setEditingId(null); }} style={{ width: "100%", background: "#ede9fe", color: "#6366f1", border: "1px solid #c4b5fd", borderRadius: 6, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Transfer Stock to Another Location</button>
           </div>
