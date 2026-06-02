@@ -5126,7 +5126,7 @@ function InventoryTransferModal({ item, fromLocId, locations, onClose, user }) {
         type: "transfer_out", quantity: -qty, newQuantity: newFromQty,
         toLocation: toLoc?.name || toLocId,
         note: "Transferred " + qty + " " + item.unit + " to " + (toLoc?.name || toLocId),
-        timestamp: now, by: user?.name || user?.email || "Unknown"
+        timestamp: now, by: user?.name || user?.email || "Unknown", userName: user?.name || user?.email || "Unknown"
       });
 
       // Check if item exists at destination
@@ -5148,7 +5148,7 @@ function InventoryTransferModal({ item, fromLocId, locations, onClose, user }) {
           type: "transfer_in", quantity: qty, newQuantity: newToQty,
           fromLocation: fromLoc?.name || fromLocId,
           note: "Received " + qty + " " + item.unit + " from " + (fromLoc?.name || fromLocId),
-          timestamp: now, by: user?.name || user?.email || "Unknown"
+          timestamp: now, by: user?.name || user?.email || "Unknown", userName: user?.name || user?.email || "Unknown"
         });
       } else {
         // Create new item at destination
@@ -5161,7 +5161,7 @@ function InventoryTransferModal({ item, fromLocId, locations, onClose, user }) {
           type: "transfer_in", quantity: qty, newQuantity: qty,
           fromLocation: fromLoc?.name || fromLocId,
           note: "Received " + qty + " " + item.unit + " from " + (fromLoc?.name || fromLocId),
-          timestamp: now, by: user?.name || user?.email || "Unknown"
+          timestamp: now, by: user?.name || user?.email || "Unknown", userName: user?.name || user?.email || "Unknown"
         });
       }
 
@@ -5198,7 +5198,7 @@ function InventoryTransferModal({ item, fromLocId, locations, onClose, user }) {
             <button onClick={() => setQty(q => Math.max(1, q - 1))}
               style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid #e2e8f0", background: "#f1f5f9", fontSize: 18, cursor: "pointer", fontWeight: 700 }}>-</button>
             <input type="number" min="1" max={item.quantity} value={qty} onChange={e => setQty(Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
-              style={{ flex: 1, padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 18, fontWeight: 700, textAlign: "center", outline: "none", color: "#0f1f35" }} />
+              style={{ flex: 1, padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 18, fontWeight: 700, textAlign: "center", outline: "none", color: "#0f1f35", background: "#fff" }} />
             <button onClick={() => setQty(q => Math.min(item.quantity, q + 1))}
               style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid #e2e8f0", background: "#f1f5f9", fontSize: 18, cursor: "pointer", fontWeight: 700 }}>+</button>
             <span style={{ fontSize: 13, color: "#64748b" }}>{item.unit}</span>
@@ -5692,7 +5692,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                       <span style={{ fontSize: 12, color: "#334155", fontWeight: 600 }}>{h.quantityBefore} → {h.quantityAfter}</span>
                       {h.note && <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic" }}>{h.note}</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{h.userName} · {new Date(h.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{h.userName || h.by || "Unknown"} · {new Date(h.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
                   </div>
                 </div>
               ))}
