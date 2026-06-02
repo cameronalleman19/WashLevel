@@ -1538,6 +1538,7 @@ useEffect(() => {
 const [note, setNote] = useState(task.note || "");
 const [showHistory, setShowHistory] = useState(false);
 const [history, setHistory] = useState([]);
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
 const [attachments, setAttachments] = useState(task.attachments || []);
 const [uploading, setUploading] = useState(false);
 const [uploadError, setUploadError] = useState("");
@@ -1565,9 +1566,17 @@ const btnC = task.status === "pending" ? "#6366f1" : task.status === "in-progres
 
 const loadHistory = async () => {
 if (!locId) return;
-const snap = await getDocs(collection(db, "locations", locId, "tasks", task.id, "history"));
-const entries = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.completedAt > a.completedAt ? 1 : -1);
-setHistory(entries);
+try {
+  const tasksSnap = await getDocs(collection(db, "locations", locId, "tasks"));
+  const matchingIds = tasksSnap.docs.filter(d => d.data().title === task.title).map(d => d.id);
+  const allEntries = [];
+  for (const tid of matchingIds) {
+    const snap = await getDocs(collection(db, "locations", locId, "tasks", tid, "history"));
+    snap.docs.forEach(d => allEntries.push({ id: d.id, ...d.data() }));
+  }
+  allEntries.sort((a, b) => (b.completedAt || "") > (a.completedAt || "") ? 1 : -1);
+  setHistory(allEntries);
+} catch(e) { console.error(e); }
 setShowHistory(true);
 };
 
@@ -1580,6 +1589,13 @@ if (next === "done" && task.requirePhoto && !(task.mediaUrls?.length) && !(task.
 if (next === "done" && locId) {
 const histId = "h" + Date.now();
 const duration = task.startedAt ? Math.round((Date.now() - new Date(task.startedAt).getTime()) / 60000) : null;
+let carCountAtCompletion = null;
+if (task.equipmentId) {
+  try {
+    const eqSnap = await getDoc(doc(db, "locations", locId, "equipment", task.equipmentId));
+    if (eqSnap.exists()) carCountAtCompletion = eqSnap.data().carsCount || null;
+  } catch(e) {}
+}
 await setDoc(doc(db, "locations", locId, "tasks", task.id, "history", histId), {
 completedAt: new Date().toISOString(),
 completedBy: user?.name || user?.email || "Unknown",
@@ -1587,6 +1603,13 @@ completedById: user?.uid,
 note: note,
 duration: duration,
 date: new Date().toLocaleDateString(),
+photos: task.mediaUrls || [],
+attachments: task.attachments || [],
+items: task.checklist || [],
+carCountAtCompletion,
+equipmentId: task.equipmentId || null,
+taskTitle: task.title,
+category: task.category || null,
 });
 await updateDoc(doc(db, "locations", locId, "tasks", task.id), {
 status: "done",
@@ -1932,15 +1955,82 @@ View History
 {history.length === 0 ? (
 <div style={{ fontSize: 12, color: "#94a3b8" }}>No history yet.</div>
 ) : history.map(h => (
-<div key={h.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, padding: "8px 12px", marginBottom: 6, fontSize: 12 }}>
+<div key={h.id} onClick={() => setSelectedHistoryEntry(h)} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, padding: "8px 12px", marginBottom: 6, fontSize: 12, cursor: "pointer" }}>
 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
 <span style={{ fontWeight: 600, color: "#334155" }}>{h.date}</span>
 <span style={{ color: "#94a3b8" }}>{h.duration != null ? h.duration + " min" : ""}</span>
 </div>
 <div style={{ color: "#64748b" }}><b>By:</b> {h.completedBy}</div>
 {h.note && <div style={{ color: "#334155", marginTop: 4, fontStyle: "italic" }}>{h.note}</div>}
+{h.carCountAtCompletion != null && <div style={{ color: "#0369a1", marginTop: 3, fontSize: 11, fontWeight: 600 }}>Car count: {Number(h.carCountAtCompletion).toLocaleString()}</div>}
 </div>
 ))}
+</div>
+)}
+{selectedHistoryEntry && (
+<div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 11000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setSelectedHistoryEntry(null)}>
+<div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 440, maxWidth: "95vw", maxHeight: "85vh", overflow: "auto", boxShadow: "0 8px 40px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+<div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35" }}>{selectedHistoryEntry.taskTitle || task.title}</div>
+<button onClick={() => setSelectedHistoryEntry(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>x</button>
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+<div style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 14px" }}>
+<div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Completed</div>
+<div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35" }}>{selectedHistoryEntry.completedAt ? new Date(selectedHistoryEntry.completedAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }) : selectedHistoryEntry.date || "-"}</div>
+</div>
+<div style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 14px" }}>
+<div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Completed By</div>
+<div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35" }}>{selectedHistoryEntry.completedBy || "-"}</div>
+</div>
+{selectedHistoryEntry.duration != null && (
+<div style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 14px" }}>
+<div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Duration</div>
+<div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35" }}>{selectedHistoryEntry.duration} min</div>
+</div>
+)}
+{selectedHistoryEntry.carCountAtCompletion != null && (
+<div style={{ background: "#f0f9ff", borderRadius: 10, padding: "10px 14px" }}>
+<div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", textTransform: "uppercase", marginBottom: 4 }}>Car Count</div>
+<div style={{ fontSize: 14, fontWeight: 700, color: "#0369a1" }}>{Number(selectedHistoryEntry.carCountAtCompletion).toLocaleString()}</div>
+</div>
+)}
+</div>
+{selectedHistoryEntry.note && <div style={{ fontSize: 13, color: "#334155", background: "#f8fafc", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontStyle: "italic" }}>{selectedHistoryEntry.note}</div>}
+{selectedHistoryEntry.items?.length > 0 && (
+<div style={{ marginBottom: 12 }}>
+<div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Inspection Results</div>
+{selectedHistoryEntry.items.map((item, idx) => (
+<div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
+<div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, background: item.result === "good" ? "#dcfce7" : item.result === "fail" ? "#fee2e2" : "#fef9c3", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: item.result === "good" ? "#15803d" : item.result === "fail" ? "#dc2626" : "#854d0e" }}>
+{item.result === "good" ? "✓" : item.result === "fail" ? "✕" : "!"}
+</div>
+<div style={{ flex: 1 }}>
+<div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35" }}>{item.label}</div>
+{item.note && <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{item.note}</div>}
+{item.photoUrl && <img src={item.photoUrl} alt="" onClick={() => window.open(item.photoUrl)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, marginTop: 6, cursor: "pointer" }} />}
+</div>
+</div>
+))}
+</div>
+)}
+{selectedHistoryEntry.photos?.length > 0 && (
+<div style={{ marginBottom: 12 }}>
+<div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Photos</div>
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+{selectedHistoryEntry.photos.map((url, i) => <img key={i} src={url} alt="" onClick={() => window.open(url)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, cursor: "pointer", border: "1px solid #e2e8f0" }} />)}
+</div>
+</div>
+)}
+{selectedHistoryEntry.attachments?.length > 0 && (
+<div>
+<div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Attachments</div>
+{selectedHistoryEntry.attachments.map((a, i) => (
+<a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 12, color: "#0369a1", marginBottom: 4 }}>{a.name || "File " + (i+1)}</a>
+))}
+</div>
+)}
+</div>
 </div>
 )}
 </div>
@@ -4769,7 +4859,7 @@ const [shift, setShift] = useState(editTask?.shift || "everyone");
 const [due, setDue] = useState(editTask?.due || new Date().toISOString().split("T")[0]);
 const [saving, setSaving] = useState(false);
   const [requirePhoto, setRequirePhoto] = useState(editTask?.requirePhoto || false);
-  const [equipmentId, setEquipmentId] = useState(preset?.id || "");
+  const [equipmentId, setEquipmentId] = useState(editTask?.equipmentId || preset?.id || "");
   const [equipmentList, setEquipmentList] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [assignTo, setAssignTo] = useState(editTask?.assignedUserId || editTask?.shift || "everyone");
@@ -4791,7 +4881,7 @@ const [saving, setSaving] = useState(false);
     });
   }, [locId]);
 
-  const [recurrence, setRecurrence] = useState("");
+  const [recurrence, setRecurrence] = useState(editTask?.recurrence || "");
 const [instructions, setInstructions] = useState(editTask?.instructions || "");
 const [customCars, setCustomCars] = useState("");
 const [checklistItems, setChecklistItems] = useState([]);
@@ -4876,7 +4966,7 @@ return (
 <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
 <div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", overflowY: "auto", maxHeight: "90vh" }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-<div style={{ fontWeight: 700, fontSize: 17, color: "#0f1f35" }}>Add New Task</div>
+<div style={{ fontWeight: 700, fontSize: 17, color: "#0f1f35" }}>{editTask ? "Edit Task" : "Add New Task"}</div>
 <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>x</button>
 </div>
 <form onSubmit={handleSubmit}>
@@ -5027,7 +5117,7 @@ return (
 </div>
 <div style={{ display: "flex", gap: 10 }}>
 <button type="submit" disabled={saving} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-{saving ? "Adding..." : "Add Task"}
+{saving ? "Saving..." : editTask ? "Save Changes" : "Add Task"}
 </button>
 <button type="button" onClick={onClose} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
 </div>
