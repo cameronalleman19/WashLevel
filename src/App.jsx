@@ -295,6 +295,156 @@ const Spinner = () => (
   </div>
 );
 
+const LandingLink = ({ href, children }) => (
+  <a href={href} style={{ color: "#0f1f35", fontSize: 13, textDecoration: "none", fontWeight: 600 }}>{children}</a>
+);
+
+function LandingFooter() {
+  return (
+    <div style={{ background: "#0f1f35", color: "#94a3b8", padding: "32px 24px", textAlign: "center", fontSize: 13 }}>
+      <div style={{ fontWeight: 800, fontSize: 16, color: "#fff", marginBottom: 10 }}>WashLevel</div>
+      <div style={{ marginBottom: 6 }}>90 Cumberland Parkway, Mechanicsburg, PA</div>
+      <div style={{ marginBottom: 6 }}>(717) 966-1794 &nbsp;|&nbsp; support@washlevel.com</div>
+      <div style={{ marginTop: 14, display: "flex", gap: 18, justifyContent: "center" }}>
+        <a href="/privacy" style={{ color: "#94a3b8", textDecoration: "underline" }}>Privacy Policy</a>
+        <a href="/sms-terms" style={{ color: "#94a3b8", textDecoration: "underline" }}>SMS Terms</a>
+      </div>
+      <div style={{ marginTop: 14, fontSize: 12 }}>© {new Date().getFullYear()} WashLevel. All rights reserved.</div>
+    </div>
+  );
+}
+
+function LandingPage() {
+  const feats = [
+    ["Task Management", "Recurring tasks by date or car count, inspections, SOPs, and a full scheduling calendar for every location."],
+    ["Time Clock & Payroll", "Employee clock-in/out with multi-session support, manager team views, and exportable payroll reports."],
+    ["Inventory & Barcodes", "Scan barcodes, track stock across locations, get low-stock reorder alerts, and manage vendors and SDS files."],
+    ["Equipment Sensors", "Monitor pressure, chemical levels, and equipment power in real time with plug-and-play IoT sensors."],
+    ["Team Notifications", "In-app and optional SMS alerts keep managers and staff on top of tasks, stock, and equipment issues."],
+    ["Multi-Location", "Run every wash from one dashboard with per-location tasks, inventory, teams, and reporting."],
+  ];
+  return (
+    <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "inherit" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, background: "#fff", zIndex: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 20, color: "#0f1f35" }}>WashLevel</div>
+        <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
+          <LandingLink href="#about">About</LandingLink>
+          <LandingLink href="#features">Features</LandingLink>
+          <LandingLink href="#sms">Text Alerts</LandingLink>
+          <LandingLink href="#contact">Contact</LandingLink>
+          <a href="/?login=1" style={{ background: "#0f1f35", color: "#fff", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Log In / Sign Up</a>
+        </div>
+      </div>
+
+      <div style={{ padding: "72px 24px 56px", textAlign: "center", background: "#f8fafc" }}>
+        <h1 style={{ fontSize: 38, fontWeight: 800, color: "#0f1f35", margin: "0 auto 16px", maxWidth: 720, lineHeight: 1.2 }}>Car Wash Operations, All In One Place</h1>
+        <p style={{ fontSize: 17, color: "#475569", maxWidth: 620, margin: "0 auto 28px", lineHeight: 1.6 }}>WashLevel is operations management software built for car washes. Manage tasks, employees, time clocks, inventory, and equipment sensors across every location from a single dashboard.</p>
+        <a href="/?login=1" style={{ background: "#0f1f35", color: "#fff", borderRadius: 10, padding: "14px 32px", fontSize: 16, fontWeight: 700, textDecoration: "none", display: "inline-block" }}>Get Started</a>
+      </div>
+
+      <div id="about" style={{ padding: "56px 24px", maxWidth: 860, margin: "0 auto" }}>
+        <h2 style={{ fontSize: 26, fontWeight: 800, color: "#0f1f35", marginBottom: 14 }}>About WashLevel</h2>
+        <p style={{ fontSize: 15, color: "#475569", lineHeight: 1.7, marginBottom: 12 }}>WashLevel is a software platform (SaaS) that helps car wash owners and managers run daily operations. It was built by a working car wash operator to solve real problems on real wash sites: keeping recurring maintenance on schedule, tracking employee hours, staying ahead of chemical and supply inventory, and knowing the moment equipment has a problem.</p>
+        <p style={{ fontSize: 15, color: "#475569", lineHeight: 1.7 }}>Teams sign in on any phone, tablet, or computer to see their tasks, clock in and out, scan inventory, and receive alerts. Owners get a live view of every location, payroll-ready time reports, and optional hardware sensors that monitor chemical levels and equipment in real time.</p>
+      </div>
+
+      <div id="features" style={{ background: "#f8fafc", padding: "56px 24px" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto" }}>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: "#0f1f35", marginBottom: 24, textAlign: "center" }}>What You Can Do</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
+            {feats.map(([t, d]) => (
+              <div key={t} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 20 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 6 }}>{t}</div>
+                <div style={{ fontSize: 13.5, color: "#64748b", lineHeight: 1.6 }}>{d}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div id="sms" style={{ padding: "56px 24px", maxWidth: 860, margin: "0 auto" }}>
+        <h2 style={{ fontSize: 26, fontWeight: 800, color: "#0f1f35", marginBottom: 14 }}>SMS Text Alerts</h2>
+        <p style={{ fontSize: 15, color: "#475569", lineHeight: 1.7, marginBottom: 12 }}>WashLevel offers an optional SMS Text Alerts add-on ($5/month) that sends operational notifications by text message, such as task reminders, low inventory warnings, and equipment sensor alerts.</p>
+        <p style={{ fontSize: 15, color: "#475569", lineHeight: 1.7, marginBottom: 12 }}>Enrollment is opt-in only. After creating an account, users subscribe from <b>Settings → Notifications → Text Alerts</b> inside their WashLevel dashboard, where they provide their mobile number and consent to receive messages. Message frequency varies based on account activity. Message and data rates may apply. Reply <b>STOP</b> to cancel or <b>HELP</b> for help at any time.</p>
+        <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.7 }}>See our <a href="/sms-terms" style={{ color: "#0f1f35" }}>SMS Terms</a> and <a href="/privacy" style={{ color: "#0f1f35" }}>Privacy Policy</a> for full details.</p>
+      </div>
+
+      <div id="contact" style={{ background: "#f8fafc", padding: "56px 24px" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto" }}>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: "#0f1f35", marginBottom: 14 }}>Contact Us</h2>
+          <div style={{ fontSize: 15, color: "#475569", lineHeight: 2 }}>
+            <div><b style={{ color: "#0f1f35" }}>Email:</b> support@washlevel.com</div>
+            <div><b style={{ color: "#0f1f35" }}>Phone:</b> (717) 966-1794</div>
+            <div><b style={{ color: "#0f1f35" }}>Address:</b> 90 Cumberland Parkway, Mechanicsburg, PA</div>
+          </div>
+        </div>
+      </div>
+
+      <LandingFooter />
+    </div>
+  );
+}
+
+function LegalShell({ title, children }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#fff" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
+        <a href="/" style={{ fontWeight: 800, fontSize: 20, color: "#0f1f35", textDecoration: "none" }}>WashLevel</a>
+        <a href="/?login=1" style={{ background: "#0f1f35", color: "#fff", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Log In</a>
+      </div>
+      <div style={{ maxWidth: 780, margin: "0 auto", padding: "48px 24px", fontSize: 14.5, color: "#334155", lineHeight: 1.7 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0f1f35", marginBottom: 20 }}>{title}</h1>
+        {children}
+      </div>
+      <LandingFooter />
+    </div>
+  );
+}
+
+function PrivacyPage() {
+  const H = ({ children }) => <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0f1f35", margin: "26px 0 8px" }}>{children}</h2>;
+  return (
+    <LegalShell title="Privacy Policy">
+      <p>Effective date: August 3, 2026</p>
+      <p>WashLevel ("we," "us") provides car wash operations management software at washlevel.com. This policy explains what information we collect and how we use it.</p>
+      <H>Information We Collect</H>
+      <p>Account information you provide (name, email, phone number, business and location details), operational data you enter (tasks, time clock entries, inventory, sensor readings), and basic usage and device information needed to operate the service.</p>
+      <H>How We Use Information</H>
+      <p>We use your information to provide and improve the WashLevel service, authenticate your account, send service notifications you have enabled (including email and, if you opt in, SMS), process subscription payments, and provide customer support.</p>
+      <H>SMS Consent and Phone Numbers</H>
+      <p>Phone numbers collected for SMS Text Alerts are used solely to deliver the operational alerts you request. No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. Text messaging originator opt-in data and consent are not shared with any third parties.</p>
+      <H>Sharing</H>
+      <p>We do not sell your personal information. We share data only with service providers required to operate WashLevel (such as cloud hosting, payment processing, and messaging delivery) and when required by law.</p>
+      <H>Data Retention and Security</H>
+      <p>We retain account data while your account is active and use industry-standard safeguards to protect it. You may request deletion of your account and data by contacting us.</p>
+      <H>Contact</H>
+      <p>support@washlevel.com &nbsp;|&nbsp; (717) 966-1794 &nbsp;|&nbsp; 90 Cumberland Parkway, Mechanicsburg, PA</p>
+    </LegalShell>
+  );
+}
+
+function SmsTermsPage() {
+  const H = ({ children }) => <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0f1f35", margin: "26px 0 8px" }}>{children}</h2>;
+  return (
+    <LegalShell title="SMS Terms & Conditions">
+      <H>Program Description</H>
+      <p>WashLevel Text Alerts sends operational notifications by SMS, including task reminders, low inventory warnings, equipment sensor alerts, and account notifications, to users who opt in through the WashLevel dashboard (Settings → Notifications → Text Alerts).</p>
+      <H>Opt-In</H>
+      <p>You enroll by subscribing to the Text Alerts add-on inside your WashLevel account and providing your mobile number with consent. Consent to receive text messages is not a condition of purchasing any other WashLevel service.</p>
+      <H>Message Frequency</H>
+      <p>Message frequency varies based on your account activity and alert settings.</p>
+      <H>Fees</H>
+      <p>Message and data rates may apply according to your mobile carrier plan. The Text Alerts add-on is billed at $5/month through your WashLevel subscription.</p>
+      <H>Opt-Out and Help</H>
+      <p>Reply <b>STOP</b> to any message to cancel and stop receiving texts. Reply <b>HELP</b> for help, or contact support@washlevel.com or (717) 966-1794. You can also disable Text Alerts in your account settings.</p>
+      <H>Privacy</H>
+      <p>See our <a href="/privacy" style={{ color: "#0f1f35" }}>Privacy Policy</a>. No mobile information will be shared with third parties or affiliates for marketing or promotional purposes.</p>
+      <H>Support</H>
+      <p>Carriers are not liable for delayed or undelivered messages.</p>
+    </LegalShell>
+  );
+}
+
 function Login({ defaultTab = "login", defaultEmail = "", ownerId = "", inviteBiz = "", inviteRole = "", debugRole = "" }) {
   const { login, signup } = useAuth();
   // Read params directly inside component as fallback
@@ -8328,6 +8478,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
   const [smsSubscription, setSmsSubscription] = useState(null);
   const [smsUsers, setSmsUsers] = useState([]);
   const [couponCode, setCouponCode] = useState("");
+  const [smsConsent, setSmsConsent] = useState(false);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -8631,7 +8782,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
           <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>Text Alerts</div>
           <div style={{ fontSize: 13, color: "#64748b" }}>Only account owners can manage text alert settings.</div>
         </div>
-      ) : smsSubscription?.smsEnabled && smsSubscription?.smsEnabledUntil && new Date(smsSubscription.smsEnabledUntil) > new Date() ? (
+      ) : !new URLSearchParams(window.location.search).has("smsPreview") && smsSubscription?.smsEnabled && smsSubscription?.smsEnabledUntil && new Date(smsSubscription.smsEnabledUntil) > new Date() ? (
         <div>
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>Text Alerts Active</div>
@@ -8641,6 +8792,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
             </div>
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35", marginBottom: 12 }}>Team Members</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.6, marginBottom: 12 }}>By adding a phone number you confirm the recipient has consented to receive WashLevel operational alerts. Msg & data rates may apply. Recipients can reply STOP to cancel or HELP for help.</div>
           {smsUsers.length === 0 && <div style={{ fontSize: 13, color: "#94a3b8" }}>No team members found.</div>}
           {smsUsers.map(u => (
             <div key={u.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 18, marginBottom: 12 }}>
@@ -8723,10 +8875,20 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
             <div style={{ fontSize: 24, fontWeight: 800, color: "#0f1f35", marginBottom: 2 }}>$5<span style={{ fontSize: 14, fontWeight: 600, color: "#64748b" }}>/month</span></div>
             <div style={{ fontSize: 12, color: "#94a3b8" }}>Per account · All locations included</div>
           </div>
-          <button style={{ width: "100%", padding: "13px", background: "#0f1f35", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 10, padding: 14, marginBottom: 14, cursor: "pointer" }} onClick={() => setSmsConsent(c => !c)}>
+            <input type="checkbox" checked={smsConsent} readOnly style={{ marginTop: 2, width: 16, height: 16, flexShrink: 0, accentColor: "#0f1f35" }} />
+            <div style={{ fontSize: 12, color: "#334155", lineHeight: 1.6 }}>
+              I agree to receive recurring operational SMS text alerts from WashLevel (task, inventory, and equipment notifications) at the mobile numbers provided on this account. Consent is not a condition of purchase of any other service. Message frequency varies. Msg & data rates may apply. Reply STOP to cancel, HELP for help.
+            </div>
+          </div>
+          <button style={{ width: "100%", padding: "13px", background: smsConsent ? "#0f1f35" : "#cbd5e1", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: smsConsent ? "pointer" : "not-allowed", marginBottom: 10 }}
+            disabled={!smsConsent}
             onClick={startCheckout}>
             Add Text Alerts — $5/mo
           </button>
+          <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginBottom: 20, lineHeight: 1.6 }}>
+            By subscribing you agree to the WashLevel <a href="/sms-terms" target="_blank" rel="noreferrer" style={{ color: "#64748b" }}>SMS Terms</a> and <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: "#64748b" }}>Privacy Policy</a>.
+          </div>
           <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 10 }}>Have a coupon code?</div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -8735,7 +8897,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
                 value={couponCode}
                 onChange={e => { setCouponCode(e.target.value); setCouponError(""); }}
                 placeholder="Enter code"
-                style={{ flex: 1, padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none" }}
+                style={{ flex: 1, padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", color: "#0f1f35", background: "#fff" }}
               />
               <button
                 onClick={redeemCoupon}
@@ -9053,6 +9215,7 @@ const [showAddTask, setShowAddTask] = useState(false);
   useEffect(() => {
     if (!locId) return;
     const params = new URLSearchParams();
+    if (new URLSearchParams(window.location.search).has("smsPreview")) params.set("smsPreview", "1");
     params.set("view", view);
     params.set("loc", locId);
     if (view === "sensors") params.set("tab", sensorTab);
@@ -9308,11 +9471,15 @@ if (user && pendingInvite) {
   );
 }
 
+const landingPath = window.location.pathname;
+if (landingPath === "/privacy") return <PrivacyPage />;
+if (landingPath === "/sms-terms") return <SmsTermsPage />;
 if (user) return <Dashboard />;
 const params = new URLSearchParams(window.location.search);
 const inviteEmail = params.get("invite");
 const inviteOwner = params.get("owner");
-return <Login defaultTab={inviteEmail ? "signup" : "login"} defaultEmail={inviteEmail || ""} ownerId={inviteOwner || ""} />;
+if (inviteEmail || params.get("login") !== null) return <Login defaultTab={inviteEmail ? "signup" : "login"} defaultEmail={inviteEmail || ""} ownerId={inviteOwner || ""} />;
+return <LandingPage />;
 }
 
 export default function App() {
