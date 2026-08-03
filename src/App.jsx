@@ -1,8 +1,6 @@
 // Paste into App.tsx, then in Dependencies panel add: firebase (10.8.0)
 
 import React, { useState, useEffect, useRef, createContext, useContext, Component, createPortal } from "react";
-import { Html5QrcodeScanner, Html5Qrcode } from "html5-qrcode";
-import JsBarcode from "jsbarcode";
 import { initializeApp, getApps } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -5290,7 +5288,7 @@ function BarcodeScanner({ onScan, onClose, scanLocName, onChangeLoc }) {
     const timer = setTimeout(async () => {
       try {
         if (!html5QrRef.current) {
-          html5QrRef.current = new Html5Qrcode(SCANNER_ID);
+          const { Html5Qrcode } = await import("html5-qrcode"); html5QrRef.current = new Html5Qrcode(SCANNER_ID);
         }
         await html5QrRef.current.start(
           { facingMode: "environment" },
