@@ -6470,8 +6470,8 @@ function Inventory({ locId, locationName, user, locations = [] }) {
             return (
               <div key={g.key} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, overflow: "hidden" }}>
                 <div onClick={() => setExpandedGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", cursor: "pointer" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{g.name}</div>
+                  <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35", textAlign: "left" }}>{g.name}</div>
                     <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {g.category && <span style={{ textTransform: "capitalize" }}>{g.category}</span>}
                       {g.barcode && <span>BC: {g.barcode}</span>}
