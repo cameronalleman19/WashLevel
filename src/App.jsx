@@ -1561,6 +1561,13 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
     }
 
     // Save history
+    let carCountAtCompletion1 = null;
+    if (task.equipmentId) {
+      try {
+        const eqSnap1 = await getDoc(doc(db, "locations", locId, "equipment", task.equipmentId));
+        if (eqSnap1.exists()) carCountAtCompletion1 = eqSnap1.data().carsCount || null;
+      } catch(e) {}
+    }
     await setDoc(doc(db, "locations", locId, "tasks", task.id, "history", histId), {
       completedAt: new Date().toISOString(),
       completedBy: user?.name || user?.email || "Unknown",
@@ -1570,6 +1577,8 @@ function CompleteTaskModal({ task, locId, note, user, onClose, onDone }) {
       date: new Date().toLocaleDateString(),
       partsUsed: usedItems,
       photos,
+      carCountAtCompletion: carCountAtCompletion1,
+      equipmentId: task.equipmentId || null,
     });
 
     // Update task
@@ -4254,6 +4263,12 @@ function TaskHistoryDetailModal({ entry, onClose }) {
               <div style={{ fontSize: 13, fontWeight: 600, color: "#0f1f35", textTransform: "capitalize" }}>{entry.category}</div>
             </div>
           )}
+          {entry.carCountAtCompletion != null && (
+            <div style={{ background: "#e0f2fe", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#0369a1", textTransform: "uppercase", marginBottom: 2 }}>Car Count</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#0369a1" }}>{Number(entry.carCountAtCompletion).toLocaleString()}</div>
+            </div>
+          )}
         </div>
         {entry.note && (
           <div style={{ background: "#f4f6f8", borderRadius: 8, padding: "12px", marginBottom: 16 }}>
@@ -4704,14 +4719,15 @@ function TaskHistoryModal({ tasks, onClose, locId }) {
               let mediaUrls = t.mediaUrls || [];
               let partsUsed = [];
               let duration = t.duration || null;
+              let carCountAtCompletion = null;
               if (locId) {
                 try {
                   const histSnap = await getDocs(collection(db, "locations", locId, "tasks", t.id, "history"));
                   const hist = histSnap.docs.map(d => d.data()).sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))[0];
-                  if (hist) { items = hist.items || items; note = hist.note || note; mediaUrls = hist.photos || mediaUrls; partsUsed = hist.partsUsed || []; duration = hist.duration || duration; }
+                  if (hist) { items = hist.items || items; note = hist.note || note; mediaUrls = hist.photos || mediaUrls; partsUsed = hist.partsUsed || []; duration = hist.duration || duration; carCountAtCompletion = hist.carCountAtCompletion ?? null; }
                 } catch(e) {}
               }
-              setSelectedEntry({ taskTitle: t.title, completedAt: t.completedAt, completedBy: t.completedBy, category: t.category, note, mediaUrls, partsUsed, duration, items });
+              setSelectedEntry({ taskTitle: t.title, completedAt: t.completedAt, completedBy: t.completedBy, category: t.category, note, mediaUrls, partsUsed, duration, items, carCountAtCompletion });
             }} style={{ padding: "12px 0", borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                 <div style={{ flex: 1 }}>
