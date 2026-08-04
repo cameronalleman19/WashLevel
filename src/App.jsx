@@ -404,17 +404,27 @@ function PrivacyPage() {
   return (
     <LegalShell title="Privacy Policy">
       <p>Effective date: August 3, 2026</p>
-      <p>WashLevel ("we," "us") provides car wash operations management software at washlevel.com. This policy explains what information we collect and how we use it.</p>
+      <p>WashLevel ("we," "us") provides car wash operations management software at washlevel.com. This policy explains what information we collect, how we use it, who processes it on our behalf, and the choices you have.</p>
       <H>Information We Collect</H>
-      <p>Account information you provide (name, email, phone number, business and location details), operational data you enter (tasks, time clock entries, inventory, sensor readings), and basic usage and device information needed to operate the service.</p>
+      <p>Account information you provide: name, email address, phone number, business name, and location details. Operational data you enter while using the service: tasks, inspections, time clock entries, payroll report data, inventory and vendor records, sensor readings, and uploaded files such as photos and safety data sheets. Payment information: handled by our payment processor; we do not store full card numbers. Technical information: basic device, browser, and usage data needed to operate, secure, and improve the service.</p>
       <H>How We Use Information</H>
-      <p>We use your information to provide and improve the WashLevel service, authenticate your account, send service notifications you have enabled (including email and, if you opt in, SMS), process subscription payments, and provide customer support.</p>
+      <p>We use your information to provide and improve WashLevel, authenticate your account, deliver the notifications you enable (in-app, email, and SMS if you opt in), process subscription payments, provide customer support, and meet legal obligations. We do not sell your personal information and we do not use your data for third-party advertising.</p>
+      <H>Service Providers</H>
+      <p>We rely on a small number of processors to run WashLevel, each receiving only the data needed for its function: <b>Google Firebase / Google Cloud</b> for application hosting, authentication, database, and file storage; <b>Stripe</b> for subscription billing and payment processing; <b>Telnyx</b> for SMS text message delivery to users who opt in to Text Alerts; and <b>Resend</b> for transactional and summary email delivery. These providers process data under their own security and privacy commitments and are not permitted to use your data for their own purposes.</p>
       <H>SMS Consent and Phone Numbers</H>
-      <p>Phone numbers collected for SMS Text Alerts are used solely to deliver the operational alerts you request. No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. Text messaging originator opt-in data and consent are not shared with any third parties.</p>
-      <H>Sharing</H>
-      <p>We do not sell your personal information. We share data only with service providers required to operate WashLevel (such as cloud hosting, payment processing, and messaging delivery) and when required by law.</p>
-      <H>Data Retention and Security</H>
-      <p>We retain account data while your account is active and use industry-standard safeguards to protect it. You may request deletion of your account and data by contacting us.</p>
+      <p>Phone numbers collected for SMS Text Alerts are used solely to deliver the operational alerts you request. No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. Text messaging originator opt-in data and consent are not shared with any third parties. You can opt out at any time by replying STOP to any message or disabling Text Alerts in your account settings.</p>
+      <H>Email Communications</H>
+      <p>We send transactional emails such as account notifications, invites, and daily operational summaries through Resend from noreply@washlevel.com. You can adjust email notification preferences in your account settings.</p>
+      <H>Data Storage and Security</H>
+      <p>Your data is stored in Google Firebase (Google Cloud) data centers and encrypted in transit (TLS/HTTPS) and at rest. Access to production data is restricted to authorized personnel, account access is protected by authenticated login, and database access is governed by security rules that limit each user to their own organization's data.</p>
+      <H>Data Retention and Deletion</H>
+      <p>We retain account and operational data while your account is active so the service can function. You may request export or deletion of your account and associated data at any time by contacting support@washlevel.com; we will complete deletion requests within a reasonable period unless retention is required by law (for example, billing records).</p>
+      <H>Your Rights</H>
+      <p>Depending on your location, you may have rights to access, correct, export, or delete your personal information, and to object to or restrict certain processing. To exercise any of these rights, contact us at support@washlevel.com.</p>
+      <H>Children</H>
+      <p>WashLevel is a business tool and is not directed to children under 13. We do not knowingly collect personal information from children.</p>
+      <H>Changes to This Policy</H>
+      <p>We may update this policy from time to time. Material changes will be reflected by an updated effective date on this page.</p>
       <H>Contact</H>
       <p>support@washlevel.com &nbsp;|&nbsp; (717) 966-1794 &nbsp;|&nbsp; 90 Cumberland Parkway, Mechanicsburg, PA</p>
     </LegalShell>
@@ -7591,6 +7601,12 @@ return (
 <ShellyIntegration locations={locations} />
 </div>
 )}
+
+<div style={{ textAlign: "center", padding: "24px 0 8px", fontSize: 12, color: "#94a3b8" }}>
+  <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: "#94a3b8", textDecoration: "underline", marginRight: 16 }}>Privacy Policy</a>
+  <a href="/sms-terms" target="_blank" rel="noreferrer" style={{ color: "#94a3b8", textDecoration: "underline" }}>SMS Terms</a>
+  <div style={{ marginTop: 6 }}>© {new Date().getFullYear()} WashLevel</div>
+</div>
 
 </div>
 );
