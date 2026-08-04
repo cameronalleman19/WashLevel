@@ -5490,6 +5490,81 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [expandedVendors, setExpandedVendors] = useState({});
   const [transferItem, setTransferItem] = useState(null);
   const [modalItem, setModalItem] = useState(null);
+  const [overviewItems, setOverviewItems] = useState({});
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [overviewSearch, setOverviewSearch] = useState("");
+  const [globalEditItem, setGlobalEditItem] = useState(null);
+  const [globalEditData, setGlobalEditData] = useState({});
+  const [savingGlobalEdit, setSavingGlobalEdit] = useState(false);
+  const [propagateMsg, setPropagateMsg] = useState("");
+  const [overviewScanOpen, setOverviewScanOpen] = useState(false);
+  const [overviewTransfer, setOverviewTransfer] = useState(null);
+  const [globalScanOpen, setGlobalScanOpen] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "overview" || !locations.length) return;
+    const unsubs = locations.map(l => onSnapshot(collection(db, "locations", l.id, "inventory"), snap => {
+      setOverviewItems(prev => ({ ...prev, [l.id]: snap.docs.map(d => ({ id: d.id, ...d.data(), _locId: l.id, _locName: l.name })) }));
+    }));
+    return () => unsubs.forEach(u => u());
+  }, [activeTab, locations]);
+
+  const groupKeyOf = (it) => {
+    const bc = (it.barcode || "").toString().trim();
+    if (bc) return "b:" + bc;
+    const pn = (it.partNumber || "").toString().trim();
+    if (pn) return "p:" + pn.toLowerCase();
+    return "n:" + (it.name || "").toString().trim().toLowerCase();
+  };
+
+  const getOverviewGroups = () => {
+    const all = Object.values(overviewItems).flat();
+    const map = {};
+    all.forEach(it => {
+      const k = groupKeyOf(it);
+      if (!map[k]) map[k] = { key: k, name: it.name, barcode: it.barcode || "", partNumber: it.partNumber || "", category: it.category || "", unit: it.unit || "", vendorId: it.vendorId || "", costPerUnit: it.costPerUnit || 0, total: 0, entries: [] };
+      map[k].total += Number(it.quantity) || 0;
+      map[k].entries.push(it);
+    });
+    let arr = Object.values(map).sort((x, y) => (x.name || "").localeCompare(y.name || ""));
+    const q = overviewSearch.trim().toLowerCase();
+    if (q) {
+      arr = arr.filter(g => {
+        const v = vendors.find(x => x.id === g.vendorId);
+        return [g.name, g.barcode, g.partNumber, g.category, g.unit, v && v.name].some(f => (f || "").toString().toLowerCase().includes(q));
+      });
+    }
+    return arr;
+  };
+
+  const propagateIdentity = async (origItem, fields, excludeLocId, excludeItemId) => {
+    const k = groupKeyOf(origItem);
+    const snaps = await Promise.all(locations.map(l => getDocs(collection(db, "locations", l.id, "inventory"))));
+    const matches = snaps.flatMap((sn, i) => sn.docs.map(d => ({ id: d.id, ...d.data(), _locId: locations[i].id }))).filter(it => groupKeyOf(it) === k);
+    const targets = matches.filter(it => !(it._locId === excludeLocId && it.id === excludeItemId));
+    await Promise.all(targets.map(it => updateDoc(doc(db, "locations", it._locId, "inventory", it.id), { ...fields, updatedAt: new Date().toISOString() })));
+    return targets.length;
+  };
+
+  const handleGlobalSave = async () => {
+    if (!globalEditItem) return;
+    setSavingGlobalEdit(true);
+    try {
+      const fields = { name: globalEditData.name, category: globalEditData.category, unit: globalEditData.unit, partNumber: globalEditData.partNumber || "", costPerUnit: Number(globalEditData.costPerUnit) || 0, vendorId: globalEditData.vendorId || "", barcode: (globalEditData.barcode || "").trim() || null };
+      await propagateIdentity(globalEditItem.entries[0], fields, null, null);
+      const locCount = new Set(globalEditItem.entries.map(e => e._locId)).size;
+      setPropagateMsg("Updated at " + locCount + " location" + (locCount === 1 ? "" : "s"));
+      setTimeout(() => setPropagateMsg(""), 2500);
+    } catch (e) { console.log("Global save error:", e.message); }
+    setSavingGlobalEdit(false);
+    setGlobalEditItem(null);
+  };
+
+  const adjustOverviewQty = async (entry, delta) => {
+    const newQty = Math.max(0, (Number(entry.quantity) || 0) + delta);
+    await updateDoc(doc(db, "locations", entry._locId, "inventory", entry.id), { quantity: newQty, updatedAt: new Date().toISOString() });
+  };
+
 
   const handleAddGroceryItem = async () => {
     if (!newGroceryItem.trim()) return;
@@ -5672,6 +5747,15 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     }
     delete dataToSave.generateBarcode;
     await updateDoc(doc(db, "locations", locId, "inventory", itemId), dataToSave);
+    try {
+      const oldItem = items.find(i => i.id === itemId);
+      const identityFields = {};
+      ["name", "category", "unit", "partNumber", "costPerUnit", "vendorId", "barcode", "sdsUrl", "sdsName", "photoUrl"].forEach(f => { if (dataToSave[f] !== undefined) identityFields[f] = dataToSave[f]; });
+      if (oldItem && Object.keys(identityFields).length && locations.length > 1) {
+        const n = await propagateIdentity(oldItem, identityFields, locId, itemId);
+        if (n > 0) { setPropagateMsg("Updated at " + (n + 1) + " locations"); setTimeout(() => setPropagateMsg(""), 2500); }
+      }
+    } catch (e) { console.log("Propagate error:", e.message); }
     const item = items.find(i => i.id === itemId);
     const qtyBefore = item?.quantity || 0;
     const qtyAfter = editData.quantity ?? qtyBefore;
@@ -5759,12 +5843,12 @@ function Inventory({ locId, locationName, user, locations = [] }) {
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {["inventory", "reorder", "vendors"].map(tab => (
+        {["inventory", "overview", "reorder", "vendors"].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
             background: activeTab === tab ? "#0f1f35" : "#f1f5f9",
             color: activeTab === tab ? "#fff" : "#64748b" }}>
-            {tab === "inventory" ? "All Items" : tab === "reorder" ? "Reorder List" : "Vendors"}
+            {tab === "inventory" ? "All Items" : tab === "overview" ? "Overview" : tab === "reorder" ? "Reorder List" : "Vendors"}
           </button>
         ))}
       </div>
@@ -6368,6 +6452,125 @@ function Inventory({ locId, locationName, user, locations = [] }) {
         </div>
       )}
       {transferItem && <InventoryTransferModal item={transferItem} fromLocId={locId} locations={locations} user={user} onClose={() => setTransferItem(null)} />}
+      {propagateMsg && (
+        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "#0f1f35", color: "#fff", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 600, zIndex: 3000, boxShadow: "0 4px 16px rgba(0,0,0,0.25)" }}>{propagateMsg}</div>
+      )}
+
+      {activeTab === "overview" && (
+        <div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <input value={overviewSearch} onChange={e => setOverviewSearch(e.target.value)} placeholder="Search name, barcode, part number, vendor, category" style={{ flex: 1, padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }} />
+            {overviewSearch && <button onClick={() => setOverviewSearch("")} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Clear</button>}
+            <button onClick={() => setOverviewScanOpen(true)} style={{ background: "#f0fdf4", color: "#059669", border: "1.5px solid #bbf7d0", borderRadius: 8, padding: "0 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Scan</button>
+          </div>
+          {getOverviewGroups().length === 0 && <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>{overviewSearch ? "No items match your search." : "No inventory items found across your locations."}</div>}
+          {getOverviewGroups().map(g => {
+            const v = vendors.find(x => x.id === g.vendorId);
+            const open = !!expandedGroups[g.key];
+            return (
+              <div key={g.key} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 8, overflow: "hidden" }}>
+                <div onClick={() => setExpandedGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", cursor: "pointer" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{g.name}</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {g.category && <span style={{ textTransform: "capitalize" }}>{g.category}</span>}
+                      {g.barcode && <span>BC: {g.barcode}</span>}
+                      {g.partNumber && <span>PN: {g.partNumber}</span>}
+                      {v && <span>{v.name}</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: "#0f1f35" }}>{g.total} {g.unit}</div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>{g.entries.length} location{g.entries.length === 1 ? "" : "s"} {open ? "\u25B2" : "\u25BC"}</div>
+                  </div>
+                </div>
+                {open && (
+                  <div style={{ borderTop: "1px solid #f1f5f9", padding: "8px 14px 12px" }}>
+                    {g.entries.sort((x, y) => (x._locName || "").localeCompare(y._locName || "")).map(entry => (
+                      <div key={entry._locId + entry.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #f8fafc" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{entry._locName}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => adjustOverviewQty(entry, -1)} style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #e5e7eb", background: "#f8fafc", color: "#dc2626", fontWeight: 700, cursor: "pointer" }}>-</button>}
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35", minWidth: 50, textAlign: "center" }}>{entry.quantity} {entry.unit}</div>
+                          {(user?.role === "manager" || user?.role === "owner") && <button onClick={() => adjustOverviewQty(entry, 1)} style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #e5e7eb", background: "#f8fafc", color: "#059669", fontWeight: 700, cursor: "pointer" }}>+</button>}
+                          {(user?.role === "manager" || user?.role === "owner") && locations.length > 1 && <button onClick={() => setOverviewTransfer({ item: entry, fromLocId: entry._locId })} style={{ background: "#eff6ff", color: "#2563eb", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Transfer</button>}
+                        </div>
+                      </div>
+                    ))}
+                    {(user?.role === "manager" || user?.role === "owner") && (
+                      <div style={{ marginTop: 8 }}>
+                        <button onClick={() => { setGlobalEditItem(g); setGlobalEditData({ name: g.name, category: g.category || "chemicals", unit: g.unit || "", partNumber: g.partNumber || "", costPerUnit: g.costPerUnit || 0, vendorId: g.vendorId || "", barcode: g.barcode || "" }); }} style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit Everywhere</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {overviewScanOpen && (
+        <BarcodeScanner onScan={(barcode) => { setOverviewSearch(barcode); setOverviewScanOpen(false); }} onClose={() => setOverviewScanOpen(false)} scanLocName="All Locations" />
+      )}
+
+      {overviewTransfer && (
+        <InventoryTransferModal item={overviewTransfer.item} fromLocId={overviewTransfer.fromLocId} locations={locations} onClose={() => setOverviewTransfer(null)} user={user} />
+      )}
+
+      {globalEditItem && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,31,53,0.5)", zIndex: 2500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setGlobalEditItem(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, padding: 20, width: "100%", maxWidth: 720, maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0f1f35", marginBottom: 4 }}>Editing: {globalEditItem.name}</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>Changes apply at all {new Set(globalEditItem.entries.map(e => e._locId)).size} location(s). Quantities are not affected.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</label><input value={globalEditData.name || ""} onChange={e => setGlobalEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={globalEditData.partNumber || ""} onChange={e => setGlobalEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Category</label>
+                <select value={globalEditData.category || "chemicals"} onChange={e => setGlobalEditData(p => ({...p, category: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
+                  <option value="chemicals">Chemicals</option>
+                  <option value="parts">Parts</option>
+                  <option value="vending supplies">Vending Supplies</option>
+                </select>
+              </div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Unit</label>
+                <select value={globalEditData.unit || "gal"} onChange={e => setGlobalEditData(p => ({...p, unit: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>
+                  {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={globalEditData.vendorId || ""} onChange={e => setGlobalEditData(p => ({...p, vendorId: e.target.value}))} style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 7, fontSize: 13, outline: "none", background: "#fff", color: "#0f1f35" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+              <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Cost / Unit</label><input type="number" value={globalEditData.costPerUnit ?? 0} onChange={e => setGlobalEditData(p => ({...p, costPerUnit: parseFloat(e.target.value)||0}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Barcode</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "nowrap" }}>
+                  {globalEditData.barcode ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+                      <div style={{ fontSize: 11, color: "#059669", fontWeight: 600, flex: 1 }}>{"\u2713"} {globalEditData.barcode}</div>
+                      <button onClick={() => setGlobalScanOpen(true)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Rescan</button>
+                      <button onClick={() => setGlobalEditData(p => ({...p, barcode: ""}))} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Remove</button>
+                      <button onClick={() => printBarcode({ name: globalEditData.name, barcode: globalEditData.barcode })} style={{ background: "#f0fdf4", color: "#059669", border: "1px solid #bbf7d0", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Print</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => setGlobalScanOpen(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 5, padding: "5px 8px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Scan Existing</button>
+                      <button onClick={() => setGlobalEditData(p => ({...p, barcode: "WL-" + globalEditItem.entries[0].id}))} style={{ background: "#f0fdf4", color: "#059669", border: "1px solid #bbf7d0", borderRadius: 5, padding: "5px 8px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Generate New</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+              <button onClick={handleGlobalSave} disabled={savingGlobalEdit} style={{ flex: 1, background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{savingGlobalEdit ? "Saving..." : "Save Everywhere"}</button>
+              <button onClick={() => setGlobalEditItem(null)} style={{ flex: 1, background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {globalScanOpen && (
+        <BarcodeScanner onScan={(barcode) => { setGlobalEditData(p => ({...p, barcode})); setGlobalScanOpen(false); }} onClose={() => setGlobalScanOpen(false)} scanLocName="Attach Barcode" />
+      )}
+
       {activeTab === "vendors" && (
         <div>
           {showAddVendor && (

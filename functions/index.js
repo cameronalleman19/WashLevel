@@ -957,6 +957,12 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       if (washMatch) count = parseInt(washMatch[1]);
     }
 
+    // Format 8: D&S Equipment — "Yesterday 9"
+    if (count === null) {
+      const yestMatch = body.match(/^Yesterday\s+(\d+)\s*$/im);
+      if (yestMatch) count = parseInt(yestMatch[1]);
+    }
+
     // Format 7: WASH DATA / PACKAGE RUNNING TODAY with two-column rows
     // e.g. "  1      ###    033" or "  8      044    000"
     // TOTAL line: "TOTAL  016992    074" — second number is today's count
