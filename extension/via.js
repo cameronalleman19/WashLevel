@@ -68,13 +68,19 @@ function parseDetail(html, id){
   };
 }
 
+function normPlate(p){ return (p||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/0/g,"O").replace(/8/g,"B").replace(/1/g,"I").replace(/5/g,"S").replace(/2/g,"Z"); }
+function editDist(a,b){ if(Math.abs(a.length-b.length)>1) return 9; const m=[]; for(let i=0;i<=a.length;i++){m[i]=[i];} for(let j=0;j<=b.length;j++){m[0][j]=j;} for(let i=1;i<=a.length;i++){for(let j=1;j<=b.length;j++){m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));}} return m[a.length][b.length]; }
+
 function recommend(e){
-  const onPlan = (lp) => e.plates.some(p => lp && (lp === p || lp.replace(/[^A-Z0-9]/g, "") === p.replace(/[^A-Z0-9]/g, "")));
+  const onPlan = (lp) => e.plates.some(p => lp && (lp === p || editDist(normPlate(lp), normPlate(p)) <= 1));
   const lastUse = e.history.length ? e.history[0].t : 0;
   const offPlan = e.history.filter(h => h.lp && !onPlan(h.lp));
   const onPlanUses = e.history.filter(h => h.lp && onPlan(h.lp));
   if (!lastUse) return {verdict: "REVIEW", cls: "rec-mid", why: "No payment history parsed - review manually"};
   if (vDays(lastUse) > 21) return {verdict: "DO NOT TRIGGER", cls: "rec-no", why: "No pass use in over 3 weeks (dormant)"};
+  const spanMs = e.history.length > 1 ? (e.history[0].t - e.history[e.history.length - 1].t) : 0;
+  const perMonth = e.history.length / Math.max(spanMs / 2592000000, 1);
+  if (perMonth < 3) return {verdict: "DO NOT TRIGGER", cls: "rec-no", why: "Low usage - about " + perMonth.toFixed(1) + " washes/month on average"};
   if (e.vehicleCount === 1 && offPlan.length && onPlanUses.length){
     const gap = Math.abs(offPlan[0].t - onPlanUses[0].t) / 86400000;
     if (gap <= 1.5) return {verdict: "TRIGGER", cls: "rec-yes", why: "Single-vehicle plan; off-plan wash within a day of on-plan wash (likely sharing)"};
