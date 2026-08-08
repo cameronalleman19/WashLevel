@@ -1,5 +1,5 @@
 const BASE = "https://admin.dencar.sancsoft.net";
-const DAYS_BACK = 90;
+function backfillStart(){ const n = new Date(); return new Date(n.getFullYear(), 0, 1); }
 const SCHEMA = 3;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
@@ -149,7 +149,7 @@ async function sync(){
   const yest = new Date(today); yest.setDate(yest.getDate() - 1);
   const yestStr = ds(yest);
   const dates = [];
-  for (let i = DAYS_BACK - 1; i >= 0; i--){ const d = new Date(today); d.setDate(d.getDate() - i); dates.push(ds(d)); }
+  for (let d = backfillStart(); ds(d) <= todayStr; d.setDate(d.getDate() + 1)){ dates.push(ds(d)); }
   const tasks = [];
   for (const s of sites){
     hist[s.id] = hist[s.id] || {};
@@ -217,6 +217,19 @@ function render(){
   let wtd = 0;
   for (const dt of Object.keys(byDate)){ if (dt >= ds(wkStart) && dt <= todayStr) wtd += byDate[dt]; }
   const p = projection(byDate);
+  const yestD = new Date(today); yestD.setDate(yestD.getDate() - 1);
+  const lwStart = new Date(wkStart); lwStart.setDate(lwStart.getDate() - 7);
+  const lwEnd = new Date(wkStart); lwEnd.setDate(lwEnd.getDate() - 1);
+  const lmFirst = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lmLast = new Date(today.getFullYear(), today.getMonth(), 0);
+  let lastWk = 0, lastMo = 0;
+  for (const dt of Object.keys(byDate)){
+    if (dt >= ds(lwStart) && dt <= ds(lwEnd)) lastWk += byDate[dt];
+    if (dt >= ds(lmFirst) && dt <= ds(lmLast)) lastMo += byDate[dt];
+  }
+  $("sumYest").textContent = fmtMoney(byDate[ds(yestD)] || 0);
+  $("sumLastWk").textContent = fmtMoney(lastWk);
+  $("sumLastMo").textContent = fmtMoney(lastMo);
   $("sumToday").textContent = fmtMoney(byDate[todayStr] || 0);
   $("sumWtd").textContent = fmtMoney(wtd);
   $("sumMtd").textContent = fmtMoney(p.mtd);
@@ -318,15 +331,65 @@ function openDetail(site){
       dailyRows += "<tr><td>" + k + "</td><td>" + fmtMoney(rec.revenue) + "</td><td>" + rec.washes + "</td><td>" + fmtMoney(rec.perWash) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td></tr>";
     }
   }
+  let monthRows = "";
+  const yr = today.getFullYear();
+  let ytdUse = 0;
+  for (let mo = 0; mo <= today.getMonth(); mo++){
+    const from = ds(new Date(yr, mo, 1));
+    const to = mo === today.getMonth() ? todayStr : ds(new Date(yr, mo + 1, 0));
+    const use = passUseRange(site.id, from, to);
+    ytdUse += use;
+    const label = new Date(yr, mo, 1).toLocaleString("en-US", {month: "long"});
+    monthRows += "<tr><td>" + label + "</td><td>" + use + "</td><td>" + (members ? (use / members).toFixed(1) + "x" : "--") + "</td></tr>";
+  }
+  monthRows += "<tr><td><strong>YTD</strong></td><td><strong>" + ytdUse + "</strong></td><td><strong>" + (members ? (ytdUse / members).toFixed(1) + "x" : "--") + "</strong></td></tr>";
   $("detailBody").innerHTML =
     "<h2>" + site.name + " <span class=\"members\">(" + members + " members)</span></h2>" +
     "<h3>Period totals</h3>" +
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<h3>Today by hour</h3>" +
     "<table class=\"via\"><thead><tr><th>Hour</th><th>Sales</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
+    "<h3>Member usage by month</h3>" +
+    "<table class=\"via\"><thead><tr><th>Month</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + monthRows + "</tbody></table>" +
+    "<h3>Revenue - last 30 days</h3>" +
+    "<canvas id=\"siteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +
     "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
   modal.style.display = "flex";
+  const labels = [], vals = [];
+  for (let i = 29; i >= 0; i--){
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const k = ds(d);
+    labels.push(k.slice(5));
+    vals.push(((hist[site.id] || {})[k] || {}).revenue || 0);
+  }
+  drawLine($("siteChart"), vals, labels);
+}
+
+function drawLine(c, vals, labels){
+  const ctx = c.getContext("2d");
+  const W = c.width = c.clientWidth * 2;
+  const H = c.height = 360;
+  ctx.clearRect(0, 0, W, H);
+  const max = Math.max.apply(null, vals.concat([1]));
+  const padL = 80, padB = 40, padT = 20, padR = 20;
+  ctx.strokeStyle = "#3a4a63";
+  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+  ctx.fillStyle = "#8fa3c0";
+  ctx.font = "20px system-ui";
+  ctx.fillText(fmtMoney(max), 4, padT + 16);
+  const xw = (W - padL - padR) / (vals.length - 1);
+  ctx.strokeStyle = "#4da3ff";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  vals.forEach((v, i) => {
+    const x = padL + i * xw;
+    const yv = H - padB - (v / max) * (H - padB - padT);
+    if (i === 0) ctx.moveTo(x, yv); else ctx.lineTo(x, yv);
+  });
+  ctx.stroke();
+  ctx.fillStyle = "#8fa3c0";
+  for (let i = 0; i < labels.length; i += 5){ ctx.fillText(labels[i], padL + i * xw - 20, H - 10); }
 }
 
 function renderChart(byDate, today){
