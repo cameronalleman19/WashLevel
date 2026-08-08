@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>WashLevel Sidecar</title>
+<link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+<header>
+  <h1>WashLevel Sidecar</h1>
+  <div id="lastSync"></div>
+  <button id="syncBtn">Sync</button>
+</header>
+<div id="status"></div>
+<section class="summary">
+  <div class="stat"><label>Today</label><div id="sumToday">--</div></div>
+  <div class="stat"><label>Week to date</label><div id="sumWtd">--</div></div>
+  <div class="stat"><label>Month to date</label><div id="sumMtd">--</div></div>
+  <div class="stat"><label>Month projection</label><div id="sumProj">--</div></div>
+</section>
+<h2>Today by site</h2>
+<div id="siteCards" class="cards"></div>
+<h2>Revenue - last 30 days (all sites)</h2>
+<canvas id="chart"></canvas>
+<h2>VIA Guard - last 7 days</h2>
+<table class="via"><thead><tr><th>Site</th><th>Trig</th><th>Oops</th><th>Pay</th><th>Rep</th><th>Add</th><th>Unresolved</th></tr></thead><tbody id="viaBody"></tbody></table>
+<h2>Anomalies</h2>
+<ul id="anomalies"></ul>
+<script src="dashboard.js"></script>
+</body>
+</html>
