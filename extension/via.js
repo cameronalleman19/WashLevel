@@ -218,7 +218,7 @@ function bindZoom(){
   if (!z){ z = document.createElement("img"); z.id = "viaZoom"; z.style.display = "none"; document.body.appendChild(z); }
   document.querySelectorAll(".via-photos img").forEach(img => {
     img.addEventListener("mouseenter", () => { z.src = img.src; z.style.display = "block"; });
-    img.addEventListener("mousemove", (ev) => { z.style.left = Math.min(ev.pageX + 24, window.scrollX + window.innerWidth - 620) + "px"; z.style.top = (ev.pageY - 100) + "px"; });
+    img.addEventListener("mousemove", (ev) => { z.style.left = Math.min(ev.pageX + 24, window.scrollX + window.innerWidth - 1220) + "px"; z.style.top = (ev.pageY - 100) + "px"; });
     img.addEventListener("mouseleave", () => { z.style.display = "none"; });
   });
 }

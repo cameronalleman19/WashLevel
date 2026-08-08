@@ -67,4 +67,4 @@ ul#anomalies li.ok{color:#4ade80;list-style:none;margin-left:-18px;}
 .via-trigger:hover{background:#991b1b;}
 .via-close-ex{background:#334155;margin-right:8px;padding:6px 14px;font-size:13px;}
 .via-close-ex:hover{background:#475569;}
-#viaZoom{position:absolute;z-index:300;width:600px;max-width:90vw;border:2px solid #4da3ff;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.6);pointer-events:none;background:#0d1524;}
+#viaZoom{position:absolute;z-index:300;width:1200px;max-width:90vw;border:2px solid #4da3ff;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.6);pointer-events:none;background:#0d1524;}
