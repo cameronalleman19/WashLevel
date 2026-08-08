@@ -239,13 +239,14 @@ async function enrichConsumer(d){
     if (!res.ok) return;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     const rows = Array.from(doc.querySelectorAll("tr"));
-    let tsIdx = -1, lpIdx = -1;
+    let tsIdx = -1, lpIdx = -1, mIdx = -1;
     for (const r of rows){
       const cells = Array.from(r.children);
       cells.forEach((c, i) => {
         const t = c.textContent.trim().toLowerCase();
         if (c.tagName === "TH" && tsIdx === -1 && /timestamp|date/.test(t)) tsIdx = i;
         if (c.tagName === "TH" && lpIdx === -1 && /license|lp\b|plate/.test(t)) lpIdx = i;
+        if (c.tagName === "TH" && mIdx === -1 && t === "method") mIdx = i;
       });
       if (tsIdx >= 0 && lpIdx >= 0) break;
     }
@@ -265,8 +266,9 @@ async function enrichConsumer(d){
       const p = ts.split(/[\/ :]/);
       const t = new Date(p[2], p[0] - 1, p[1], p[3] || 0, p[4] || 0, p[5] || 0).getTime();
       const plate = (lp || "").toUpperCase();
+      const method = (mIdx >= 0 && cells[mIdx]) ? cells[mIdx].textContent.trim() : "";
       if (plate && plate !== "N/A" && plate !== "-") washes.push({t: t, lp: plate});
-      else others++;
+      else if (/vac|self serve/i.test(method)) others++;
     }
     washes.sort((a, b) => b.t - a.t);
     if (washes.length || others){ d.washHistory = washes; d.otherUses = others; }
