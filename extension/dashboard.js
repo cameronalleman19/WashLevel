@@ -1,5 +1,6 @@
 const BASE = "https://admin.dencar.sancsoft.net";
 const DAYS_BACK = 90;
+const SCHEMA = 2;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
 
@@ -11,14 +12,25 @@ function ds(d){ return d.toLocaleDateString("en-CA"); }
 function num(s){ const m = String(s).replace(/[$,]/g, "").match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
 function setStatus(msg){ $("status").textContent = msg; }
 function dedupe(arr){ const seen = {}; const out = []; for (const s of arr){ if (!seen[s.id]){ seen[s.id] = 1; out.push(s); } } return out; }
+function retail(r){
+  const rw = Math.max(0, (r.washes || 0) - (r.passUse || 0));
+  const rr = Math.max(0, (r.revenue || 0) - (r.newPassAmt || 0) - (r.passRenewAmt || 0));
+  return {washes: rw, revenue: rr, per: rw ? rr / rw : 0};
+}
 
 async function load(){
-  const st = await chrome.storage.local.get(["hist", "sites", "lastSync"]);
-  hist = st.hist || {};
+  const st = await chrome.storage.local.get(["hist", "sites", "lastSync", "schema"]);
+  if (st.schema !== SCHEMA){
+    hist = {};
+    await chrome.storage.local.set({hist: {}, schema: SCHEMA});
+    setStatus("Data format updated - press Sync to rebuild history.");
+  } else {
+    hist = st.hist || {};
+  }
   sites = st.sites || [];
   if (st.lastSync) $("lastSync").textContent = "Last sync: " + new Date(st.lastSync).toLocaleString();
 }
-async function save(){ await chrome.storage.local.set({hist: hist, sites: sites, lastSync: Date.now()}); }
+async function save(){ await chrome.storage.local.set({hist: hist, sites: sites, lastSync: Date.now(), schema: SCHEMA}); }
 
 async function discoverSites(){
   const re = /<option[^>]*value="([0-9a-fA-F-]{36})"[^>]*>\s*([^<]+?)\s*<\/option>/g;
@@ -68,17 +80,34 @@ function parseReport(html, siteId, date){
   };
   const sums = mapRow(sumRow);
   const counts = mapRow(countRow);
+  const hourly = [];
+  for (const r of rows){
+    const first = r.children[0] ? r.children[0].textContent.trim() : "";
+    if (/^\d{1,2}:\d{2}$/.test(first)){
+      const c = Array.from(r.children);
+      hourly.push({
+        h: parseInt(first, 10),
+        sales: num(c[1] && c[1].textContent),
+        washes: num(c[2] && c[2].textContent),
+        cash: num(c[4] && c[4].textContent),
+        credit: num(c[5] && c[5].textContent)
+      });
+    }
+  }
+  hourly.sort((a, b) => a.h - b.h);
   return {
     date: date, siteId: siteId,
     revenue: sumRow ? num(sumRow.children[0].textContent) : 0,
     cash: num(sums["Cash"]), credit: num(sums["Credit Card"]),
+    passRenewAmt: num(sums["Pass Renew"]), newPassAmt: num(sums["New Pass"]),
     sales: num(counts["Sales"]), washes: num(counts["Washes"]), perWash: num(counts["$/ Wash"]),
     passUse: num(counts["Pass Use"]), vacPassUse: num(counts["Vac Pass Use"]),
     passRenew: num(counts["Pass Renew"]), newPass: num(counts["New Pass"]),
     declined: num(counts["Declined"]), passCancelled: num(counts["Pass Cancelled"]),
     renewFailure: num(counts["Renew Failure"]),
     viaTrig: num(counts["VIA Trig"]), viaOops: num(counts["VIA Oops"]),
-    viaPay: num(counts["VIA Pay"]), viaRep: num(counts["VIA Rep"]), viaAdd: num(counts["VIA Add"])
+    viaPay: num(counts["VIA Pay"]), viaRep: num(counts["VIA Rep"]), viaAdd: num(counts["VIA Add"]),
+    hourly: hourly
   };
 }
 
@@ -180,18 +209,85 @@ function renderSiteCards(todayStr, today){
   wrap.innerHTML = "";
   for (const s of sites){
     const r = (hist[s.id] || {})[todayStr] || {};
+    const rt = retail(r);
     const avg = siteAvgWeekday(s.id, today);
     const rev = r.revenue || 0;
     const delta = avg ? Math.round((rev - avg) / avg * 100) : 0;
     const div = document.createElement("div");
-    div.className = "card";
+    div.className = "card clickable";
     div.innerHTML = "<h3>" + s.name + "</h3>" +
       "<div class=\"big\">" + fmtMoney(rev) + "</div>" +
-      "<div class=\"row\"><span>Washes: " + (r.washes || 0) + "</span><span>$/wash: " + fmtMoney(r.perWash || 0) + "</span></div>" +
+      "<div class=\"row\"><span>Washes: " + (r.washes || 0) + "</span><span>Overall $/wash: " + fmtMoney(r.perWash || 0) + "</span></div>" +
+      "<div class=\"row\"><span>Retail washes: " + rt.washes + "</span><span>Retail $/wash: " + fmtMoney(rt.per) + "</span></div>" +
       "<div class=\"row\"><span>Renews: " + (r.passRenew || 0) + "</span><span>New: " + (r.newPass || 0) + "</span><span>Declined: " + (r.declined || 0) + "</span></div>" +
       "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+    div.addEventListener("click", () => openDetail(s));
     wrap.appendChild(div);
   }
+}
+
+function sumRange(sid, from, to){
+  const out = {revenue: 0, washes: 0, passUse: 0, newPassAmt: 0, passRenewAmt: 0, sales: 0, days: 0};
+  for (const dt of Object.keys(hist[sid] || {})){
+    if (dt >= from && dt <= to){
+      const r = hist[sid][dt];
+      out.revenue += r.revenue || 0; out.washes += r.washes || 0; out.passUse += r.passUse || 0;
+      out.newPassAmt += r.newPassAmt || 0; out.passRenewAmt += r.passRenewAmt || 0;
+      out.sales += r.sales || 0; out.days++;
+    }
+  }
+  return out;
+}
+
+function periodRow(label, t){
+  const rt = retail(t);
+  const overall = t.washes ? t.revenue / t.washes : 0;
+  return "<tr><td>" + label + "</td><td>" + fmtMoney(t.revenue) + "</td><td>" + t.washes + "</td><td>" + fmtMoney(overall) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td></tr>";
+}
+
+function openDetail(site){
+  const today = new Date();
+  const todayStr = ds(today);
+  const modal = $("detailModal");
+  const r = (hist[site.id] || {})[todayStr];
+  const wkStart = new Date(today); wkStart.setDate(wkStart.getDate() - today.getDay());
+  const moStart = todayStr.slice(0, 8) + "01";
+  let rows = "";
+  rows += periodRow("Today", sumRange(site.id, todayStr, todayStr));
+  rows += periodRow("This week", sumRange(site.id, ds(wkStart), todayStr));
+  rows += periodRow("This month", sumRange(site.id, moStart, todayStr));
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  rows += periodRow("Last 30 days", sumRange(site.id, ds(d30), todayStr));
+  const d90 = new Date(today); d90.setDate(d90.getDate() - 89);
+  rows += periodRow("Last 90 days", sumRange(site.id, ds(d90), todayStr));
+  let hourlyRows = "";
+  if (r && r.hourly && r.hourly.length){
+    for (const h of r.hourly){
+      if (h.sales || h.washes){
+        hourlyRows += "<tr><td>" + String(h.h).padStart(2, "0") + ":00</td><td>" + h.sales + "</td><td>" + h.washes + "</td></tr>";
+      }
+    }
+  }
+  if (!hourlyRows) hourlyRows = "<tr><td colspan=\"3\">No hourly activity recorded today</td></tr>";
+  let dailyRows = "";
+  for (let i = 13; i >= 0; i--){
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const k = ds(d);
+    const rec = (hist[site.id] || {})[k];
+    if (rec){
+      const rt = retail(rec);
+      dailyRows += "<tr><td>" + k + "</td><td>" + fmtMoney(rec.revenue) + "</td><td>" + rec.washes + "</td><td>" + fmtMoney(rec.perWash) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td></tr>";
+    }
+  }
+  $("detailBody").innerHTML =
+    "<h2>" + site.name + "</h2>" +
+    "<h3>Period totals</h3>" +
+    "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<h3>Today by hour</h3>" +
+    "<table class=\"via\"><thead><tr><th>Hour</th><th>Sales</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
+    "<h3>Last 14 days</h3>" +
+    "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
+  modal.style.display = "flex";
 }
 
 function renderChart(byDate, today){
@@ -282,5 +378,7 @@ async function init(){
   await load();
   render();
   $("syncBtn").addEventListener("click", sync);
+  $("detailClose").addEventListener("click", () => { $("detailModal").style.display = "none"; });
+  $("detailModal").addEventListener("click", (e) => { if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
 }
 document.addEventListener("DOMContentLoaded", init);
