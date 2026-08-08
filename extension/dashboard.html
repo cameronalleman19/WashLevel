@@ -6,8 +6,18 @@
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
+<div class="app">
+<nav id="sideNav">
+  <div class="brand">WashLevel<br>Sidecar</div>
+  <button class="nav-btn active" data-page="overview">Overview</button>
+  <button class="nav-btn" data-page="consumers">Consumers</button>
+  <button class="nav-btn" data-page="via">VIA Guard</button>
+</nav>
+<main>
+
+<div class="page active" id="page-overview">
 <header>
-  <h1>WashLevel Sidecar</h1>
+  <h1>Overview</h1>
   <div id="lastSync"></div>
   <button id="syncBtn">Sync</button>
 </header>
@@ -26,19 +36,46 @@
 <div id="siteCards" class="cards"></div>
 <h2>Revenue - last 30 days (all sites)</h2>
 <canvas id="chart"></canvas>
-<h2>VIA Guard exceptions <button id="viaSyncBtn" class="via-sync">Sync VIA</button> <span id="viaStatus" class="via-status"></span></h2>
-<div id="viaCards"></div>
 <h2>VIA Guard - last 7 days</h2>
 <table class="via"><thead><tr><th>Site</th><th>Trig</th><th>Oops</th><th>Pay</th><th>Rep</th><th>Add</th><th>Unresolved</th></tr></thead><tbody id="viaBody"></tbody></table>
 <h2>Anomalies</h2>
 <ul id="anomalies"></ul>
+</div>
+
+<div class="page" id="page-consumers">
+<header>
+  <h1>Consumers</h1>
+  <select id="consSort">
+    <option value="recent">Newest sign-up</option>
+    <option value="usageHigh">Wash usage: high to low</option>
+    <option value="usageLow">Wash usage: low to high</option>
+  </select>
+  <button id="consSyncBtn">Sync Consumers</button>
+</header>
+<div id="consStatus"></div>
+<table class="via consumers"><thead><tr><th>Name</th><th>Signed up</th><th>Washes 12mo</th><th>Washes/month</th><th>Vac/self-serve</th><th>Last wash</th><th></th></tr></thead><tbody id="consBody"></tbody></table>
+</div>
+
+<div class="page" id="page-via">
+<header>
+  <h1>VIA Guard exceptions</h1>
+  <button id="viaSyncBtn">Sync VIA</button>
+  <span id="viaStatus" class="via-status"></span>
+</header>
+<div id="viaCards"></div>
+</div>
+
+</main>
+</div>
 <div id="detailModal" style="display:none;">
   <div id="detailPanel">
     <button id="detailClose">Close</button>
     <div id="detailBody"></div>
   </div>
 </div>
+<script src="nav.js"></script>
 <script src="dashboard.js"></script>
 <script src="via.js"></script>
+<script src="consumers.js"></script>
 </body>
 </html>
