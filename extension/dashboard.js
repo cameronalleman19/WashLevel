@@ -103,7 +103,7 @@ function parseReport(html, siteId, date){
     const cells = Array.from(row.children);
     let ti = -1;
     for (let i = 0; i < cells.length; i++){
-      if (/^\d{1,2}:\d{2}$/.test(cells[i].textContent.trim())){ ti = i; break; }
+      if (/^\d{1,2}:\d{2}/.test(cells[i].textContent.trim())){ ti = i; break; }
     }
     if (ti === -1) continue;
     hourly.push({
