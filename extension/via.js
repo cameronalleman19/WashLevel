@@ -44,7 +44,7 @@ function parseDetail(html, id){
   }
   history.sort((a, b) => b.t - a.t);
   const trigM = html.match(/consumerpassexceptions\/trigger\/([0-9a-fA-F-]{36})/);
-  const closeM = html.match(/consumerpassexceptions\/close\/([0-9a-fA-F-]{36})/);
+  const closeM = html.match(/consumerpassexceptions\/closeexception\/([0-9a-fA-F-]{36})/);
   const imgs = [];
   const imre = /https:\/\/s3[^"'\s]*payments_(driver|license)\/([0-9a-fA-F-]{36})[^"'\s]*/g;
   let m;
@@ -182,7 +182,9 @@ async function viaAction(id, kind, btn){
   btn.disabled = true;
   btn.textContent = "Working...";
   try {
-    const res = await fetch(VBASE + "/consumerpassexceptions/" + kind + "/" + actionId + "/", {method: "POST", credentials: "include"});
+    const path = kind === "trigger" ? "trigger" : "closeexception";
+    const method = kind === "trigger" ? "POST" : "DELETE";
+    const res = await fetch(VBASE + "/consumerpassexceptions/" + path + "/" + actionId + "/", {method: method, credentials: "include"});
     if (res.ok){
       viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] " + (kind === "trigger" ? "Triggered" : "Closed") + " via Sidecar").trim();
       delete viaData[id];
