@@ -1,5 +1,5 @@
 const BASE = "https://admin.dencar.sancsoft.net";
-const SCHEMA = 3;
+const SCHEMA = 4;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
 
@@ -129,6 +129,8 @@ function parseReport(html, siteId, date){
     declined: num(counts["Declined"]), passCancelled: num(counts["Pass Cancelled"]),
     renewFailure: num(counts["Renew Failure"]),
     consumerVehicles: num(counts["Consumer Vehicles"]),
+    newPassOnline: num(counts["New Pass Online"]),
+    onlineGift: num(counts["Online Gift Pass"]),
     viaTrig: num(counts["VIA Trig"]), viaOops: num(counts["VIA Oops"]),
     viaPay: num(counts["VIA Pay"]), viaRep: num(counts["VIA Rep"]), viaAdd: num(counts["VIA Add"]),
     hourly: hourly
@@ -268,7 +270,7 @@ function renderSiteCards(todayStr, today){
       "<div class=\"row\"><span>Washes: " + (r.washes || 0) + "</span><span>Overall $/wash: " + fmtMoney(r.perWash || 0) + "</span></div>" +
       "<div class=\"row\"><span>Retail washes: " + rt.washes + "</span><span>Retail $/wash: " + fmtMoney(rt.per) + "</span></div>" +
       "<div class=\"row\"><span>Members: " + members + "</span><span>Use/member 30d: " + memberUse + "</span></div>" +
-      "<div class=\"row\"><span>Renews: " + (r.passRenew || 0) + "</span><span>New: " + (r.newPass || 0) + "</span><span>Declined: " + (r.declined || 0) + "</span></div>" +
+      "<div class=\"row\"><span>Renews: " + (r.passRenew || 0) + "</span><span>New: " + ((r.newPass || 0) + (r.newPassOnline || 0)) + "</span><span>Cancelled: " + (r.passCancelled || 0) + "</span><span>Declined: " + (r.declined || 0) + "</span></div>" +
       "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
     div.addEventListener("click", () => openDetail(s));
     wrap.appendChild(div);
@@ -290,10 +292,10 @@ function sumRange(sid, from, to){
   return out;
 }
 
-function periodRow(label, t, members){
+function periodRow(label, t, members, div){
   const rt = retail(t);
   const overall = t.washes ? t.revenue / t.washes : 0;
-  const mu = members ? (t.passUse / members).toFixed(1) + "x" : "--";
+  const mu = members ? (t.passUse / members / (div || 1)).toFixed(1) + "x" : "--";
   return "<tr><td>" + label + "</td><td>" + fmtMoney(t.revenue) + "</td><td>" + t.washes + "</td><td>" + fmtMoney(overall) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td><td>" + t.passUse + "</td><td>" + mu + "</td></tr>";
 }
 
@@ -312,13 +314,11 @@ function openDetail(site){
   const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
   rows += periodRow("Last 30 days", sumRange(site.id, ds(d30), todayStr), members);
   const d90 = new Date(today); d90.setDate(d90.getDate() - 89);
-  rows += periodRow("Last 90 days", sumRange(site.id, ds(d90), todayStr), members);
+  rows += periodRow("Last 90 days (monthly avg)", sumRange(site.id, ds(d90), todayStr), members, 3);
   let hourlyRows = "";
   if (r && r.hourly && r.hourly.length){
     for (const h of r.hourly){
-      if (h.washes){
-        hourlyRows += "<tr><td>" + String(h.h).padStart(2, "0") + ":00</td><td>" + h.washes + "</td></tr>";
-      }
+      hourlyRows += "<tr><td>" + String(h.h).padStart(2, "0") + ":00</td><td>" + h.washes + "</td></tr>";
     }
   }
   if (!hourlyRows) hourlyRows = "<tr><td colspan=\"2\">No hourly activity recorded today</td></tr>";
@@ -334,6 +334,28 @@ function openDetail(site){
     const label = new Date(yr, mo, 1).toLocaleString("en-US", {month: "long"});
     monthRows += "<tr><td>" + label + "</td><td>" + use + "</td><td>" + (members ? (use / members).toFixed(1) + "x" : "--") + "</td></tr>";
   }
+  let memberRows = "";
+  let yN = 0, yC = 0, yD = 0, yF = 0;
+  for (let mo = 0; mo <= today.getMonth(); mo++){
+    const mFrom = ds(new Date(yr, mo, 1));
+    const mTo = mo === today.getMonth() ? todayStr : ds(new Date(yr, mo + 1, 0));
+    let n = 0, c = 0, dcl = 0, rf = 0;
+    for (const dt of Object.keys(hist[site.id] || {})){
+      if (dt >= mFrom && dt <= mTo){
+        const rec2 = hist[site.id][dt];
+        n += (rec2.newPass || 0) + (rec2.newPassOnline || 0);
+        c += rec2.passCancelled || 0;
+        dcl += rec2.declined || 0;
+        rf += rec2.renewFailure || 0;
+      }
+    }
+    yN += n; yC += c; yD += dcl; yF += rf;
+    const net = n - c;
+    const mLabel = new Date(yr, mo, 1).toLocaleString("en-US", {month: "long"});
+    memberRows += "<tr><td>" + mLabel + "</td><td>" + n + "</td><td>" + c + "</td><td class=\"" + (net >= 0 ? "net-up" : "net-down") + "\">" + (net >= 0 ? "+" : "") + net + "</td><td>" + dcl + "</td><td>" + rf + "</td></tr>";
+  }
+  const yNet = yN - yC;
+  memberRows += "<tr><td><strong>YTD</strong></td><td><strong>" + yN + "</strong></td><td><strong>" + yC + "</strong></td><td class=\"" + (yNet >= 0 ? "net-up" : "net-down") + "\"><strong>" + (yNet >= 0 ? "+" : "") + yNet + "</strong></td><td><strong>" + yD + "</strong></td><td><strong>" + yF + "</strong></td></tr>";
   monthRows += "<tr><td><strong>YTD monthly avg</strong></td><td><strong>" + ytdUse + " total</strong></td><td><strong>" + (members ? (ytdUse / moCount / members).toFixed(1) + "x" : "--") + "</strong></td></tr>";
   let dailyRows = "";
   for (let i = 13; i >= 0; i--){
@@ -351,6 +373,8 @@ function openDetail(site){
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<h3>Today by hour</h3>" +
     "<table class=\"via\"><thead><tr><th>Hour</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
+    "<h3>Membership changes by month</h3>" +
+    "<table class=\"via\"><thead><tr><th>Month</th><th>New passes</th><th>Cancelled</th><th>Net</th><th>Declines</th><th>Renew failures</th></tr></thead><tbody>" + memberRows + "</tbody></table>" +
     "<h3>Member usage by month</h3>" +
     "<table class=\"via\"><thead><tr><th>Month</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + monthRows + "</tbody></table>" +
     "<h3>Revenue - last 30 days</h3>" +
