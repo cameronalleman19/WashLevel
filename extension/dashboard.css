@@ -5,7 +5,7 @@ h1{font-size:22px;margin:0;flex:1;}
 button{background:#1f4393;color:#fff;border:none;border-radius:6px;padding:10px 22px;font-size:15px;cursor:pointer;}
 button:hover{background:#2a55b8;}
 #status{margin:10px 0;color:#ffd166;min-height:18px;}
-.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:14px 0 6px;}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:14px 0 6px;}
 .stat{background:#182640;border-radius:10px;padding:14px;}
 .stat label{color:#8fa3c0;font-size:12px;text-transform:uppercase;letter-spacing:.5px;}
 .stat div{font-size:26px;font-weight:600;margin-top:6px;}
@@ -34,3 +34,5 @@ ul#anomalies li.ok{color:#4ade80;list-style:none;margin-left:-18px;}
 #detailPanel h2{color:#eaeef5;text-transform:none;font-size:20px;margin:0 0 4px;letter-spacing:0;}
 #detailPanel h3{font-size:13px;color:#8fa3c0;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.5px;}
 #detailClose{float:right;background:#233453;}
+
+.members{color:#8fa3c0;font-size:14px;font-weight:400;}

@@ -1,6 +1,6 @@
 const BASE = "https://admin.dencar.sancsoft.net";
 const DAYS_BACK = 90;
-const SCHEMA = 2;
+const SCHEMA = 3;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
 
@@ -12,10 +12,27 @@ function ds(d){ return d.toLocaleDateString("en-CA"); }
 function num(s){ const m = String(s).replace(/[$,]/g, "").match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
 function setStatus(msg){ $("status").textContent = msg; }
 function dedupe(arr){ const seen = {}; const out = []; for (const s of arr){ if (!seen[s.id]){ seen[s.id] = 1; out.push(s); } } return out; }
+
 function retail(r){
   const rw = Math.max(0, (r.washes || 0) - (r.passUse || 0));
-  const rr = Math.max(0, (r.revenue || 0) - (r.newPassAmt || 0) - (r.passRenewAmt || 0));
+  const excl = (r.newPassAmt || 0) + (r.passRenewAmt || 0) + (r.viaPayAmt || 0) + (r.viaAddAmt || 0) + (r.newPassOnlineAmt || 0) + (r.onlineGiftAmt || 0);
+  const rr = Math.max(0, (r.revenue || 0) - excl);
   return {washes: rw, revenue: rr, per: rw ? rr / rw : 0};
+}
+
+function latestMembers(sid){
+  const days = Object.keys(hist[sid] || {}).sort();
+  for (let i = days.length - 1; i >= 0; i--){
+    const v = hist[sid][days[i]].consumerVehicles || 0;
+    if (v > 0) return v;
+  }
+  return 0;
+}
+
+function passUseRange(sid, from, to){
+  let n = 0;
+  for (const dt of Object.keys(hist[sid] || {})){ if (dt >= from && dt <= to) n += hist[sid][dt].passUse || 0; }
+  return n;
 }
 
 async function load(){
@@ -81,18 +98,21 @@ function parseReport(html, siteId, date){
   const sums = mapRow(sumRow);
   const counts = mapRow(countRow);
   const hourly = [];
-  for (const r of rows){
-    const first = r.children[0] ? r.children[0].textContent.trim() : "";
-    if (/^\d{1,2}:\d{2}$/.test(first)){
-      const c = Array.from(r.children);
-      hourly.push({
-        h: parseInt(first, 10),
-        sales: num(c[1] && c[1].textContent),
-        washes: num(c[2] && c[2].textContent),
-        cash: num(c[4] && c[4].textContent),
-        credit: num(c[5] && c[5].textContent)
-      });
+  for (const row of rows){
+    if (row === headRow || row === sumRow || row === countRow) continue;
+    const cells = Array.from(row.children);
+    let ti = -1;
+    for (let i = 0; i < cells.length; i++){
+      if (/^\d{1,2}:\d{2}$/.test(cells[i].textContent.trim())){ ti = i; break; }
     }
+    if (ti === -1) continue;
+    hourly.push({
+      h: parseInt(cells[ti].textContent.trim(), 10),
+      sales: num(cells[ti + 1] && cells[ti + 1].textContent),
+      washes: num(cells[ti + 2] && cells[ti + 2].textContent),
+      cash: num(cells[ti + 4] && cells[ti + 4].textContent),
+      credit: num(cells[ti + 5] && cells[ti + 5].textContent)
+    });
   }
   hourly.sort((a, b) => a.h - b.h);
   return {
@@ -100,11 +120,14 @@ function parseReport(html, siteId, date){
     revenue: sumRow ? num(sumRow.children[0].textContent) : 0,
     cash: num(sums["Cash"]), credit: num(sums["Credit Card"]),
     passRenewAmt: num(sums["Pass Renew"]), newPassAmt: num(sums["New Pass"]),
+    viaPayAmt: num(sums["VIA Pay"]), viaAddAmt: num(sums["VIA Add"]),
+    newPassOnlineAmt: num(sums["New Pass Online"]), onlineGiftAmt: num(sums["Online Gift Pass"]),
     sales: num(counts["Sales"]), washes: num(counts["Washes"]), perWash: num(counts["$/ Wash"]),
     passUse: num(counts["Pass Use"]), vacPassUse: num(counts["Vac Pass Use"]),
     passRenew: num(counts["Pass Renew"]), newPass: num(counts["New Pass"]),
     declined: num(counts["Declined"]), passCancelled: num(counts["Pass Cancelled"]),
     renewFailure: num(counts["Renew Failure"]),
+    consumerVehicles: num(counts["Consumer Vehicles"]),
     viaTrig: num(counts["VIA Trig"]), viaOops: num(counts["VIA Oops"]),
     viaPay: num(counts["VIA Pay"]), viaRep: num(counts["VIA Rep"]), viaAdd: num(counts["VIA Add"]),
     hourly: hourly
@@ -198,6 +221,13 @@ function render(){
   $("sumWtd").textContent = fmtMoney(wtd);
   $("sumMtd").textContent = fmtMoney(p.mtd);
   $("sumProj").textContent = fmtMoney(p.projected);
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  let totUse = 0, totMembers = 0;
+  for (const s of sites){
+    totUse += passUseRange(s.id, ds(d30), todayStr);
+    totMembers += latestMembers(s.id);
+  }
+  $("sumMemberUse").textContent = totMembers ? (totUse / totMembers).toFixed(1) + "x" : "--";
   renderSiteCards(todayStr, today);
   renderChart(byDate, today);
   renderVia(today);
@@ -207,18 +237,23 @@ function render(){
 function renderSiteCards(todayStr, today){
   const wrap = $("siteCards");
   wrap.innerHTML = "";
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
   for (const s of sites){
     const r = (hist[s.id] || {})[todayStr] || {};
     const rt = retail(r);
     const avg = siteAvgWeekday(s.id, today);
     const rev = r.revenue || 0;
     const delta = avg ? Math.round((rev - avg) / avg * 100) : 0;
+    const members = latestMembers(s.id);
+    const use30 = passUseRange(s.id, ds(d30), todayStr);
+    const memberUse = members ? (use30 / members).toFixed(1) + "x" : "--";
     const div = document.createElement("div");
     div.className = "card clickable";
     div.innerHTML = "<h3>" + s.name + "</h3>" +
       "<div class=\"big\">" + fmtMoney(rev) + "</div>" +
       "<div class=\"row\"><span>Washes: " + (r.washes || 0) + "</span><span>Overall $/wash: " + fmtMoney(r.perWash || 0) + "</span></div>" +
       "<div class=\"row\"><span>Retail washes: " + rt.washes + "</span><span>Retail $/wash: " + fmtMoney(rt.per) + "</span></div>" +
+      "<div class=\"row\"><span>Members: " + members + "</span><span>Use/member 30d: " + memberUse + "</span></div>" +
       "<div class=\"row\"><span>Renews: " + (r.passRenew || 0) + "</span><span>New: " + (r.newPass || 0) + "</span><span>Declined: " + (r.declined || 0) + "</span></div>" +
       "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
     div.addEventListener("click", () => openDetail(s));
@@ -227,22 +262,25 @@ function renderSiteCards(todayStr, today){
 }
 
 function sumRange(sid, from, to){
-  const out = {revenue: 0, washes: 0, passUse: 0, newPassAmt: 0, passRenewAmt: 0, sales: 0, days: 0};
+  const out = {revenue: 0, washes: 0, passUse: 0, newPassAmt: 0, passRenewAmt: 0, viaPayAmt: 0, viaAddAmt: 0, newPassOnlineAmt: 0, onlineGiftAmt: 0, sales: 0, days: 0};
   for (const dt of Object.keys(hist[sid] || {})){
     if (dt >= from && dt <= to){
       const r = hist[sid][dt];
       out.revenue += r.revenue || 0; out.washes += r.washes || 0; out.passUse += r.passUse || 0;
       out.newPassAmt += r.newPassAmt || 0; out.passRenewAmt += r.passRenewAmt || 0;
+      out.viaPayAmt += r.viaPayAmt || 0; out.viaAddAmt += r.viaAddAmt || 0;
+      out.newPassOnlineAmt += r.newPassOnlineAmt || 0; out.onlineGiftAmt += r.onlineGiftAmt || 0;
       out.sales += r.sales || 0; out.days++;
     }
   }
   return out;
 }
 
-function periodRow(label, t){
+function periodRow(label, t, members){
   const rt = retail(t);
   const overall = t.washes ? t.revenue / t.washes : 0;
-  return "<tr><td>" + label + "</td><td>" + fmtMoney(t.revenue) + "</td><td>" + t.washes + "</td><td>" + fmtMoney(overall) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td></tr>";
+  const mu = members ? (t.passUse / members).toFixed(1) + "x" : "--";
+  return "<tr><td>" + label + "</td><td>" + fmtMoney(t.revenue) + "</td><td>" + t.washes + "</td><td>" + fmtMoney(overall) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td><td>" + t.passUse + "</td><td>" + mu + "</td></tr>";
 }
 
 function openDetail(site){
@@ -250,16 +288,17 @@ function openDetail(site){
   const todayStr = ds(today);
   const modal = $("detailModal");
   const r = (hist[site.id] || {})[todayStr];
+  const members = latestMembers(site.id);
   const wkStart = new Date(today); wkStart.setDate(wkStart.getDate() - today.getDay());
   const moStart = todayStr.slice(0, 8) + "01";
   let rows = "";
-  rows += periodRow("Today", sumRange(site.id, todayStr, todayStr));
-  rows += periodRow("This week", sumRange(site.id, ds(wkStart), todayStr));
-  rows += periodRow("This month", sumRange(site.id, moStart, todayStr));
+  rows += periodRow("Today", sumRange(site.id, todayStr, todayStr), members);
+  rows += periodRow("This week", sumRange(site.id, ds(wkStart), todayStr), members);
+  rows += periodRow("This month", sumRange(site.id, moStart, todayStr), members);
   const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
-  rows += periodRow("Last 30 days", sumRange(site.id, ds(d30), todayStr));
+  rows += periodRow("Last 30 days", sumRange(site.id, ds(d30), todayStr), members);
   const d90 = new Date(today); d90.setDate(d90.getDate() - 89);
-  rows += periodRow("Last 90 days", sumRange(site.id, ds(d90), todayStr));
+  rows += periodRow("Last 90 days", sumRange(site.id, ds(d90), todayStr), members);
   let hourlyRows = "";
   if (r && r.hourly && r.hourly.length){
     for (const h of r.hourly){
@@ -280,9 +319,9 @@ function openDetail(site){
     }
   }
   $("detailBody").innerHTML =
-    "<h2>" + site.name + "</h2>" +
+    "<h2>" + site.name + " <span class=\"members\">(" + members + " members)</span></h2>" +
     "<h3>Period totals</h3>" +
-    "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<h3>Today by hour</h3>" +
     "<table class=\"via\"><thead><tr><th>Hour</th><th>Sales</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
     "<h3>Last 14 days</h3>" +
