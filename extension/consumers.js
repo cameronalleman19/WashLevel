@@ -18,18 +18,22 @@ async function fetchConsumerPage(page){
   if (!res.ok) return [];
   const doc = new DOMParser().parseFromString(await res.text(), "text/html");
   const out = [];
-  doc.querySelectorAll("tr").forEach(r => {
-    const link = r.querySelector("a[href*='/consumer/']");
-    if (!link) return;
-    const m = (link.getAttribute("href") || "").match(/consumer\/([0-9a-fA-F-]{36})/);
-    if (!m) return;
-    const txt = r.textContent.replace(/\s+/g, " ").trim();
-    const dm = txt.match(/(\d{2}\/\d{2}\/\d{4})/);
-    let signup = 0;
-    if (dm){ const p = dm[1].split("/"); signup = new Date(p[2], p[0] - 1, p[1]).getTime(); }
-    let name = link.textContent.replace(/\s+/g, " ").trim();
-    if (!name) name = txt.replace(dm ? dm[1] : "", "").trim();
-    out.push({id: m[1], name: name || "(no name)", signup: signup});
+  doc.querySelectorAll("div.card[id]").forEach(card => {
+    const id = (card.getAttribute("id") || "").trim();
+    if (!/^[0-9a-fA-F-]{36}$/.test(id)) return;
+    const h = card.querySelector("h5");
+    let name = "", signup = 0;
+    if (h){
+      const small = h.querySelector("small");
+      const dTxt = small ? small.textContent.trim() : "";
+      const dm = dTxt.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (dm) signup = new Date(dm[3], dm[1] - 1, dm[2]).getTime();
+      const hClone = h.cloneNode(true);
+      const sm = hClone.querySelector("small");
+      if (sm) sm.remove();
+      name = hClone.textContent.replace(/\s+/g, " ").trim();
+    }
+    out.push({id: id, name: name || "(no name)", signup: signup});
   });
   return out;
 }
