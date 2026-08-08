@@ -64,6 +64,7 @@ function parseDetail(html, id){
     imgs: imgs,
     triggerId: trigM ? trigM[1] : null,
     closeId: closeM ? closeM[1] : null,
+    consumerId: (html.match(/\/consumer\/([0-9a-fA-F-]{36})/) || [null, null])[1],
     fetched: Date.now()
   };
 }
@@ -71,7 +72,7 @@ function parseDetail(html, id){
 function normPlate(p){ return (p||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/0/g,"O").replace(/8/g,"B").replace(/1/g,"I").replace(/5/g,"S").replace(/2/g,"Z"); }
 function editDist(a,b){ if(Math.abs(a.length-b.length)>1) return 9; const m=[]; for(let i=0;i<=a.length;i++){m[i]=[i];} for(let j=0;j<=b.length;j++){m[0][j]=j;} for(let i=1;i<=a.length;i++){for(let j=1;j<=b.length;j++){m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));}} return m[a.length][b.length]; }
 
-function calcPerMonth(e){ if(!e.history.length) return 0; const spanMs = e.history.length > 1 ? (e.history[0].t - e.history[e.history.length - 1].t) : 0; return e.history.length / Math.max(spanMs / 2592000000, 1); }
+function calcPerMonth(e){ const h = (e.washHistory && e.washHistory.length) ? e.washHistory : e.history.filter(x => x.lp && x.lp !== "N/A"); if(!h.length) return 0; const spanMs = h.length > 1 ? (h[0].t - h[h.length - 1].t) : 0; return h.length / Math.max(spanMs / 2592000000, 1); }
 
 function recommend(e){
   const onPlan = (lp) => e.plates.some(p => lp && (lp === p || editDist(normPlate(lp), normPlate(p)) <= 1));
@@ -116,6 +117,7 @@ async function viaSync(){
       V$("viaStatus").textContent = "Loading exception " + (i + 1) + " / " + ids.length;
       const r2 = await fetch(VBASE + "/consumerpassexceptions/" + ids[i] + "/", {credentials: "include"});
       const d = parseDetail(await r2.text(), ids[i]);
+      await enrichConsumer(d);
       fresh[ids[i]] = d;
       const key = d.consumerPassId || ids[i];
       viaSeen[key] = viaSeen[key] || {};
@@ -154,7 +156,7 @@ function renderViaList(){
       "<div class=\"via-info\">" +
         "<div class=\"via-name\">" + vEsc(e.firstName + " " + e.lastName) + " <span class=\"via-pass\">(" + vEsc(e.passName) + ")</span></div>" +
         "<div class=\"via-row\">Plates on plan: <strong>" + vEsc(e.plates.join(", ") || "none parsed") + "</strong> | Vehicles: " + e.vehicleCount + "</div>" +
-        "<div class=\"via-row\">Last pass use: " + vEsc(lastUse) + " | Washes/month (computed): " + calcPerMonth(e).toFixed(1) + " | Use count: " + vEsc(e.useCount) + "</div>" +
+        "<div class=\"via-row\">Last pass use: " + vEsc(lastUse) + " | Washes/month (computed): " + calcPerMonth(e).toFixed(1) + " | Vac/self-serve uses 12mo: " + (e.otherUses || 0) + " | Use count: " + vEsc(e.useCount) + "</div>" +
         "<div class=\"via-row\">Exceptions seen for this member: " + seenCount + "</div>" +
         "<div class=\"via-rec " + rec.cls + "\">" + rec.verdict + "</div>" +
         "<div class=\"via-why\">" + rec.why + "</div>" +
@@ -226,3 +228,47 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderViaList();
   V$("viaSyncBtn").addEventListener("click", viaSync);
 });
+
+async function enrichConsumer(d){
+  if (!d.consumerId) return;
+  try {
+    const end = new Date();
+    const start = new Date(end); start.setMonth(start.getMonth() - 12);
+    const body = "currentPage=1&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=" + start.toLocaleDateString("en-CA") + "&EndDate=" + end.toLocaleDateString("en-CA") + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=" + d.consumerId;
+    const res = await fetch(VBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
+    if (!res.ok) return;
+    const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+    const rows = Array.from(doc.querySelectorAll("tr"));
+    let tsIdx = -1, lpIdx = -1;
+    for (const r of rows){
+      const cells = Array.from(r.children);
+      cells.forEach((c, i) => {
+        const t = c.textContent.trim().toLowerCase();
+        if (c.tagName === "TH" && tsIdx === -1 && /timestamp|date/.test(t)) tsIdx = i;
+        if (c.tagName === "TH" && lpIdx === -1 && /license|lp\b|plate/.test(t)) lpIdx = i;
+      });
+      if (tsIdx >= 0 && lpIdx >= 0) break;
+    }
+    const washes = [];
+    let others = 0;
+    for (const r of rows){
+      const cells = Array.from(r.children);
+      if (!cells.length || cells[0].tagName === "TH") continue;
+      let ts = "";
+      if (tsIdx >= 0 && cells[tsIdx]) ts = cells[tsIdx].textContent.trim();
+      if (!/^\d{2}\/\d{2}\/\d{4}/.test(ts)){
+        const alt = cells.map(c => c.textContent.trim()).find(x => /^\d{2}\/\d{2}\/\d{4}/.test(x));
+        if (alt) ts = alt; else continue;
+      }
+      let lp = "";
+      if (lpIdx >= 0 && cells[lpIdx]) lp = cells[lpIdx].textContent.trim();
+      const p = ts.split(/[\/ :]/);
+      const t = new Date(p[2], p[0] - 1, p[1], p[3] || 0, p[4] || 0, p[5] || 0).getTime();
+      const plate = (lp || "").toUpperCase();
+      if (plate && plate !== "N/A" && plate !== "-") washes.push({t: t, lp: plate});
+      else others++;
+    }
+    washes.sort((a, b) => b.t - a.t);
+    if (washes.length || others){ d.washHistory = washes; d.otherUses = others; }
+  } catch(err){}
+}
