@@ -127,7 +127,7 @@ async function consSync(){
   C$("consSyncBtn").disabled = false;
 }
 
-function consPerMonth(c){ return c.washes / 12; }
+function consPerMonth(c){ const mo = c.signup ? Math.min(12, Math.max((Date.now() - c.signup) / 2592000000, 1)) : 12; return c.washes / mo; }
 
 function renderConsumers(){
   const tb = C$("consBody");
