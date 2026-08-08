@@ -1,5 +1,4 @@
 const BASE = "https://admin.dencar.sancsoft.net";
-function backfillStart(){ const n = new Date(); return new Date(n.getFullYear(), 0, 1); }
 const SCHEMA = 3;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
@@ -7,8 +6,10 @@ const $ = (id) => document.getElementById(id);
 let hist = {};
 let sites = [];
 
+function backfillStart(){ const n = new Date(); return new Date(n.getFullYear(), 0, 1); }
 function fmtMoney(n){ return "$" + (n || 0).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function ds(d){ return d.toLocaleDateString("en-CA"); }
+function fmtDate(k){ const p = k.split("-"); return parseInt(p[1], 10) + "/" + parseInt(p[2], 10) + "/" + p[0]; }
 function num(s){ const m = String(s).replace(/[$,]/g, "").match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
 function setStatus(msg){ $("status").textContent = msg; }
 function dedupe(arr){ const seen = {}; const out = []; for (const s of arr){ if (!seen[s.id]){ seen[s.id] = 1; out.push(s); } } return out; }
@@ -315,25 +316,16 @@ function openDetail(site){
   let hourlyRows = "";
   if (r && r.hourly && r.hourly.length){
     for (const h of r.hourly){
-      if (h.sales || h.washes){
-        hourlyRows += "<tr><td>" + String(h.h).padStart(2, "0") + ":00</td><td>" + h.sales + "</td><td>" + h.washes + "</td></tr>";
+      if (h.washes){
+        hourlyRows += "<tr><td>" + String(h.h).padStart(2, "0") + ":00</td><td>" + h.washes + "</td></tr>";
       }
     }
   }
-  if (!hourlyRows) hourlyRows = "<tr><td colspan=\"3\">No hourly activity recorded today</td></tr>";
-  let dailyRows = "";
-  for (let i = 13; i >= 0; i--){
-    const d = new Date(today); d.setDate(d.getDate() - i);
-    const k = ds(d);
-    const rec = (hist[site.id] || {})[k];
-    if (rec){
-      const rt = retail(rec);
-      dailyRows += "<tr><td>" + k + "</td><td>" + fmtMoney(rec.revenue) + "</td><td>" + rec.washes + "</td><td>" + fmtMoney(rec.perWash) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td></tr>";
-    }
-  }
+  if (!hourlyRows) hourlyRows = "<tr><td colspan=\"2\">No hourly activity recorded today</td></tr>";
   let monthRows = "";
   const yr = today.getFullYear();
   let ytdUse = 0;
+  const moCount = today.getMonth() + 1;
   for (let mo = 0; mo <= today.getMonth(); mo++){
     const from = ds(new Date(yr, mo, 1));
     const to = mo === today.getMonth() ? todayStr : ds(new Date(yr, mo + 1, 0));
@@ -342,31 +334,41 @@ function openDetail(site){
     const label = new Date(yr, mo, 1).toLocaleString("en-US", {month: "long"});
     monthRows += "<tr><td>" + label + "</td><td>" + use + "</td><td>" + (members ? (use / members).toFixed(1) + "x" : "--") + "</td></tr>";
   }
-  monthRows += "<tr><td><strong>YTD</strong></td><td><strong>" + ytdUse + "</strong></td><td><strong>" + (members ? (ytdUse / members).toFixed(1) + "x" : "--") + "</strong></td></tr>";
+  monthRows += "<tr><td><strong>YTD monthly avg</strong></td><td><strong>" + ytdUse + " total</strong></td><td><strong>" + (members ? (ytdUse / moCount / members).toFixed(1) + "x" : "--") + "</strong></td></tr>";
+  let dailyRows = "";
+  for (let i = 13; i >= 0; i--){
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const k = ds(d);
+    const rec = (hist[site.id] || {})[k];
+    if (rec){
+      const rt = retail(rec);
+      dailyRows += "<tr><td>" + fmtDate(k) + "</td><td>" + fmtMoney(rec.revenue) + "</td><td>" + rec.washes + "</td><td>" + fmtMoney(rec.perWash) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td><td>" + (rec.passUse || 0) + "</td></tr>";
+    }
+  }
   $("detailBody").innerHTML =
     "<h2>" + site.name + " <span class=\"members\">(" + members + " members)</span></h2>" +
     "<h3>Period totals</h3>" +
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<h3>Today by hour</h3>" +
-    "<table class=\"via\"><thead><tr><th>Hour</th><th>Sales</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
+    "<table class=\"via\"><thead><tr><th>Hour</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
     "<h3>Member usage by month</h3>" +
     "<table class=\"via\"><thead><tr><th>Month</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + monthRows + "</tbody></table>" +
     "<h3>Revenue - last 30 days</h3>" +
     "<canvas id=\"siteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +
-    "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
+    "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Member washes</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
   modal.style.display = "flex";
-  const labels = [], vals = [];
+  const chartDates = [], vals = [];
   for (let i = 29; i >= 0; i--){
     const d = new Date(today); d.setDate(d.getDate() - i);
     const k = ds(d);
-    labels.push(k.slice(5));
+    chartDates.push(k);
     vals.push(((hist[site.id] || {})[k] || {}).revenue || 0);
   }
-  drawLine($("siteChart"), vals, labels);
+  drawLine($("siteChart"), vals, chartDates);
 }
 
-function drawLine(c, vals, labels){
+function drawLine(c, vals, dates){
   const ctx = c.getContext("2d");
   const W = c.width = c.clientWidth * 2;
   const H = c.height = 360;
@@ -382,48 +384,51 @@ function drawLine(c, vals, labels){
   ctx.strokeStyle = "#4da3ff";
   ctx.lineWidth = 3;
   ctx.beginPath();
+  const pts = [];
   vals.forEach((v, i) => {
     const x = padL + i * xw;
     const yv = H - padB - (v / max) * (H - padB - padT);
+    pts.push(x);
     if (i === 0) ctx.moveTo(x, yv); else ctx.lineTo(x, yv);
   });
   ctx.stroke();
   ctx.fillStyle = "#8fa3c0";
-  for (let i = 0; i < labels.length; i += 5){ ctx.fillText(labels[i], padL + i * xw - 20, H - 10); }
+  for (let i = 0; i < dates.length; i += 5){
+    const p = dates[i].split("-");
+    ctx.fillText(parseInt(p[1], 10) + "/" + parseInt(p[2], 10), padL + i * xw - 20, H - 10);
+  }
+  c.__data = {vals: vals, dates: dates, pts: pts};
+  if (!c.__hoverBound){
+    c.__hoverBound = true;
+    const tip = document.createElement("div");
+    tip.className = "chart-tip";
+    tip.style.display = "none";
+    document.body.appendChild(tip);
+    c.addEventListener("mousemove", (e) => {
+      const d = c.__data;
+      if (!d) return;
+      const rect = c.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (c.width / rect.width);
+      let best = 0, bd = 1e9;
+      d.pts.forEach((px, i) => { const dist = Math.abs(px - mx); if (dist < bd){ bd = dist; best = i; } });
+      tip.textContent = fmtDate(d.dates[best]) + ": " + fmtMoney(d.vals[best]);
+      tip.style.display = "block";
+      tip.style.left = (e.pageX + 14) + "px";
+      tip.style.top = (e.pageY - 34) + "px";
+    });
+    c.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+  }
 }
 
 function renderChart(byDate, today){
-  const c = $("chart");
-  const ctx = c.getContext("2d");
-  const labels = [], vals = [];
+  const dates = [], vals = [];
   for (let i = 29; i >= 0; i--){
     const d = new Date(today); d.setDate(d.getDate() - i);
     const k = ds(d);
-    labels.push(k.slice(5));
+    dates.push(k);
     vals.push(byDate[k] || 0);
   }
-  const W = c.width = c.clientWidth * 2;
-  const H = c.height = 360;
-  ctx.clearRect(0, 0, W, H);
-  const max = Math.max.apply(null, vals.concat([1]));
-  const padL = 80, padB = 40, padT = 20, padR = 20;
-  ctx.strokeStyle = "#3a4a63";
-  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
-  ctx.fillStyle = "#8fa3c0";
-  ctx.font = "20px system-ui";
-  ctx.fillText(fmtMoney(max), 4, padT + 16);
-  const xw = (W - padL - padR) / (vals.length - 1);
-  ctx.strokeStyle = "#4da3ff";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  vals.forEach((v, i) => {
-    const x = padL + i * xw;
-    const yv = H - padB - (v / max) * (H - padB - padT);
-    if (i === 0) ctx.moveTo(x, yv); else ctx.lineTo(x, yv);
-  });
-  ctx.stroke();
-  ctx.fillStyle = "#8fa3c0";
-  for (let i = 0; i < labels.length; i += 5){ ctx.fillText(labels[i], padL + i * xw - 20, H - 10); }
+  drawLine($("chart"), vals, dates);
 }
 
 function renderVia(today){

@@ -36,3 +36,5 @@ ul#anomalies li.ok{color:#4ade80;list-style:none;margin-left:-18px;}
 #detailClose{float:right;background:#233453;}
 
 .members{color:#8fa3c0;font-size:14px;font-weight:400;}
+
+.chart-tip{position:absolute;background:#233453;color:#eaeef5;border:1px solid #3a4a63;border-radius:6px;padding:6px 10px;font-size:13px;pointer-events:none;z-index:200;white-space:nowrap;}
