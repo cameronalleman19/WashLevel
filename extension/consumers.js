@@ -93,7 +93,7 @@ async function consSync(){
     const byName = {};
     const fresh = {};
     for (const c of list){
-      fresh[c.id] = {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}};
+      fresh[c.id] = {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0};
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
@@ -107,6 +107,8 @@ async function consSync(){
       for (const row of batch){
         const c = byName[cNorm(row.name)];
         if (!c) continue;
+        if (/pass cancelled/i.test(row.method)){ if (row.t > c.cancelled) c.cancelled = row.t; }
+        if (/new pass/i.test(row.method)){ if (row.t > c.lastNew) c.lastNew = row.t; }
         if (row.lp && row.lp !== "N/A" && row.lp !== "-"){
           c.washes++;
           const md = new Date(row.t);

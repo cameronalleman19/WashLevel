@@ -68,6 +68,10 @@ function mViaRecent(c){
   return false;
 }
 
+function mIsCancelled(c){
+  return !!(c.cancelled && c.cancelled > (c.lastNew || 0));
+}
+
 function mScore(c){
   const reasons = [];
   let score = 0;
@@ -92,6 +96,7 @@ function mRenderRisk(){
   }
   const scored = [];
   for (const c of Object.values(mConsumers)){
+    if (mIsCancelled(c)) continue;
     const r = mScore(c);
     if (r.score >= 25) scored.push({c: c, r: r});
   }
@@ -136,9 +141,9 @@ async function mRenderCohorts(){
     for (const n of [1, 3, 6, 12]){
       const target = mAddMonths(cohortStart, n);
       if (target >= mAddMonths(now, 0)){ cells += "<td>--</td>"; continue; }
-      const tk = mMonthKey(target);
-      const active = byCohort[key].filter(c => (c.months || {})[tk] > 0).length;
-      cells += "<td>" + Math.round(active / base * 100) + "%</td>";
+      const end = mAddMonths(cohortStart, n + 1).getTime();
+      const paying = byCohort[key].filter(c => !(c.cancelled && c.cancelled < end && c.cancelled > (c.lastNew || 0))).length;
+      cells += "<td>" + Math.round(paying / base * 100) + "%</td>";
     }
     const tr = document.createElement("tr");
     tr.innerHTML = "<td>" + mMonthLabel(key) + "</td><td>" + base + "</td>" + cells;
