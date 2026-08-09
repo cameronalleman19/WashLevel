@@ -85,40 +85,16 @@ function rRenderTiles(){
 
 function rRenderChart(){
   const cv = R$("retChart");
-  if (!cv) return;
-  const ctx = cv.getContext("2d");
-  const W = cv.width = cv.clientWidth || 800;
-  const H = cv.height = 220;
-  ctx.clearRect(0, 0, W, H);
+  if (!cv || typeof wlLineChart !== "function") return;
   const today = new Date();
-  const keys = [], vals = [];
+  const labels = [], vals = [];
   for (let i = 29; i >= 0; i--){
     const d = new Date(today); d.setDate(d.getDate() - i);
     const k = rDs(d);
-    keys.push(k);
+    labels.push(k);
     vals.push(rDayTotals(k).revenue);
   }
-  const max = Math.max.apply(null, vals.concat([1]));
-  const padL = 50, padB = 22, padT = 10;
-  ctx.strokeStyle = "#444"; ctx.beginPath();
-  ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - 8, H - padB); ctx.stroke();
-  ctx.fillStyle = "#888"; ctx.font = "11px sans-serif";
-  ctx.fillText(rMoney0(max), 4, padT + 10);
-  ctx.fillText("$0", 4, H - padB);
-  ctx.fillText(rFmtDate(keys[0]), padL, H - 6);
-  ctx.fillText(rFmtDate(keys[keys.length - 1]), W - 44, H - 6);
-  const xw = (W - padL - 12) / (vals.length - 1);
-  ctx.beginPath();
-  for (let i = 0; i < vals.length; i++){
-    const x = padL + i * xw;
-    const yv = H - padB - (vals[i] / max) * (H - padB - padT);
-    if (i === 0) ctx.moveTo(x, yv); else ctx.lineTo(x, yv);
-  }
-  ctx.strokeStyle = "#4da3ff"; ctx.lineWidth = 2; ctx.stroke();
-  ctx.lineTo(padL + (vals.length - 1) * xw, H - padB);
-  ctx.lineTo(padL, H - padB);
-  ctx.closePath();
-  ctx.fillStyle = "rgba(77,163,255,0.15)"; ctx.fill();
+  wlLineChart(cv, labels, vals);
 }
 
 function rRenderDow(){
@@ -221,6 +197,7 @@ async function retRender(){
   R$("retStatus").textContent = "Calculating...";
   await retLoad();
   rRenderTiles();
+  if (typeof wlTips === "function") wlTips("retTiles", WL_TIP_RETAIL);
   rRenderChart();
   rRenderDow();
   rRenderCapture();

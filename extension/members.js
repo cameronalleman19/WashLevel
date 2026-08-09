@@ -87,6 +87,20 @@ function mScore(c){
   return {score: score, reasons: reasons, recent: recent, base: base};
 }
 
+function mRenderChart(){
+  const cv = M$("memChart");
+  if (!cv || typeof wlLineChart !== "function") return;
+  const today = new Date();
+  const labels = [], vals = [];
+  for (let i = 29; i >= 0; i--){
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const k = mDs(d);
+    labels.push(k);
+    vals.push(mMemberDay(k).rev);
+  }
+  wlLineChart(cv, labels, vals);
+}
+
 function mRenderRisk(){
   const tb = M$("memRiskBody");
   tb.innerHTML = "";
@@ -97,6 +111,7 @@ function mRenderRisk(){
   const scored = [];
   for (const c of Object.values(mConsumers)){
     if (mIsCancelled(c)) continue;
+    if (!(c.washes || c.lastNew || c.lastRenew || c.cancelled)) continue;
     const r = mScore(c);
     if (r.score >= 25) scored.push({c: c, r: r});
   }
@@ -288,9 +303,12 @@ async function memRender(){
   M$("memStatus").textContent = "Calculating...";
   await memLoad();
   mRenderTiles();
+  mRenderChart();
+  if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); }
   mRenderRisk();
   await mRenderCohorts();
   mRenderEconomics();
+  if (typeof wlTips === "function"){ wlTips("memLtv", WL_TIP_MEM_ECON); }
   mRenderNet();
   M$("memStatus").textContent = "";
 }
