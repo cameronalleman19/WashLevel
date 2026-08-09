@@ -93,7 +93,7 @@ async function consSync(){
     const byName = {};
     const fresh = {};
     for (const c of list){
-      fresh[c.id] = {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0};
+      fresh[c.id] = {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}};
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
@@ -109,6 +109,9 @@ async function consSync(){
         if (!c) continue;
         if (row.lp && row.lp !== "N/A" && row.lp !== "-"){
           c.washes++;
+          const md = new Date(row.t);
+          const mk = md.getFullYear() + "-" + String(md.getMonth() + 1).padStart(2, "0");
+          c.months[mk] = (c.months[mk] || 0) + 1;
           if (row.t > c.lastWash) c.lastWash = row.t;
         } else if (/vac|self serve/i.test(row.method)){
           c.others++;
