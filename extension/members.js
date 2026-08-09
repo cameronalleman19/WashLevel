@@ -111,7 +111,8 @@ function mRenderRisk(){
   const scored = [];
   for (const c of Object.values(mConsumers)){
     if (mIsCancelled(c)) continue;
-    if (!(c.washes || c.lastNew || c.lastRenew || c.cancelled)) continue;
+    const lastBill = Math.max(c.lastNew || 0, c.lastRenew || 0);
+    if (!lastBill || Date.now() - lastBill > 45 * 86400000) continue;
     const r = mScore(c);
     if (r.score >= 25) scored.push({c: c, r: r});
   }
