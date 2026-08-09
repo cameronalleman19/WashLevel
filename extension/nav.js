@@ -5,9 +5,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  document.querySelectorAll(".nav-btn").forEach(b => {
+  document.querySelectorAll(".nav-btn[data-page]").forEach(b => {
     b.addEventListener("click", () => {
-      document.querySelectorAll(".nav-btn").forEach(x => x.classList.remove("active"));
+      document.querySelectorAll(".nav-btn[data-page]").forEach(x => x.classList.remove("active"));
       document.querySelectorAll(".page").forEach(x => x.classList.remove("active"));
       b.classList.add("active");
       const pg = document.getElementById("page-" + b.dataset.page);
@@ -15,7 +15,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // keep the group open if it contains the initially active page
   document.querySelectorAll(".nav-subgroup .nav-btn.active").forEach(b => {
     b.closest(".nav-group").classList.add("open");
   });

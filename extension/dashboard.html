@@ -5,11 +5,9 @@
 <title>WashLevel Sidecar</title>
 <link rel="stylesheet" href="dashboard.css">
 <style>
-.nav-group-toggle{display:block;width:100%;text-align:left;background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:8px 12px;opacity:.8}
-.nav-group-toggle:hover{opacity:1}
 .nav-subgroup{display:none;flex-direction:column}
 .nav-group.open .nav-subgroup{display:flex}
-.nav-subgroup .nav-btn{padding-left:24px;font-size:.92em}
+.nav-subgroup .nav-btn{padding-left:24px}
 </style>
 </head>
 <body>
@@ -18,7 +16,7 @@
 <nav id="sideNav">
   <div class="brand">WashLevel<br>Sidecar</div>
   <div class="nav-group open">
-    <button class="nav-group-toggle">Dencar</button>
+    <button class="nav-btn nav-group-toggle">Dencar</button>
     <div class="nav-subgroup">
       <button class="nav-btn active" data-page="overview">Overview</button>
       <button class="nav-btn" data-page="consumers">Consumers</button>
