@@ -12,6 +12,8 @@
   <button class="nav-btn active" data-page="overview">Overview</button>
   <button class="nav-btn" data-page="consumers">Consumers</button>
   <button class="nav-btn" data-page="via">VIA Guard</button>
+  <button class="nav-btn" data-page="members">Members</button>
+  <button class="nav-btn" data-page="retail">Retail</button>
 </nav>
 <main>
 
@@ -65,6 +67,39 @@
 <div id="viaCards"></div>
 </div>
 
+
+<div class="page" id="page-members">
+<header>
+  <h1>Members</h1>
+  <button id="memRefreshBtn">Recalculate</button>
+  <span id="memStatus"></span>
+</header>
+<h2>At-risk members</h2>
+<table class="via members"><thead><tr><th>Name</th><th>Risk</th><th>Why</th><th>Washes/mo (recent)</th><th>Baseline</th><th>Last wash</th></tr></thead><tbody id="memRiskBody"></tbody></table>
+<h2>Retention by signup month</h2>
+<table class="via"><thead><tr><th>Cohort</th><th>Signups</th><th>1 mo</th><th>3 mo</th><th>6 mo</th><th>12 mo</th></tr></thead><tbody id="memCohortBody"></tbody></table>
+<h2>Membership economics</h2>
+<div id="memLtv" class="cards"></div>
+<h2>Net members by month</h2>
+<table class="via"><thead><tr><th>Month</th><th>New</th><th>Cancelled</th><th>Net</th><th>Declines</th></tr></thead><tbody id="memNetBody"></tbody></table>
+</div>
+
+<div class="page" id="page-retail">
+<header>
+  <h1>Retail</h1>
+  <span id="retStatus"></span>
+</header>
+<section class="summary" id="retTiles"></section>
+<h2>Retail revenue - last 30 days</h2>
+<canvas id="retChart"></canvas>
+<h2>Day-of-week baselines</h2>
+<table class="via"><thead><tr><th>Day</th><th>Avg retail washes</th><th>Avg retail $</th><th>Avg $/wash</th></tr></thead><tbody id="retDowBody"></tbody></table>
+<h2>Capture rate by site (30d)</h2>
+<table class="via"><thead><tr><th>Site</th><th>Retail washes</th><th>New passes</th><th>Capture %</th></tr></thead><tbody id="retCapBody"></tbody></table>
+<h2>Retail anomalies</h2>
+<ul id="retAnoms"></ul>
+</div>
+
 </main>
 </div>
 <div id="detailModal" style="display:none;">
@@ -77,5 +112,7 @@
 <script src="dashboard.js"></script>
 <script src="via.js"></script>
 <script src="consumers.js"></script>
+<script src="members.js"></script>
+<script src="retail.js"></script>
 </body>
 </html>
