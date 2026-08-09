@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
+<div id="licenseBanner" hidden style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#b45309;color:#fff;padding:10px 16px;text-align:center;font-size:14px;">Sidecar license inactive — syncing is paused. <a href="https://washlevel.com/sidecar" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">Get a license</a> or call (717) 966-1794.</div>
 <div class="app">
 <nav id="sideNav">
   <div class="brand">WashLevel<br>Sidecar</div>
@@ -14,6 +15,7 @@
   <button class="nav-btn" data-page="via">VIA Guard</button>
   <button class="nav-btn" data-page="members">Members</button>
   <button class="nav-btn" data-page="retail">Retail</button>
+  <button class="nav-btn" data-page="settings">Settings</button>
 </nav>
 <main>
 
@@ -115,6 +117,28 @@
 <ul id="retAnoms"></ul>
 </div>
 
+<div class="page" id="page-settings">
+<header>
+  <h1>Settings</h1>
+</header>
+<section class="summary">
+  <div class="stat"><label>License status</label><div id="licStatus">--</div></div>
+  <div class="stat"><label>Plan</label><div id="licPlan">--</div></div>
+</section>
+<h2>License key</h2>
+<p>Paste the key from your WashLevel Sidecar confirmation email.</p>
+<div style="display:flex;gap:8px;max-width:420px">
+  <input type="text" id="licKeyInput" placeholder="WLSC-XXXX-XXXX-XXXX" style="flex:1">
+  <button id="licSaveBtn">Save &amp; Check</button>
+</div>
+<p id="licMsg"></p>
+<h2>Billing</h2>
+<button id="licPortalBtn" hidden>Manage billing</button>
+<p id="licPortalMsg"></p>
+<h2>Need a license?</h2>
+<p>Get WashLevel Sidecar at <a href="https://washlevel.com/sidecar" target="_blank" rel="noopener">washlevel.com/sidecar</a>, or call (717) 966-1794.</p>
+</div>
+
 </main>
 </div>
 <div id="detailModal" style="display:none;">
@@ -125,6 +149,7 @@
 </div>
 <script src="nav.js"></script>
 <script src="common.js"></script>
+<script src="license.js"></script>
 <script src="dashboard.js"></script>
 <script src="via.js"></script>
 <script src="consumers.js"></script>

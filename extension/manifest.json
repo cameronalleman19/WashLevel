@@ -3,8 +3,17 @@
   "name": "WashLevel Sidecar",
   "version": "1.0.0",
   "description": "Aggregated Dencar sales, pass, and VIA analytics with projections",
-  "permissions": ["storage"],
-  "host_permissions": ["https://admin.dencar.sancsoft.net/*"],
-  "background": { "service_worker": "background.js" },
-  "action": { "default_title": "Open WashLevel Sidecar" }
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://admin.dencar.sancsoft.net/*",
+    "https://washlevel.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open WashLevel Sidecar"
+  }
 }
