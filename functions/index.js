@@ -1306,3 +1306,210 @@ exports.sendAlertSms = onCall({ secrets: [TELNYX_API_KEY] }, async (request) => 
   await sendSms(phone, message, TELNYX_API_KEY.value());
   return { success: true };
 });
+
+// ── WashLevel Sidecar ─────────────────────────────────────────────────────────
+const SIDECAR_PRICE_FOUNDING = "REPLACE_PRICE_19";
+const SIDECAR_PRICE_STANDARD = "REPLACE_PRICE_29";
+const SIDECAR_FOUNDING_SLOTS = 10;
+const SIDECAR_TRIAL_DAYS = 7;
+const SIDECAR_SITE = "https://washlevel.com";
+const SIDECAR_OWNER_KEY = "WLSC-OWNER-CAM1-2026";
+const SIDECAR_WEBHOOK_SECRET = defineSecret("SIDECAR_WEBHOOK_SECRET");
+
+function sidecarCors(res) {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+}
+
+function sidecarKey() {
+  const crypto = require("crypto");
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const grp = () =>
+    Array.from(crypto.randomBytes(4)).map((b) => abc[b % abc.length]).join("");
+  return `WLSC-${grp()}-${grp()}-${grp()}`;
+}
+
+// Founding slots are only consumed by full-price (non-comp) active licenses.
+async function sidecarFoundingLeft() {
+  const snap = await db
+    .collection("sidecarLicenses")
+    .where("active", "==", true)
+    .where("comp", "==", false)
+    .get();
+  return Math.max(0, SIDECAR_FOUNDING_SLOTS - snap.size);
+}
+
+exports.sidecarPricing = onRequest(async (req, res) => {
+  sidecarCors(res);
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  try {
+    const left = await sidecarFoundingLeft();
+    res.json({ foundingLeft: left, slots: SIDECAR_FOUNDING_SLOTS, price: left > 0 ? 19 : 29 });
+  } catch (e) {
+    console.error("sidecarPricing", e);
+    res.json({ foundingLeft: 0, slots: SIDECAR_FOUNDING_SLOTS, price: 29 });
+  }
+});
+
+exports.createSidecarCheckout = onRequest({ secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  sidecarCors(res);
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  try {
+    const email = (req.body && req.body.email) || undefined;
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+    const left = await sidecarFoundingLeft();
+    const tier = left > 0 ? "founding" : "standard";
+    const price = left > 0 ? SIDECAR_PRICE_FOUNDING : SIDECAR_PRICE_STANDARD;
+    const session = await stripeClient.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price, quantity: 1 }],
+      customer_email: email,
+      allow_promotion_codes: true,
+      subscription_data: {
+        trial_period_days: SIDECAR_TRIAL_DAYS,
+        metadata: { product: "sidecar", tier },
+      },
+      metadata: { product: "sidecar", tier },
+      success_url: `${SIDECAR_SITE}/sidecar-success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${SIDECAR_SITE}/sidecar.html`,
+    });
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error("createSidecarCheckout", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Dedicated Sidecar webhook — separate endpoint and signing secret from stripeWebhook.
+exports.sidecarWebhook = onRequest(
+  { secrets: [STRIPE_SECRET_KEY, SIDECAR_WEBHOOK_SECRET, RESEND_API_KEY] },
+  async (req, res) => {
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+    let event;
+    try {
+      event = stripeClient.webhooks.constructEvent(
+        req.rawBody,
+        req.headers["stripe-signature"],
+        SIDECAR_WEBHOOK_SECRET.value()
+      );
+    } catch (e) {
+      console.error("sidecarWebhook signature", e.message);
+      return res.status(400).send(`Webhook Error: ${e.message}`);
+    }
+
+    try {
+      if (event.type === "checkout.session.completed") {
+        const s = event.data.object;
+        if (!s.metadata || s.metadata.product !== "sidecar") return res.json({ received: true });
+
+        const sub = await stripeClient.subscriptions.retrieve(s.subscription);
+        const comp = !!(sub.discount || (sub.discounts && sub.discounts.length));
+        const key = sidecarKey();
+        const email = (s.customer_details && s.customer_details.email) || s.customer_email || "";
+
+        await db.collection("sidecarLicenses").doc(key).set({
+          key,
+          email,
+          stripeCustomerId: s.customer,
+          stripeSubscriptionId: s.subscription,
+          checkoutSessionId: s.id,
+          status: sub.status,
+          active: ["active", "trialing", "past_due"].includes(sub.status),
+          comp,
+          tier: comp ? "comp" : (s.metadata.tier || "standard"),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        if (email) {
+          try {
+            const resend = new Resend(RESEND_API_KEY.value());
+            await resend.emails.send({
+              from: "WashLevel <noreply@washlevel.com>",
+              to: email,
+              subject: "Your WashLevel Sidecar license key",
+              html: `
+      <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#f8fafc;">
+        <div style="background:#1a3352;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
+          <h1 style="color:#fff;margin:0;font-size:24px;font-weight:700;">WashLevel Sidecar</h1>
+          <p style="color:#94a3b8;margin:4px 0 0;font-size:12px;letter-spacing:2px;">A DENCAR UPGRADE EXPERIENCE</p>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:28px;">
+          <h2 style="color:#111827;font-size:20px;margin:0 0 8px;">You're in.</h2>
+          <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px;">Here's your license key. Paste it into Sidecar's Settings tab to unlock syncing.</p>
+          <div style="background:#f1f5f9;border:1px dashed #94a3b8;border-radius:8px;padding:16px;text-align:center;font-family:monospace;font-size:18px;letter-spacing:1px;color:#1a3352;font-weight:700;">${key}</div>
+          <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:20px 0 0;">Your first 7 days are free. Installation instructions are at washlevel.com/sidecar.html</p>
+        </div>
+      </div>`,
+            });
+          } catch (mailErr) {
+            console.error("sidecar license email", mailErr);
+          }
+        }
+      }
+
+      if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+        const sub = event.data.object;
+        if (!sub.metadata || sub.metadata.product !== "sidecar") return res.json({ received: true });
+        const snap = await db
+          .collection("sidecarLicenses")
+          .where("stripeSubscriptionId", "==", sub.id)
+          .get();
+        const active =
+          event.type !== "customer.subscription.deleted" &&
+          ["active", "trialing", "past_due"].includes(sub.status);
+        for (const d of snap.docs) {
+          await d.ref.set({ status: sub.status, active }, { merge: true });
+        }
+      }
+
+      res.json({ received: true });
+    } catch (e) {
+      console.error("sidecarWebhook", e);
+      res.status(500).send("error");
+    }
+  }
+);
+
+exports.validateSidecarLicense = onRequest(async (req, res) => {
+  sidecarCors(res);
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  try {
+    const raw = (req.body && req.body.key) || req.query.key || "";
+    const key = String(raw).trim().toUpperCase();
+    if (!key) return res.json({ valid: false, reason: "no-key" });
+    if (key === SIDECAR_OWNER_KEY) return res.json({ valid: true, plan: "owner" });
+    const doc = await db.collection("sidecarLicenses").doc(key).get();
+    if (!doc.exists) return res.json({ valid: false, reason: "not-found" });
+    const d = doc.data();
+    res.json({
+      valid: !!d.active,
+      plan: d.tier || "standard",
+      status: d.status || null,
+      reason: d.active ? null : d.status || "inactive",
+    });
+  } catch (e) {
+    console.error("validateSidecarLicense", e);
+    res.status(500).json({ valid: false, reason: "server-error" });
+  }
+});
+
+exports.sidecarLicenseBySession = onRequest(async (req, res) => {
+  sidecarCors(res);
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  try {
+    const sid = String(req.query.session_id || "").trim();
+    if (!sid) return res.json({ ready: false });
+    const snap = await db
+      .collection("sidecarLicenses")
+      .where("checkoutSessionId", "==", sid)
+      .limit(1)
+      .get();
+    if (snap.empty) return res.json({ ready: false });
+    const d = snap.docs[0].data();
+    res.json({ ready: true, key: d.key, email: d.email || "" });
+  } catch (e) {
+    console.error("sidecarLicenseBySession", e);
+    res.json({ ready: false });
+  }
+});

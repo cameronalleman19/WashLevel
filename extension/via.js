@@ -321,12 +321,12 @@ async function renderViaHistory(){
     const st = document.createElement("style");
     st.id = "viaHistCss";
     st.textContent = ".via-hist{border-collapse:collapse;width:100%;margin-top:8px}" +
-      ".via-hist th,.via-hist td{border-bottom:1px solid #e3e3e3;padding:6px 10px;text-align:left;font-size:13px}" +
-      ".via-hist th{background:#f5f6f8;font-weight:600}" +
-      ".via-hist-trigger{color:#b02a2a;font-weight:600}" +
-      ".via-hist-close{color:#2a7a2a;font-weight:600}" +
-      ".via-hist-summary{margin:6px 0;color:#555;font-size:13px}" +
-      ".via-hist-empty{color:#888;font-size:13px;margin:8px 0}";
+      ".via-hist th,.via-hist td{border-bottom:1px solid #e3e3e3;padding:6px 10px;text-align:left;font-size:13px;color:inherit}" +
+      ".via-hist th{background:rgba(127,127,127,.18);color:inherit;font-weight:700}" +
+      ".via-hist-trigger{color:#ff6b6b;font-weight:600}" +
+      ".via-hist-close{color:#4ade80;font-weight:600}" +
+      ".via-hist-summary{margin:6px 0;opacity:.75;font-size:13px}" +
+      ".via-hist-empty{opacity:.7;font-size:13px;margin:8px 0}";
     document.head.appendChild(st);
   }
   let box = document.getElementById("viaHistBox");
@@ -354,7 +354,7 @@ async function renderViaHistory(){
       html += "<tr><td>" + new Date(h.ts).toLocaleString() + "</td>" +
         "<td>" + viaHistEsc(n) + "</td>" +
         "<td class='via-hist-" + h.action + "'>" + (h.action === "trigger" ? "Triggered" : "Closed") + "</td>" +
-        "<td>" + viaHistEsc(h.rec || "&ndash;") + "</td>" +
+        "<td>" + (h.rec ? viaHistEsc(h.rec) : "&ndash;") + "</td>" +
         "<td>" + byName[n] + "</td></tr>";
     });
     html += "</table>";
