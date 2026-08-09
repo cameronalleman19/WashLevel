@@ -293,16 +293,12 @@ async function viaHistLog(e, action){
     if (typeof v === "string" && (k.toLowerCase().indexOf("photo") >= 0 || k.toLowerCase().indexOf("image") >= 0 || v.length > 300)) continue;
     rec[k] = v;
   }
-  var recFns = ["viaRecommend", "viaRec", "recommendFor", "viaRecommendation", "getRecommendation"];
-  for (var i = 0; i < recFns.length; i++){
-    if (typeof window[recFns[i]] === "function"){
-      try {
-        var r = window[recFns[i]](e);
-        rec.rec = (typeof r === "string") ? r : (r && (r.text || r.label || JSON.stringify(r)));
-      } catch(_){}
-      break;
+  try {
+    if (typeof recommend === "function"){
+      var r = recommend(e);
+      rec.rec = (typeof r === "string") ? r : (r && (r.text || r.label || r.action || JSON.stringify(r)));
     }
-  }
+  } catch(_){}
   const hist = await viaHistAll();
   hist.push(rec);
   if (hist.length > 2000) hist.splice(0, hist.length - 2000);
