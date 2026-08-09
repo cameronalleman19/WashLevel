@@ -153,6 +153,67 @@ async function mRenderCohorts(){
   if (!any) tb.innerHTML = "<tr><td colspan=\"6\">No cohort data yet.</td></tr>";
 }
 
+function mDs(d){ return d.toLocaleDateString("en-CA"); }
+
+function mMemberDay(dateStr){
+  const out = {rev: 0, passUse: 0};
+  for (const s of mSites){
+    const rec = (mHist[s.id] || {})[dateStr];
+    if (!rec) continue;
+    out.rev += (rec.newPassAmt || 0) + (rec.passRenewAmt || 0) + (rec.newPassOnlineAmt || 0) + (rec.onlineGiftAmt || 0) + (rec.viaAddAmt || 0);
+    out.passUse += rec.passUse || 0;
+  }
+  return out;
+}
+
+function mMemberRange(from, to){
+  const out = {rev: 0, passUse: 0};
+  const d = new Date(from + "T00:00:00");
+  const end = new Date(to + "T00:00:00");
+  while (d <= end){
+    const t = mMemberDay(mDs(d));
+    out.rev += t.rev; out.passUse += t.passUse;
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function mMoney0(n){ return "$" + Math.round(n || 0).toLocaleString("en-US"); }
+
+function mTile(label, val){
+  return "<div class=\"stat\"><label>" + label + "</label><div>" + val + "</div></div>";
+}
+
+function mRenderTiles(){
+  const el = M$("memTiles");
+  if (!el) return;
+  const today = new Date();
+  const todayStr = mDs(today);
+  const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+  const wkStart = new Date(today); wkStart.setDate(wkStart.getDate() - today.getDay());
+  const moStart = todayStr.slice(0, 8) + "01";
+  const lmEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+  const lmStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+
+  const t = mMemberRange(todayStr, todayStr);
+  const y = mMemberRange(mDs(yest), mDs(yest));
+  const w = mMemberRange(mDs(wkStart), todayStr);
+  const m = mMemberRange(moStart, todayStr);
+  const lm = mMemberRange(mDs(lmStart), mDs(lmEnd));
+  const r30 = mMemberRange(mDs(d30), todayStr);
+
+  el.innerHTML =
+    mTile("Member sales today", mMoney0(t.rev)) +
+    mTile("Member sales yesterday", mMoney0(y.rev)) +
+    mTile("Week to date", mMoney0(w.rev)) +
+    mTile("Month to date", mMoney0(m.rev)) +
+    mTile("Last month", mMoney0(lm.rev)) +
+    mTile("Member $/wash MTD", m.passUse ? "$" + (m.rev / m.passUse).toFixed(2) : "--") +
+    mTile("Member $/wash 30d", r30.passUse ? "$" + (r30.rev / r30.passUse).toFixed(2) : "--") +
+    mTile("Pass uses 30d", r30.passUse.toLocaleString("en-US"));
+}
+
 function mLatestVehicles(){
   let tot = 0;
   for (const s of mSites){
@@ -226,6 +287,7 @@ function mRenderNet(){
 async function memRender(){
   M$("memStatus").textContent = "Calculating...";
   await memLoad();
+  mRenderTiles();
   mRenderRisk();
   await mRenderCohorts();
   mRenderEconomics();
