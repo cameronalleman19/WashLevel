@@ -4,17 +4,30 @@
 <meta charset="utf-8">
 <title>WashLevel Sidecar</title>
 <link rel="stylesheet" href="dashboard.css">
+<style>
+.nav-group-toggle{display:block;width:100%;text-align:left;background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:8px 12px;opacity:.8}
+.nav-group-toggle:hover{opacity:1}
+.nav-subgroup{display:none;flex-direction:column}
+.nav-group.open .nav-subgroup{display:flex}
+.nav-subgroup .nav-btn{padding-left:24px;font-size:.92em}
+</style>
 </head>
 <body>
 <div id="licenseBanner" hidden style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#b45309;color:#fff;padding:10px 16px;text-align:center;font-size:14px;">Sidecar license inactive — syncing is paused. <a href="https://washlevel.com/sidecar" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">Get a license</a> or call (717) 966-1794.</div>
 <div class="app">
 <nav id="sideNav">
   <div class="brand">WashLevel<br>Sidecar</div>
-  <button class="nav-btn active" data-page="overview">Overview</button>
-  <button class="nav-btn" data-page="consumers">Consumers</button>
-  <button class="nav-btn" data-page="via">VIA Guard</button>
-  <button class="nav-btn" data-page="members">Members</button>
-  <button class="nav-btn" data-page="retail">Retail</button>
+  <div class="nav-group open">
+    <button class="nav-group-toggle">Dencar</button>
+    <div class="nav-subgroup">
+      <button class="nav-btn active" data-page="overview">Overview</button>
+      <button class="nav-btn" data-page="consumers">Consumers</button>
+      <button class="nav-btn" data-page="via">VIA Guard</button>
+      <button class="nav-btn" data-page="members">Members</button>
+      <button class="nav-btn" data-page="retail">Retail</button>
+    </div>
+  </div>
+  <button class="nav-btn" data-page="cryptopay">Cryptopay</button>
   <button class="nav-btn" data-page="settings">Settings</button>
 </nav>
 <main>
@@ -115,6 +128,14 @@
 <table class="via"><thead><tr><th>Site</th><th>Retail washes</th><th>New passes</th><th>Capture %</th></tr></thead><tbody id="retCapBody"></tbody></table>
 <h2>Retail anomalies</h2>
 <ul id="retAnoms"></ul>
+</div>
+
+<div class="page" id="page-cryptopay">
+<header>
+  <h1>Cryptopay</h1>
+  <span id="cryptoStatus"></span>
+</header>
+<p>Integration coming soon. This tab will surface remote bay activation, device status, and operational stats from MyCryptoPay.</p>
 </div>
 
 <div class="page" id="page-settings">

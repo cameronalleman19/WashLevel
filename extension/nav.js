@@ -1,4 +1,10 @@
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".nav-group-toggle").forEach(g => {
+    g.addEventListener("click", () => {
+      g.closest(".nav-group").classList.toggle("open");
+    });
+  });
+
   document.querySelectorAll(".nav-btn").forEach(b => {
     b.addEventListener("click", () => {
       document.querySelectorAll(".nav-btn").forEach(x => x.classList.remove("active"));
@@ -7,5 +13,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const pg = document.getElementById("page-" + b.dataset.page);
       if (pg) pg.classList.add("active");
     });
+  });
+
+  // keep the group open if it contains the initially active page
+  document.querySelectorAll(".nav-subgroup .nav-btn.active").forEach(b => {
+    b.closest(".nav-group").classList.add("open");
   });
 });
