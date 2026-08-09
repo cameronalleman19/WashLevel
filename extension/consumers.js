@@ -101,7 +101,7 @@ async function consSync(){
     const start = new Date(end); start.setMonth(start.getMonth() - 12);
     const startStr = start.toLocaleDateString("en-CA");
     const endStr = end.toLocaleDateString("en-CA");
-    for (let page = 1; page <= 40; page++){
+    for (let page = 1; page <= 70; page++){
       C$("consStatus").textContent = "Loading payments page " + page + "...";
       const batch = await fetchPaymentsPage(page, startStr, endStr);
       for (const row of batch){
@@ -110,7 +110,7 @@ async function consSync(){
         if (/pass cancelled/i.test(row.method)){ if (row.t > c.cancelled) c.cancelled = row.t; }
         if (/new pass/i.test(row.method)){ if (row.t > c.lastNew) c.lastNew = row.t; }
         if (/pass renew/i.test(row.method)){ if (row.t > c.lastRenew) c.lastRenew = row.t; }
-        if (row.lp && row.lp !== "N/A" && row.lp !== "-"){
+        if (/wash pass/i.test(row.method)){
           c.washes++;
           const md = new Date(row.t);
           const mk = md.getFullYear() + "-" + String(md.getMonth() + 1).padStart(2, "0");
