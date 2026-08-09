@@ -201,6 +201,7 @@ async function retRender(){
   rRenderChart();
   rRenderDow();
   rRenderCapture();
+  await rRenderPackages();
   rRenderAnoms();
   R$("retStatus").textContent = "";
 }
@@ -209,4 +210,121 @@ document.addEventListener("DOMContentLoaded", () => {
   retRender();
   const btn = document.querySelector('[data-page="retail"]');
   if (btn) btn.addEventListener("click", () => retRender());
+});
+
+let rTiers = {};
+
+async function rPkgLoad(){
+  const st = await chrome.storage.local.get(["washTiers"]);
+  rTiers = st.washTiers || {};
+}
+
+function rPkgRange(){
+  const sel = R$("retPkgPeriod");
+  const mode = sel ? sel.value : "30d";
+  const today = new Date();
+  const to = rDs(today);
+  let from;
+  if (mode === "today"){ from = to; }
+  else if (mode === "7d"){ const d = new Date(today); d.setDate(d.getDate() - 6); from = rDs(d); }
+  else if (mode === "mtd"){ from = to.slice(0, 8) + "01"; }
+  else if (mode === "ytd"){ from = to.slice(0, 4) + "-01-01"; }
+  else if (mode === "12mo"){ const d = new Date(today); d.setFullYear(d.getFullYear() - 1); from = rDs(d); }
+  else { const d = new Date(today); d.setDate(d.getDate() - 29); from = rDs(d); }
+  return {from: from, to: to};
+}
+
+function rPkgAgg(from, to){
+  const out = {};
+  for (const site of Object.keys(rTiers)){
+    const days = rTiers[site] || {};
+    for (const dt of Object.keys(days)){
+      if (dt < from || dt > to) continue;
+      const o = out[site] = out[site] || {};
+      for (const k of Object.keys(days[dt])){
+        const v = days[dt][k];
+        const cur = o[k] = o[k] || {n: 0, rev: 0};
+        cur.n += v[0] || 0;
+        cur.rev += v[1] || 0;
+      }
+    }
+  }
+  return out;
+}
+
+function rPkgSortKeys(obj){
+  return Object.keys(obj).sort((a, b) => {
+    if (a === "other") return 1;
+    if (b === "other") return -1;
+    return parseFloat(b) - parseFloat(a);
+  });
+}
+
+function rRenderPkgTable(agg){
+  const tb = R$("retPkgBody");
+  if (!tb) return;
+  tb.innerHTML = "";
+  const sites = Object.keys(agg).sort();
+  if (!sites.length){ tb.innerHTML = "<tr><td colspan=\"5\">No wash sales found. Run Sync Payment History on the Consumers tab.</td></tr>"; return; }
+  for (const site of sites){
+    const o = agg[site];
+    let totN = 0, totR = 0;
+    for (const k of Object.keys(o)){ totN += o[k].n; totR += o[k].rev; }
+    if (!totN) continue;
+    const hdr = document.createElement("tr");
+    hdr.innerHTML = "<td colspan=\"5\"><strong>" + site + "</strong> - " + totN + " washes, " + rMoney0(totR) + "</td>";
+    tb.appendChild(hdr);
+    for (const k of rPkgSortKeys(o)){
+      const v = o[k];
+      if (!v.n) continue;
+      const label = k === "other" ? "Other / promo" : "$" + parseFloat(k).toFixed(0) + " wash";
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td style=\"padding-left:18px\">" + label + "</td>" +
+        "<td>" + v.n + "</td>" +
+        "<td>" + (totN ? (v.n / totN * 100).toFixed(1) + "%" : "--") + "</td>" +
+        "<td>" + rMoney0(v.rev) + "</td>" +
+        "<td>" + (totR ? (v.rev / totR * 100).toFixed(1) + "%" : "--") + "</td>";
+      tb.appendChild(tr);
+    }
+  }
+}
+
+function rRenderPkgMix(agg){
+  const el = document.getElementById("ovPkgMix");
+  if (!el) return;
+  const comb = {};
+  let totN = 0, totR = 0;
+  for (const site of Object.keys(agg)){
+    for (const k of Object.keys(agg[site])){
+      const v = agg[site][k];
+      const c = comb[k] = comb[k] || {n: 0, rev: 0};
+      c.n += v.n; c.rev += v.rev;
+      totN += v.n; totR += v.rev;
+    }
+  }
+  if (!totN){ el.innerHTML = ""; return; }
+  let html = "<table class=\"via\"><thead><tr><th>Package</th><th>Washes</th><th>% of washes</th><th>Revenue</th><th>% of revenue</th></tr></thead><tbody>";
+  for (const k of rPkgSortKeys(comb)){
+    const v = comb[k];
+    if (!v.n) continue;
+    const label = k === "other" ? "Other / promo" : "$" + parseFloat(k).toFixed(0) + " wash";
+    html += "<tr><td>" + label + "</td><td>" + v.n + "</td><td>" + (v.n / totN * 100).toFixed(1) + "%</td><td>" + rMoney0(v.rev) + "</td><td>" + (v.rev / totR * 100).toFixed(1) + "%</td></tr>";
+  }
+  html += "</tbody></table>";
+  el.innerHTML = html;
+}
+
+async function rRenderPackages(){
+  await rPkgLoad();
+  const rng = rPkgRange();
+  const agg = rPkgAgg(rng.from, rng.to);
+  rRenderPkgTable(agg);
+  const today = new Date();
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  rRenderPkgMix(rPkgAgg(rDs(d30), rDs(today)));
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const sel = document.getElementById("retPkgPeriod");
+  if (sel) sel.addEventListener("change", () => rRenderPackages());
 });

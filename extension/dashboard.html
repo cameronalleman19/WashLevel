@@ -40,6 +40,8 @@
 <canvas id="chart"></canvas>
 <h2>VIA Guard - last 7 days</h2>
 <table class="via"><thead><tr><th>Site</th><th>Trig</th><th>Oops</th><th>Pay</th><th>Rep</th><th>Add</th><th>Unresolved</th></tr></thead><tbody id="viaBody"></tbody></table>
+<h2>Wash package mix - last 30 days</h2>
+<div id="ovPkgMix"></div>
 <h2>Anomalies</h2>
 <ul id="anomalies"></ul>
 </div>
@@ -52,7 +54,7 @@
     <option value="usageHigh">Wash usage: high to low</option>
     <option value="usageLow">Wash usage: low to high</option>
   </select>
-  <button id="consSyncBtn">Sync Consumers</button>
+  <button id="consSyncBtn">Sync Payment History</button>
 </header>
 <div id="consStatus"></div>
 <table class="via consumers"><thead><tr><th>Name</th><th>Signed up</th><th>Washes 12mo</th><th>Washes/month</th><th>Vac/self-serve</th><th>Last wash</th><th></th></tr></thead><tbody id="consBody"></tbody></table>
@@ -97,6 +99,16 @@
 <canvas id="retChart"></canvas>
 <h2>Day-of-week baselines</h2>
 <table class="via"><thead><tr><th>Day</th><th>Avg retail washes</th><th>Avg retail $</th><th>Avg $/wash</th></tr></thead><tbody id="retDowBody"></tbody></table>
+<h2>Wash package breakdown</h2>
+<select id="retPkgPeriod">
+  <option value="today">Today</option>
+  <option value="7d">Last 7 days</option>
+  <option value="30d" selected>Last 30 days</option>
+  <option value="mtd">Month to date</option>
+  <option value="ytd">Year to date</option>
+  <option value="12mo">Last 12 months</option>
+</select>
+<table class="via"><thead><tr><th>Package</th><th>Washes</th><th>% of washes</th><th>Revenue</th><th>% of revenue</th></tr></thead><tbody id="retPkgBody"></tbody></table>
 <h2>Capture rate by site (30d)</h2>
 <table class="via"><thead><tr><th>Site</th><th>Retail washes</th><th>New passes</th><th>Capture %</th></tr></thead><tbody id="retCapBody"></tbody></table>
 <h2>Retail anomalies</h2>

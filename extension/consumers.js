@@ -45,6 +45,7 @@ async function fetchPaymentsPage(page, startStr, endStr){
   const doc = new DOMParser().parseFromString(await res.text(), "text/html");
   const rows = Array.from(doc.querySelectorAll("tr"));
   let tsIdx = -1, lpIdx = -1, mIdx = -1, nIdx = -1;
+  let aIdx = -1, taxIdx = -1, dIdx = -1;
   for (const r of rows){
     Array.from(r.children).forEach((c, i) => {
       const t = c.textContent.trim().toLowerCase();
@@ -53,6 +54,9 @@ async function fetchPaymentsPage(page, startStr, endStr){
       if (lpIdx === -1 && /license|plate/.test(t) && !/confidence/.test(t)) lpIdx = i;
       if (mIdx === -1 && t === "method") mIdx = i;
       if (nIdx === -1 && t === "name") nIdx = i;
+      if (aIdx === -1 && t === "amount") aIdx = i;
+      if (taxIdx === -1 && t === "tax") taxIdx = i;
+      if (dIdx === -1 && t === "device") dIdx = i;
     });
     if (tsIdx >= 0 && lpIdx >= 0 && mIdx >= 0 && nIdx >= 0) break;
   }
@@ -71,7 +75,10 @@ async function fetchPaymentsPage(page, startStr, endStr){
       t: t,
       lp: (lpIdx >= 0 && cells[lpIdx] ? cells[lpIdx].textContent.trim() : "").toUpperCase(),
       method: mIdx >= 0 && cells[mIdx] ? cells[mIdx].textContent.trim() : "",
-      name: nIdx >= 0 && cells[nIdx] ? cells[nIdx].textContent.replace(/\s+/g, " ").trim() : ""
+      name: nIdx >= 0 && cells[nIdx] ? cells[nIdx].textContent.replace(/\s+/g, " ").trim() : "",
+      amt: aIdx >= 0 && cells[aIdx] ? (parseFloat(cells[aIdx].textContent.replace(/[^0-9.-]/g, "")) || 0) : 0,
+      tax: taxIdx >= 0 && cells[taxIdx] ? (parseFloat(cells[taxIdx].textContent.replace(/[^0-9.-]/g, "")) || 0) : 0,
+      device: dIdx >= 0 && cells[dIdx] ? cells[dIdx].textContent.replace(/\s+/g, " ").trim() : ""
     });
   }
   return out;
@@ -97,6 +104,7 @@ async function consSync(){
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
+    const tiers = {};
     const end = new Date();
     const start = new Date(end); start.setMonth(start.getMonth() - 12);
     const startStr = start.toLocaleDateString("en-CA");
@@ -105,6 +113,17 @@ async function consSync(){
       C$("consStatus").textContent = "Loading payments page " + page + "...";
       const batch = await fetchPaymentsPage(page, startStr, endStr);
       for (const row of batch){
+        if (/^(credit card|cash)$/i.test(row.method) && row.amt > 0){
+          const site = (row.device || "").split(" - ")[0].trim() || "Unknown";
+          const base = Math.round((row.amt - row.tax) * 100) / 100;
+          const key = (Math.abs(base - Math.round(base)) < 0.02 && base > 0) ? String(Math.round(base)) : "other";
+          const dk = new Date(row.t).toLocaleDateString("en-CA");
+          const sObj = tiers[site] = tiers[site] || {};
+          const dObj = sObj[dk] = sObj[dk] || {};
+          const cur = dObj[key] = dObj[key] || [0, 0];
+          cur[0] += 1;
+          cur[1] += base;
+        }
         const c = byName[cNorm(row.name)];
         if (!c) continue;
         if (/pass cancelled/i.test(row.method)){ if (row.t > c.cancelled) c.cancelled = row.t; }
@@ -124,6 +143,7 @@ async function consSync(){
       await new Promise(r => setTimeout(r, 150));
     }
     consumers = fresh;
+    await chrome.storage.local.set({washTiers: tiers});
     await consSave();
     C$("consStatus").textContent = "Synced " + list.length + " consumers.";
     renderConsumers();
