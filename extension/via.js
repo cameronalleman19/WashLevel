@@ -197,6 +197,7 @@ async function viaAction(id, kind, btn){
     const res = await fetch(VBASE + "/consumerpassexceptions/" + path + "/" + actionId + "/", {method: method, credentials: "include"});
     if (res.ok){
       viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] " + (kind === "trigger" ? "Triggered" : "Closed") + " via Sidecar").trim();
+      try { await viaHistLog(e, kind === "trigger" ? "trigger" : "close"); } catch(_){}
       delete viaData[id];
       await viaSave();
       renderViaList();
@@ -274,3 +275,91 @@ async function enrichConsumer(d){
     if (washes.length || others){ d.washHistory = washes; d.otherUses = others; }
   } catch(err){}
 }
+
+/* ===== VIA Decision History (Sidecar) ===== */
+const VIA_HIST_KEY = "viaHistory";
+
+async function viaHistAll(){
+  const o = await chrome.storage.local.get(VIA_HIST_KEY);
+  return o[VIA_HIST_KEY] || [];
+}
+
+async function viaHistLog(e, action){
+  const rec = { ts: Date.now(), action: action };
+  for (const k in e){
+    const v = e[k];
+    if (v == null) continue;
+    if (typeof v === "object" || typeof v === "function") continue;
+    if (typeof v === "string" && (k.toLowerCase().indexOf("photo") >= 0 || k.toLowerCase().indexOf("image") >= 0 || v.length > 300)) continue;
+    rec[k] = v;
+  }
+  var recFns = ["viaRecommend", "viaRec", "recommendFor", "viaRecommendation", "getRecommendation"];
+  for (var i = 0; i < recFns.length; i++){
+    if (typeof window[recFns[i]] === "function"){
+      try {
+        var r = window[recFns[i]](e);
+        rec.rec = (typeof r === "string") ? r : (r && (r.text || r.label || JSON.stringify(r)));
+      } catch(_){}
+      break;
+    }
+  }
+  const hist = await viaHistAll();
+  hist.push(rec);
+  if (hist.length > 2000) hist.splice(0, hist.length - 2000);
+  await chrome.storage.local.set({ [VIA_HIST_KEY]: hist });
+  try { renderViaHistory(); } catch(_){}
+}
+
+function viaHistEsc(s){
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function renderViaHistory(){
+  const anchor = document.getElementById("viaCards");
+  if (!anchor) return;
+  if (!document.getElementById("viaHistCss")){
+    const st = document.createElement("style");
+    st.id = "viaHistCss";
+    st.textContent = ".via-hist{border-collapse:collapse;width:100%;margin-top:8px}" +
+      ".via-hist th,.via-hist td{border-bottom:1px solid #e3e3e3;padding:6px 10px;text-align:left;font-size:13px}" +
+      ".via-hist th{background:#f5f6f8;font-weight:600}" +
+      ".via-hist-trigger{color:#b02a2a;font-weight:600}" +
+      ".via-hist-close{color:#2a7a2a;font-weight:600}" +
+      ".via-hist-summary{margin:6px 0;color:#555;font-size:13px}" +
+      ".via-hist-empty{color:#888;font-size:13px;margin:8px 0}";
+    document.head.appendChild(st);
+  }
+  let box = document.getElementById("viaHistBox");
+  if (!box){
+    box = document.createElement("div");
+    box.id = "viaHistBox";
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+  }
+  const hist = (await viaHistAll()).slice().reverse();
+  const trig = hist.filter(h => h.action === "trigger").length;
+  const closed = hist.length - trig;
+  const byName = {};
+  hist.forEach(h => {
+    const n = ((h.firstName || "") + " " + (h.lastName || "")).trim() || "Unknown";
+    byName[n] = (byName[n] || 0) + 1;
+  });
+  let html = "<h2>VIA decision history</h2>";
+  html += "<div class='via-hist-summary'>" + hist.length + " decisions logged &mdash; " + trig + " triggered, " + closed + " closed</div>";
+  if (!hist.length){
+    html += "<div class='via-hist-empty'>No decisions logged yet. The next trigger or close will appear here.</div>";
+  } else {
+    html += "<table class='via-hist'><tr><th>When</th><th>Member</th><th>Action</th><th>Sidecar said</th><th>Times seen</th></tr>";
+    hist.slice(0, 150).forEach(h => {
+      const n = ((h.firstName || "") + " " + (h.lastName || "")).trim() || "Unknown";
+      html += "<tr><td>" + new Date(h.ts).toLocaleString() + "</td>" +
+        "<td>" + viaHistEsc(n) + "</td>" +
+        "<td class='via-hist-" + h.action + "'>" + (h.action === "trigger" ? "Triggered" : "Closed") + "</td>" +
+        "<td>" + viaHistEsc(h.rec || "&ndash;") + "</td>" +
+        "<td>" + byName[n] + "</td></tr>";
+    });
+    html += "</table>";
+  }
+  box.innerHTML = html;
+}
+
+document.addEventListener("DOMContentLoaded", () => { renderViaHistory(); });
