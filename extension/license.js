@@ -12,7 +12,7 @@ document.addEventListener("click", function (e) {
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
-    const banner = $("licenseBanner");
+    const banner = document.getElementById("licenseBanner");
     if (banner) {
       banner.hidden = false;
       banner.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -80,10 +80,10 @@ async function licValidate(key, opts) {
 
 function licApplyGate(state) {
   sidecarLicenseState = state;
-  const banner = $("licenseBanner");
+  const banner = document.getElementById("licenseBanner");
   if (banner) banner.hidden = !!(state && state.valid);
   SIDECAR_SYNC_BTN_IDS.forEach(function (id) {
-    const btn = $(id);
+    const btn = document.getElementById(id);
     if (!btn) return;
     if (state && state.valid) {
       btn.style.opacity = "";
@@ -98,11 +98,11 @@ function licApplyGate(state) {
 }
 
 function licRenderSettings(state) {
-  const statusEl = $("licStatus");
+  const statusEl = document.getElementById("licStatus");
   if (!statusEl) return;
-  const keyInput = $("licKeyInput");
-  const planEl = $("licPlan");
-  const portalBtn = $("licPortalBtn");
+  const keyInput = document.getElementById("licKeyInput");
+  const planEl = document.getElementById("licPlan");
+  const portalBtn = document.getElementById("licPortalBtn");
 
   if (keyInput && !keyInput.value && state && state.key) keyInput.value = state.key;
 
@@ -132,7 +132,7 @@ async function ensureLicense(opts) {
 }
 
 async function licOpenPortal() {
-  const msgEl = $("licPortalMsg");
+  const msgEl = document.getElementById("licPortalMsg");
   const key = await licGetKey();
   if (!key || key === SIDECAR_OWNER_KEY) return;
   if (msgEl) msgEl.textContent = "Opening billing portal...";
@@ -154,11 +154,11 @@ async function licOpenPortal() {
   }
 }
 
-const licSaveBtnEl = $("licSaveBtn");
+const licSaveBtnEl = document.getElementById("licSaveBtn");
 if (licSaveBtnEl) {
   licSaveBtnEl.addEventListener("click", async function () {
-    const input = $("licKeyInput");
-    const msgEl = $("licMsg");
+    const input = document.getElementById("licKeyInput");
+    const msgEl = document.getElementById("licMsg");
     const key = input ? input.value : "";
     await licSetKey(key);
     if (msgEl) msgEl.textContent = "Checking...";
@@ -171,7 +171,7 @@ if (licSaveBtnEl) {
   });
 }
 
-const licPortalBtnEl = $("licPortalBtn");
+const licPortalBtnEl = document.getElementById("licPortalBtn");
 if (licPortalBtnEl) licPortalBtnEl.addEventListener("click", licOpenPortal);
 
 ensureLicense();
