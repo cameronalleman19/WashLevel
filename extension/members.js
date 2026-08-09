@@ -148,6 +148,18 @@ async function mRenderCohorts(){
   if (!any) tb.innerHTML = "<tr><td colspan=\"6\">No cohort data yet.</td></tr>";
 }
 
+function mLatestVehicles(){
+  let tot = 0;
+  for (const s of mSites){
+    const days = Object.keys(mHist[s.id] || {}).sort();
+    for (let i = days.length - 1; i >= 0; i--){
+      const v = mHist[s.id][days[i]].consumerVehicles || 0;
+      if (v){ tot += v; break; }
+    }
+  }
+  return tot;
+}
+
 function mMonthAgg(){
   const out = {};
   for (const s of mSites){
@@ -174,7 +186,7 @@ function mRenderEconomics(){
     const k = mMonthKey(mAddMonths(now, -i));
     if (agg[k]) full.push(agg[k]);
   }
-  const members = Object.keys(mConsumers).length;
+  const members = mLatestVehicles() || Object.keys(mConsumers).length;
   if (!full.length || !members){ el.innerHTML = "<div class=\"stat\"><label>Economics</label><div>Need consumer sync + report history</div></div>"; return; }
   const cancels = full.reduce((a, x) => a + x.cancels, 0) / full.length;
   const renewAmt = full.reduce((a, x) => a + x.renewAmt, 0);
@@ -184,7 +196,7 @@ function mRenderEconomics(){
   const lifeMo = churn > 0 ? 1 / churn : null;
   const ltv = lifeMo && avgPrice ? avgPrice * lifeMo : null;
   el.innerHTML =
-    "<div class=\"stat\"><label>Active members (list)</label><div>" + members + "</div></div>" +
+    "<div class=\"stat\"><label>Active members (vehicles)</label><div>" + members + "</div></div>" +
     "<div class=\"stat\"><label>Monthly churn</label><div>" + (churn * 100).toFixed(1) + "%</div></div>" +
     "<div class=\"stat\"><label>Avg renewal price</label><div>" + mMoney(avgPrice) + "</div></div>" +
     "<div class=\"stat\"><label>Est. avg lifetime</label><div>" + (lifeMo ? lifeMo.toFixed(1) + " mo" : "--") + "</div></div>" +
