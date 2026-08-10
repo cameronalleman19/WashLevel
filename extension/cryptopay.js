@@ -1,10 +1,13 @@
 const CP_BASE = "https://www.mycryptopay.com";
 const CP_SCHEMA = 1;
-const CP_HIST_SCHEMA = 1;
+const CP_HIST_SCHEMA = 2;
+const CP_MAX_BACKFILL_MONTHS = 72;
+const CP_EMPTY_MONTH_STOP = 3;
 
 let cpSites = [];
 let cpStatus = {};
 let cpHist = {};
+let cpSyncedMonths = [];
 
 function cpSetStatus(msg){ $("cryptoStatus").textContent = msg; }
 
@@ -253,9 +256,22 @@ function cpAggregateCsv(rows){
     if (!date || !siteId) continue;
     const amt = cpMoneyNum(r.TotalCharge);
     bySiteDate[siteId] = bySiteDate[siteId] || {};
-    bySiteDate[siteId][date] = bySiteDate[siteId][date] || {revenue: 0, count: 0};
+    bySiteDate[siteId][date] = bySiteDate[siteId][date] || {revenue: 0, count: 0, byType: {}};
     bySiteDate[siteId][date].revenue += amt;
     bySiteDate[siteId][date].count += 1;
+  }
+  // Second pass over every line item (not deduped) for the category breakdown.
+  // Sales Tax is kept as its own category so categories sum to the day total.
+  for (const r of rows){
+    const siteId = r.SiteID;
+    const date = (r.Time || "").slice(0, 10);
+    if (!date || !siteId) continue;
+    if (!bySiteDate[siteId] || !bySiteDate[siteId][date]) continue;
+    const cat = (r.PurchaseType || "Other").trim();
+    const bt = bySiteDate[siteId][date].byType;
+    bt[cat] = bt[cat] || {revenue: 0, count: 0};
+    bt[cat].revenue += cpMoneyNum(r.Charge);
+    bt[cat].count += 1;
   }
   return bySiteDate;
 }
@@ -275,13 +291,64 @@ function cpMonthRanges(start, end){
 }
 
 function cpSumRange(sid, from, to){
-  const out = {revenue: 0, count: 0};
+  const out = {revenue: 0, count: 0, byType: {}};
   for (const dt of Object.keys(cpHist[sid] || {})){
     if (dt >= from && dt <= to){
       const r = cpHist[sid][dt];
       out.revenue += r.revenue || 0;
       out.count += r.count || 0;
+      const bt = r.byType || {};
+      for (const cat of Object.keys(bt)){
+        out.byType[cat] = out.byType[cat] || {revenue: 0, count: 0};
+        out.byType[cat].revenue += bt[cat].revenue || 0;
+        out.byType[cat].count += bt[cat].count || 0;
+      }
     }
+  }
+  return out;
+}
+
+function cpSiteDataDays(sid){ return Object.keys(cpHist[sid] || {}).length; }
+
+function cpConfidence(days){
+  if (days >= 365) return {label: "good", note: "Based on over a year of history, so seasonal patterns are represented."};
+  if (days >= 90) return {label: "fair", note: "Based on several months of history - weekday patterns are solid, but seasonal swings are not learned yet."};
+  return {label: "limited", note: "Based on under 90 days of history - treat this as a rough estimate."};
+}
+
+// Per-site month projection. Days with no record are skipped rather than counted
+// as zero, so a site that was offline does not drag down its own baseline.
+function cpSiteProjection(sid){
+  const today = new Date();
+  const y = today.getFullYear(), m = today.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const todayStr = cpDs(today);
+  const hist = cpHist[sid] || {};
+  let mtd = 0;
+  for (const dt of Object.keys(hist)){
+    if (dt.slice(0, 7) === todayStr.slice(0, 7) && dt <= todayStr) mtd += hist[dt].revenue || 0;
+  }
+  const wk = [[], [], [], [], [], [], []];
+  for (let i = 1; i <= 56; i++){
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const r = hist[cpDs(d)];
+    if (r) wk[d.getDay()].push(r.revenue || 0);
+  }
+  const avg = wk.map(function(a){ return a.length ? a.reduce(function(x, b){ return x + b; }, 0) / a.length : 0; });
+  let rest = 0;
+  for (let day = today.getDate() + 1; day <= daysInMonth; day++) rest += avg[new Date(y, m, day).getDay()];
+  const todayRemain = Math.max(0, avg[today.getDay()] - ((hist[todayStr] || {}).revenue || 0));
+  return {mtd: mtd, projected: mtd + todayRemain + rest};
+}
+
+// Overview projection is the sum of the per-site projections, so the headline
+// number always reconciles with the site cards.
+function cpAllProjection(){
+  const out = {mtd: 0, projected: 0};
+  for (const s of cpOvSiteList()){
+    const p = cpSiteProjection(s.id);
+    out.mtd += p.mtd;
+    out.projected += p.projected;
   }
   return out;
 }
@@ -303,12 +370,14 @@ function cpPeriodRow(label, t){
 }
 
 async function cpOvLoad(){
-  const st = await chrome.storage.local.get(["cpHist", "cpHistLastSync", "cpHistSchema"]);
+  const st = await chrome.storage.local.get(["cpHist", "cpHistLastSync", "cpHistSchema", "cpSyncedMonths"]);
   if (st.cpHistSchema !== CP_HIST_SCHEMA){
     cpHist = {};
-    await chrome.storage.local.set({cpHist: {}, cpHistSchema: CP_HIST_SCHEMA});
+    cpSyncedMonths = [];
+    await chrome.storage.local.set({cpHist: {}, cpSyncedMonths: [], cpHistSchema: CP_HIST_SCHEMA});
   } else {
     cpHist = st.cpHist || {};
+    cpSyncedMonths = st.cpSyncedMonths || [];
   }
   if (st.cpHistLastSync){
     const el = $("cpOvLastSync");
@@ -317,7 +386,7 @@ async function cpOvLoad(){
 }
 
 async function cpOvSave(){
-  await chrome.storage.local.set({cpHist: cpHist, cpHistLastSync: Date.now(), cpHistSchema: CP_HIST_SCHEMA});
+  await chrome.storage.local.set({cpHist: cpHist, cpSyncedMonths: cpSyncedMonths, cpHistLastSync: Date.now(), cpHistSchema: CP_HIST_SCHEMA});
 }
 
 async function cpOvSync(){
@@ -335,19 +404,31 @@ async function cpOvSync(){
   await cpSave();
 
   const today = new Date();
-  const start = cpBackfillStart();
-  const months = cpMonthRanges(start, today);
   const curMonthKey = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0");
 
   let loggedOutMidSync = false;
   let monthsFetched = 0;
-  for (const rng of months){
-    const mStart = rng[0], mEnd = rng[1], mKey = rng[2];
-    const alreadyHave = mKey !== curMonthKey && cpSites.length && cpSites.every(function(s){
-      const siteHist = cpHist[s.id] || {};
-      return Object.keys(siteHist).some(function(d){ return d.indexOf(mKey) === 0; });
-    });
-    if (alreadyHave) continue;
+  let monthsSkipped = 0;
+  let emptyStreak = 0;
+  let cur = new Date(today.getFullYear(), today.getMonth(), 1);
+  for (let iter = 0; iter < CP_MAX_BACKFILL_MONTHS; iter++){
+    const mStart = new Date(cur.getFullYear(), cur.getMonth(), 1);
+    const mEndCand = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+    const mEnd = mEndCand > today ? today : mEndCand;
+    const mKey = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, "0");
+    cur = new Date(cur.getFullYear(), cur.getMonth() - 1, 1);
+    // Always re-fetch the current month (still accruing); skip past months
+    // already recorded as fully synced.
+    const alreadyHave = mKey !== curMonthKey && cpSyncedMonths.indexOf(mKey) !== -1;
+    if (alreadyHave){
+      monthsSkipped++;
+      const anyData = Object.keys(cpHist).some(function(sid){
+        return Object.keys(cpHist[sid]).some(function(d){ return d.indexOf(mKey) === 0; });
+      });
+      emptyStreak = anyData ? 0 : emptyStreak + 1;
+      if (emptyStreak >= CP_EMPTY_MONTH_STOP) break;
+      continue;
+    }
 
     $("cpOvStatus").textContent = "Syncing " + mStart.toLocaleDateString("en-US", {month: "short", year: "numeric"}) + "...";
     const r = await cpFetchCsvRange(cpFmtCpDate(mStart), cpFmtCpDate(mEnd));
@@ -357,17 +438,21 @@ async function cpOvSync(){
       cpHist[siteId] = cpHist[siteId] || {};
       Object.assign(cpHist[siteId], agg[siteId]);
     }
+    if (cpSyncedMonths.indexOf(mKey) === -1) cpSyncedMonths.push(mKey);
     monthsFetched++;
+    emptyStreak = r.rows.length ? 0 : emptyStreak + 1;
     await cpOvSave();
     cpOvRender();
     await new Promise(res => setTimeout(res, 200));
+    if (emptyStreak >= CP_EMPTY_MONTH_STOP) break;
   }
 
   if (loggedOutMidSync){
     cpShowSessionBanner(true);
     $("cpOvStatus").textContent = "Session expired mid-sync. Log in and press Sync again.";
   } else {
-    $("cpOvStatus").textContent = "Done. Synced " + monthsFetched + " month" + (monthsFetched === 1 ? "" : "s") + " of data.";
+    $("cpOvStatus").textContent = "Done. Synced " + monthsFetched + " month" + (monthsFetched === 1 ? "" : "s") +
+      (monthsSkipped ? " (" + monthsSkipped + " already up to date)" : "") + ".";
   }
   $("cpOvSyncBtn").disabled = false;
   cpOvRender();
@@ -420,7 +505,7 @@ function cpOvRender(){
   const wkStart = new Date(today); wkStart.setDate(wkStart.getDate() - today.getDay());
   let wtd = 0;
   for (const dt of Object.keys(byDate)){ if (dt >= cpDs(wkStart) && dt <= todayStr) wtd += byDate[dt]; }
-  const p = cpProjection(byDate);
+  const p = cpAllProjection();
   const yestD = new Date(today); yestD.setDate(yestD.getDate() - 1);
   const lwStart = new Date(wkStart); lwStart.setDate(lwStart.getDate() - 7);
   const lwEnd = new Date(wkStart); lwEnd.setDate(lwEnd.getDate() - 1);
@@ -464,6 +549,8 @@ function cpOvRenderSiteCards(todayStr){
   for (const s of siteList){
     const r = (cpHist[s.id] || {})[todayStr] || {revenue: 0, count: 0};
     const t30 = cpSumRange(s.id, cpDs(d30), todayStr);
+    const proj = cpSiteProjection(s.id);
+    const conf = cpConfidence(cpSiteDataDays(s.id));
     const avg = cpSiteAvgWeekday(s.id, today);
     const delta = avg ? Math.round((r.revenue - avg) / avg * 100) : 0;
     const bigHelp = "Sum of this site's CryptoPay transaction totals (sales tax included) for today.";
@@ -477,6 +564,11 @@ function cpOvRenderSiteCards(todayStr){
       "<div class=\"big\" title=\"" + bigHelp + "\">" + cpMoney(r.revenue) + "</div>" +
       "<div class=\"row\" title=\"" + txHelp + "\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>" +
       "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\" title=\"" + deltaHelp + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+    const projRow = document.createElement("div");
+    projRow.className = "row";
+    projRow.title = "Projected total for this month: month to date plus an estimate for each remaining day, using this site's average for that weekday over the last 8 weeks. " + conf.note;
+    projRow.innerHTML = "<span>Month projection: " + cpMoney(proj.projected) + (conf.label === "good" ? "" : "*") + "</span>";
+    div.appendChild(projRow);
     div.addEventListener("click", () => cpOpenDetail(s));
     wrap.appendChild(div);
   }
@@ -490,7 +582,10 @@ function cpOpenDetail(site){
   const wkStart = new Date(today); wkStart.setDate(wkStart.getDate() - today.getDay());
   const moStart = todayStr.slice(0, 8) + "01";
   let rows = "";
+  const yestD = new Date(today); yestD.setDate(yestD.getDate() - 1);
+  const yestStr = cpDs(yestD);
   rows += cpPeriodRow("Today", cpSumRange(site.id, todayStr, todayStr));
+  rows += cpPeriodRow("Yesterday", cpSumRange(site.id, yestStr, yestStr));
   rows += cpPeriodRow("This week", cpSumRange(site.id, cpDs(wkStart), todayStr));
   rows += cpPeriodRow("This month", cpSumRange(site.id, moStart, todayStr));
   const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
@@ -509,10 +604,28 @@ function cpOpenDetail(site){
   }
   if (!dailyRows) dailyRows = "<tr><td colspan=\"4\">No activity recorded</td></tr>";
 
+  const t30d = cpSumRange(site.id, cpDs(d30), todayStr);
+  const catNames = Object.keys(t30d.byType || {}).sort(function(a, b){
+    return (t30d.byType[b].revenue || 0) - (t30d.byType[a].revenue || 0);
+  });
+  let catRows = "";
+  for (const cat of catNames){
+    const v = t30d.byType[cat];
+    const pct = t30d.revenue ? (v.revenue / t30d.revenue * 100) : 0;
+    catRows += "<tr><td>" + cat + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td><td>" + pct.toFixed(1) + "%</td></tr>";
+  }
+  if (!catRows) catRows = "<tr><td colspan=\"4\">No category detail stored yet - press Sync.</td></tr>";
+
+  const sProj = cpSiteProjection(site.id);
+  const sConf = cpConfidence(cpSiteDataDays(site.id));
+
   $("detailBody").innerHTML =
     "<h2>" + site.name + "</h2>" +
+    "<p style=\"color:#8fa3c0;font-size:13px;margin:0 0 6px\">Month projection: <strong style=\"color:#eaeef5\">" + cpMoney(sProj.projected) + "</strong> &nbsp;(" + cpSiteDataDays(site.id) + " days of history - confidence: " + sConf.label + ". " + sConf.note + ")</p>" +
     "<h3>Period totals</h3>" +
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<h3>Breakdown by device type - last 30 days</h3>" +
+    "<table class=\"via\"><thead><tr><th>Type</th><th>Uses</th><th>Revenue</th><th>% of revenue</th></tr></thead><tbody>" + catRows + "</tbody></table>" +
     "<h3>Revenue - last 30 days</h3>" +
     "<canvas id=\"cpSiteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +
@@ -583,5 +696,9 @@ async function cpInit(){
   if (btn) btn.addEventListener("click", cpSync);
   const ovBtn = $("cpOvSyncBtn");
   if (ovBtn) ovBtn.addEventListener("click", cpOvSync);
+  // Canvas has zero width while its page is hidden, so the chart cannot draw at
+  // load time. Redraw once the tab is actually visible.
+  const ovNavBtn = document.querySelector('.nav-btn[data-page="cp-overview"]');
+  if (ovNavBtn) ovNavBtn.addEventListener("click", function(){ setTimeout(cpOvRender, 0); });
 }
 document.addEventListener("DOMContentLoaded", cpInit);
