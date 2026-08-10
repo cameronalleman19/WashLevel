@@ -9,6 +9,10 @@
 .nav-subgroup{display:none;flex-direction:column;gap:8px;margin-top:8px}
 .nav-group.open .nav-subgroup{display:flex}
 .nav-subgroup .nav-btn{padding-left:24px}
+.cp-ok{color:#4ade80;font-weight:600}
+.cp-down{color:#f87171;font-weight:600}
+.cp-activate{background:#7f1d1d;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px}
+.cp-activate:hover{background:#9c2b2b}
 </style>
 </head>
 <body>
@@ -132,9 +136,12 @@
 <div class="page" id="page-cryptopay">
 <header>
   <h1>Cryptopay</h1>
-  <span id="cryptoStatus"></span>
+  <div id="cpLastSync"></div>
+  <button id="cpSyncBtn">Sync</button>
 </header>
-<p>Integration coming soon. This tab will surface remote bay activation, device status, and operational stats from MyCryptoPay.</p>
+<div id="cpSessionBanner" hidden style="background:#7f1d1d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:14px;">MyCryptoPay session expired or not logged in. <a href="https://www.mycryptopay.com/login/index.php?page=sitestatus" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">Log in to MyCryptoPay</a>, then press Sync again.</div>
+<div id="cryptoStatus"></div>
+<div id="cpSites" class="cards"></div>
 </div>
 
 <div class="page" id="page-settings">
@@ -177,5 +184,6 @@
 <script src="consumers.js"></script>
 <script src="members.js"></script>
 <script src="retail.js"></script>
+<script src="cryptopay.js"></script>
 </body>
 </html>
