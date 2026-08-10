@@ -274,6 +274,34 @@ function cpMonthRanges(start, end){
   return out;
 }
 
+function cpSumRange(sid, from, to){
+  const out = {revenue: 0, count: 0};
+  for (const dt of Object.keys(cpHist[sid] || {})){
+    if (dt >= from && dt <= to){
+      const r = cpHist[sid][dt];
+      out.revenue += r.revenue || 0;
+      out.count += r.count || 0;
+    }
+  }
+  return out;
+}
+
+function cpAllSitesRange(from, to){
+  const out = {revenue: 0, count: 0};
+  for (const sid of Object.keys(cpHist)){
+    const t = cpSumRange(sid, from, to);
+    out.revenue += t.revenue;
+    out.count += t.count;
+  }
+  return out;
+}
+
+function cpAvgTicket(t){ return t.count ? t.revenue / t.count : 0; }
+
+function cpPeriodRow(label, t){
+  return "<tr><td>" + label + "</td><td>" + cpMoney(t.revenue) + "</td><td>" + t.count + "</td><td>" + cpMoney(cpAvgTicket(t)) + "</td></tr>";
+}
+
 async function cpOvLoad(){
   const st = await chrome.storage.local.get(["cpHist", "cpHistLastSync", "cpHistSchema"]);
   if (st.cpHistSchema !== CP_HIST_SCHEMA){
@@ -411,6 +439,10 @@ function cpOvRender(){
   $("cpOvWtd").textContent = cpMoney(wtd);
   $("cpOvMtd").textContent = cpMoney(p.mtd);
   $("cpOvProj").textContent = cpMoney(p.projected);
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  const allTicket = cpAllSitesRange(cpDs(d30), todayStr);
+  const avgTicketEl = $("cpOvAvgTicket");
+  if (avgTicketEl) avgTicketEl.textContent = cpMoney(cpAvgTicket(allTicket));
   cpOvRenderSiteCards(todayStr, today);
   cpOvRenderChart(byDate, today);
   cpOvRenderAnomalies(today);
@@ -426,19 +458,70 @@ function cpOvRenderSiteCards(todayStr){
   if (!wrap) return;
   wrap.innerHTML = "";
   const today = new Date();
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
   const siteList = cpOvSiteList();
   for (const s of siteList){
     const r = (cpHist[s.id] || {})[todayStr] || {revenue: 0, count: 0};
+    const t30 = cpSumRange(s.id, cpDs(d30), todayStr);
     const avg = cpSiteAvgWeekday(s.id, today);
     const delta = avg ? Math.round((r.revenue - avg) / avg * 100) : 0;
     const div = document.createElement("div");
-    div.className = "card";
+    div.className = "card clickable";
     div.innerHTML = "<h3>" + s.name + "</h3>" +
       "<div class=\"big\">" + cpMoney(r.revenue) + "</div>" +
-      "<div class=\"row\"><span>Transactions: " + r.count + "</span></div>" +
+      "<div class=\"row\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>" +
       "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+    div.addEventListener("click", () => cpOpenDetail(s));
     wrap.appendChild(div);
   }
+}
+
+function cpOpenDetail(site){
+  const today = new Date();
+  const todayStr = cpDs(today);
+  const modal = $("detailModal");
+  if (!modal) return;
+  const wkStart = new Date(today); wkStart.setDate(wkStart.getDate() - today.getDay());
+  const moStart = todayStr.slice(0, 8) + "01";
+  let rows = "";
+  rows += cpPeriodRow("Today", cpSumRange(site.id, todayStr, todayStr));
+  rows += cpPeriodRow("This week", cpSumRange(site.id, cpDs(wkStart), todayStr));
+  rows += cpPeriodRow("This month", cpSumRange(site.id, moStart, todayStr));
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  rows += cpPeriodRow("Last 30 days", cpSumRange(site.id, cpDs(d30), todayStr));
+  const d90 = new Date(today); d90.setDate(d90.getDate() - 89);
+  rows += cpPeriodRow("Last 90 days", cpSumRange(site.id, cpDs(d90), todayStr));
+
+  let dailyRows = "";
+  for (let i = 13; i >= 0; i--){
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const k = cpDs(d);
+    const rec = (cpHist[site.id] || {})[k];
+    if (rec){
+      dailyRows += "<tr><td>" + fmtDate(k) + "</td><td>" + cpMoney(rec.revenue) + "</td><td>" + rec.count + "</td><td>" + cpMoney(cpAvgTicket(rec)) + "</td></tr>";
+    }
+  }
+  if (!dailyRows) dailyRows = "<tr><td colspan=\"4\">No activity recorded</td></tr>";
+
+  $("detailBody").innerHTML =
+    "<h2>" + site.name + "</h2>" +
+    "<h3>Period totals</h3>" +
+    "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<h3>Revenue - last 30 days</h3>" +
+    "<canvas id=\"cpSiteChart\"></canvas>" +
+    "<h3>Last 14 days</h3>" +
+    "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
+  modal.style.display = "flex";
+
+  const chartDates = [], vals = [];
+  for (let i = 29; i >= 0; i--){
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const k = cpDs(d);
+    chartDates.push(k);
+    vals.push(((cpHist[site.id] || {})[k] || {}).revenue || 0);
+  }
+  const chartCanvas = $("cpSiteChart");
+  if (chartCanvas && typeof drawLine === "function") drawLine(chartCanvas, vals, chartDates);
 }
 
 function cpOvRenderChart(byDate, today){
