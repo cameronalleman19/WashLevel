@@ -443,6 +443,7 @@ function cpOvRender(){
   const allTicket = cpAllSitesRange(cpDs(d30), todayStr);
   const avgTicketEl = $("cpOvAvgTicket");
   if (avgTicketEl) avgTicketEl.textContent = cpMoney(cpAvgTicket(allTicket));
+  if (typeof wlTips === "function") wlTips("cpOvTiles", WL_TIP_CP_OVERVIEW);
   cpOvRenderSiteCards(todayStr, today);
   cpOvRenderChart(byDate, today);
   cpOvRenderAnomalies(today);
@@ -473,9 +474,9 @@ function cpOvRenderSiteCards(todayStr){
     const div = document.createElement("div");
     div.className = "card clickable";
     div.innerHTML = "<h3>" + s.name + "</h3>" +
-      "<div class=\"big\" data-help=\"" + bigHelp + "\">" + cpMoney(r.revenue) + "</div>" +
-      "<div class=\"row\" data-help=\"" + txHelp + "\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>" +
-      "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\" data-help=\"" + deltaHelp + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+      "<div class=\"big\" title=\"" + bigHelp + "\">" + cpMoney(r.revenue) + "</div>" +
+      "<div class=\"row\" title=\"" + txHelp + "\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>" +
+      "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\" title=\"" + deltaHelp + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
     div.addEventListener("click", () => cpOpenDetail(s));
     wrap.appendChild(div);
   }

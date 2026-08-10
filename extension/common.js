@@ -112,3 +112,25 @@ const WL_TIP_RETAIL = {
   "Retail $/wash 30d": "Retail revenue divided by retail washes over 30d - the average ticket per non-member wash.",
   "Capture rate 30d": "New passes sold divided by retail washes - how well retail traffic converts into members."
 };
+
+const WL_TIP_OVERVIEW = {
+  "Today": "Total revenue across all Dencar sites for today, from each site's daily report.",
+  "Yesterday": "Total revenue across all sites for yesterday - the last full day of data.",
+  "Week to date": "Total revenue across all sites since Sunday, through today.",
+  "Last week": "Total revenue across all sites for the previous full week, Sunday through Saturday.",
+  "Month to date": "Total revenue across all sites since the 1st of this month.",
+  "Last month": "Total revenue across all sites for the previous calendar month.",
+  "Month projection": "Month to date plus an estimate of the rest of the month. Each remaining day is estimated from the average revenue for that same weekday over the last 8 weeks.",
+  "Avg use/member 30d": "Pass Use washes over the last 30 days divided by active member vehicles. How often the average member washes per month."
+};
+
+const WL_TIP_CP_OVERVIEW = {
+  "Today": "Sum of every CryptoPay transaction total (sales tax included) across all sites, for today.",
+  "Yesterday": "Same as Today, but for yesterday - the last full day of data.",
+  "Week to date": "All-site CryptoPay totals since Sunday, through today.",
+  "Last week": "All-site CryptoPay totals for the previous full week, Sunday through Saturday.",
+  "Month to date": "All-site CryptoPay totals since the 1st of this month.",
+  "Last month": "All-site CryptoPay totals for the previous calendar month.",
+  "Month projection": "Month to date plus an estimate of the rest of the month, using the average for each weekday over the last 8 weeks.",
+  "Avg ticket (30d)": "Revenue divided by transaction count across all sites over the last 30 days. Each swipe is one transaction, even if it covers several items."
+};

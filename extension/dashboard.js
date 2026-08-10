@@ -244,6 +244,7 @@ function render(){
     totMembers += latestMembers(s.id);
   }
   $("sumMemberUse").textContent = totMembers ? (totUse / totMembers).toFixed(1) + "x" : "--";
+  if (typeof wlTips === "function") wlTips("ovTiles", WL_TIP_OVERVIEW);
   renderSiteCards(todayStr, today);
   renderChart(byDate, today);
   renderVia(today);

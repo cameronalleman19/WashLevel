@@ -13,8 +13,6 @@
 .cp-down{color:#f87171;font-weight:600}
 .cp-activate{background:#7f1d1d;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px}
 .cp-activate:hover{background:#9c2b2b}
-[data-help]{position:relative;cursor:help}
-[data-help]:hover::after{content:attr(data-help);position:absolute;left:0;top:100%;margin-top:6px;width:260px;background:#0d1524;color:#eaeef5;border:1px solid #2a3a58;border-radius:6px;padding:9px 11px;font-size:12px;font-weight:400;line-height:1.45;letter-spacing:0;text-transform:none;white-space:normal;z-index:200;box-shadow:0 6px 16px rgba(0,0,0,.45);pointer-events:none}
 </style>
 </head>
 <body>
@@ -52,7 +50,7 @@
   <button id="syncBtn">Sync</button>
 </header>
 <div id="status"></div>
-<section class="summary">
+<section class="summary" id="ovTiles">
   <div class="stat"><label>Today</label><div id="sumToday">--</div></div>
   <div class="stat"><label>Yesterday</label><div id="sumYest">--</div></div>
   <div class="stat"><label>Week to date</label><div id="sumWtd">--</div></div>
@@ -150,15 +148,15 @@
   <button id="cpOvSyncBtn">Sync</button>
 </header>
 <div id="cpOvStatus"></div>
-<section class="summary">
-  <div class="stat" data-help="Sum of every CryptoPay transaction total (sales tax included) across all sites, for today's date."><label>Today</label><div id="cpOvToday">--</div></div>
-  <div class="stat" data-help="Same as Today, but for yesterday's date. Useful because yesterday is the last full day of data."><label>Yesterday</label><div id="cpOvYest">--</div></div>
-  <div class="stat" data-help="All-site transaction totals from Sunday through today, inclusive."><label>Week to date</label><div id="cpOvWtd">--</div></div>
-  <div class="stat" data-help="All-site transaction totals for the previous full week, Sunday through Saturday."><label>Last week</label><div id="cpOvLastWk">--</div></div>
-  <div class="stat" data-help="All-site transaction totals from the 1st of this month through today, inclusive."><label>Month to date</label><div id="cpOvMtd">--</div></div>
-  <div class="stat" data-help="All-site transaction totals for the previous full calendar month."><label>Last month</label><div id="cpOvLastMo">--</div></div>
-  <div class="stat" data-help="Month to date, plus an estimate for the rest of the month. Each remaining day is estimated using the average revenue for that same weekday over the last 8 weeks."><label>Month projection</label><div id="cpOvProj">--</div></div>
-  <div class="stat" data-help="Total revenue divided by transaction count across all sites over the last 30 days. Each swipe counts as one transaction; multi-item purchases still count once."><label>Avg ticket (30d)</label><div id="cpOvAvgTicket">--</div></div>
+<section class="summary" id="cpOvTiles">
+  <div class="stat"><label>Today</label><div id="cpOvToday">--</div></div>
+  <div class="stat"><label>Yesterday</label><div id="cpOvYest">--</div></div>
+  <div class="stat"><label>Week to date</label><div id="cpOvWtd">--</div></div>
+  <div class="stat"><label>Last week</label><div id="cpOvLastWk">--</div></div>
+  <div class="stat"><label>Month to date</label><div id="cpOvMtd">--</div></div>
+  <div class="stat"><label>Last month</label><div id="cpOvLastMo">--</div></div>
+  <div class="stat"><label>Month projection</label><div id="cpOvProj">--</div></div>
+  <div class="stat"><label>Avg ticket (30d)</label><div id="cpOvAvgTicket">--</div></div>
 </section>
 <h2>Today by site</h2>
 <div id="cpOvSiteCards" class="cards"></div>
