@@ -465,12 +465,17 @@ function cpOvRenderSiteCards(todayStr){
     const t30 = cpSumRange(s.id, cpDs(d30), todayStr);
     const avg = cpSiteAvgWeekday(s.id, today);
     const delta = avg ? Math.round((r.revenue - avg) / avg * 100) : 0;
+    const bigHelp = "Sum of this site's CryptoPay transaction totals (sales tax included) for today.";
+    const txHelp = "Transactions: number of separate purchases today. Avg ticket: this site's revenue divided by its transaction count over the last 30 days.";
+    const deltaHelp = avg
+      ? "Today's revenue compared with this site's average for the same weekday over the previous 4 weeks (" + cpMoney(avg) + ")."
+      : "Not enough history yet for this site to compare against the same weekday in previous weeks.";
     const div = document.createElement("div");
     div.className = "card clickable";
     div.innerHTML = "<h3>" + s.name + "</h3>" +
-      "<div class=\"big\">" + cpMoney(r.revenue) + "</div>" +
-      "<div class=\"row\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>" +
-      "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+      "<div class=\"big\" data-help=\"" + bigHelp + "\">" + cpMoney(r.revenue) + "</div>" +
+      "<div class=\"row\" data-help=\"" + txHelp + "\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>" +
+      "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\" data-help=\"" + deltaHelp + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
     div.addEventListener("click", () => cpOpenDetail(s));
     wrap.appendChild(div);
   }
