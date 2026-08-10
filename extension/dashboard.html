@@ -30,7 +30,15 @@
       <button class="nav-btn" data-page="retail">Retail</button>
     </div>
   </div>
-  <button class="nav-btn" data-page="cryptopay">Cryptopay</button>
+  <div class="nav-group">
+    <button class="nav-btn nav-group-toggle">Cryptopay</button>
+    <div class="nav-subgroup">
+      <button class="nav-btn" data-page="cp-overview">Overview</button>
+      <button class="nav-btn" data-page="cryptopay">Site Status</button>
+      <button class="nav-btn" data-page="cp-purchases">Purchases</button>
+      <button class="nav-btn" data-page="cp-statistics">Statistics</button>
+    </div>
+  </div>
   <button class="nav-btn" data-page="settings">Settings</button>
 </nav>
 <main>
@@ -133,15 +141,53 @@
 <ul id="retAnoms"></ul>
 </div>
 
+<div class="page" id="page-cp-overview">
+<header>
+  <h1>Cryptopay Overview</h1>
+  <div id="cpOvLastSync"></div>
+  <button id="cpOvSyncBtn">Sync</button>
+</header>
+<div id="cpOvStatus"></div>
+<section class="summary">
+  <div class="stat"><label>Today</label><div id="cpOvToday">--</div></div>
+  <div class="stat"><label>Yesterday</label><div id="cpOvYest">--</div></div>
+  <div class="stat"><label>Week to date</label><div id="cpOvWtd">--</div></div>
+  <div class="stat"><label>Last week</label><div id="cpOvLastWk">--</div></div>
+  <div class="stat"><label>Month to date</label><div id="cpOvMtd">--</div></div>
+  <div class="stat"><label>Last month</label><div id="cpOvLastMo">--</div></div>
+  <div class="stat"><label>Month projection</label><div id="cpOvProj">--</div></div>
+</section>
+<h2>Today by site</h2>
+<div id="cpOvSiteCards" class="cards"></div>
+<h2>Revenue - last 30 days (all sites)</h2>
+<canvas id="cpOvChart"></canvas>
+<h2>Anomalies</h2>
+<ul id="cpOvAnomalies"></ul>
+</div>
+
 <div class="page" id="page-cryptopay">
 <header>
-  <h1>Cryptopay</h1>
+  <h1>Site Status</h1>
   <div id="cpLastSync"></div>
   <button id="cpSyncBtn">Sync</button>
 </header>
 <div id="cpSessionBanner" hidden style="background:#7f1d1d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:14px;">MyCryptoPay session expired or not logged in. <a href="https://www.mycryptopay.com/login/index.php?page=sitestatus" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">Log in to MyCryptoPay</a>, then press Sync again.</div>
 <div id="cryptoStatus"></div>
 <div id="cpSites" class="cards"></div>
+</div>
+
+<div class="page" id="page-cp-purchases">
+<header>
+  <h1>Purchases</h1>
+</header>
+<p>Coming soon.</p>
+</div>
+
+<div class="page" id="page-cp-statistics">
+<header>
+  <h1>Statistics</h1>
+</header>
+<p>Coming soon.</p>
 </div>
 
 <div class="page" id="page-settings">
