@@ -88,12 +88,25 @@ function cpParseDevices(html){
   return devices;
 }
 
+// Pulls the street address out of the Site Information block so projections can
+// geocode each site once for weather lookups.
+function cpParseAddress(html){
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const cells = Array.from(doc.querySelectorAll("td"));
+  for (let i = 0; i < cells.length; i++){
+    if (/^\s*Address:\s*$/i.test(cells[i].textContent) && cells[i + 1]){
+      return cells[i + 1].innerHTML.replace(/<br\s*\/?>/gi, ", ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    }
+  }
+  return "";
+}
+
 async function cpFetchStatus(siteId){
   try {
     const res = await fetch(CP_BASE + "/login/api.php?page=sitestatus_inner&siteid=" + siteId, {credentials: "include"});
     const html = await res.text();
     if (/type="password"/i.test(html)) return {devices: [], loggedOut: true};
-    return {devices: cpParseDevices(html), loggedOut: false};
+    return {devices: cpParseDevices(html), address: cpParseAddress(html), loggedOut: false};
   } catch(e){
     return {devices: [], loggedOut: false, error: true};
   }
@@ -122,7 +135,7 @@ async function cpSync(){
     cpSetStatus("Syncing " + (done + 1) + " / " + cpSites.length + " - " + s.name);
     const r = await cpFetchStatus(s.id);
     if (r.loggedOut){ loggedOutMidSync = true; break; }
-    cpStatus[s.id] = {name: s.name, devices: r.devices || [], lastUpdated: Date.now()};
+    cpStatus[s.id] = {name: s.name, devices: r.devices || [], address: r.address || ((cpStatus[s.id] || {}).address || ""), lastUpdated: Date.now()};
     done++;
     await new Promise(res => setTimeout(res, 150));
   }

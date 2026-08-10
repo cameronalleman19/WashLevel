@@ -13,6 +13,11 @@
 .cp-down{color:#f87171;font-weight:600}
 .cp-activate{background:#7f1d1d;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px}
 .cp-activate:hover{background:#9c2b2b}
+.cpj-good{color:#4ade80;font-weight:600}
+.cpj-fair{color:#ffd166;font-weight:600}
+.cpj-limited{color:#f87171;font-weight:600}
+ul.cpj-notes{background:#182640;border-radius:10px;padding:14px 14px 14px 32px;margin:0;}
+ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -36,6 +41,7 @@
       <button class="nav-btn" data-page="cp-overview">Overview</button>
       <button class="nav-btn" data-page="cryptopay">Site Status</button>
       <button class="nav-btn" data-page="cp-purchases">Purchases</button>
+      <button class="nav-btn" data-page="cp-projections">Projections</button>
       <button class="nav-btn" data-page="cp-statistics">Statistics</button>
     </div>
   </div>
@@ -184,6 +190,20 @@
 <p>Coming soon.</p>
 </div>
 
+<div class="page" id="page-cp-projections">
+<header>
+  <h1>Projections</h1>
+  <button id="cpjRefreshBtn">Refresh</button>
+</header>
+<section class="summary">
+  <div class="stat" title="Projected total across all sites for the current calendar month: actual revenue so far plus a predicted value for every remaining day."><label>Projected this month</label><div id="cpjTotProj">--</div></div>
+  <div class="stat" title="80% interval. Roughly speaking, the month should land inside this range about 8 times out of 10 if nothing unusual happens."><label>Likely range</label><div id="cpjTotRange">--</div></div>
+  <div class="stat" title="Actual revenue banked so far this month across all sites."><label>Month to date</label><div id="cpjTotMtd">--</div></div>
+  <div class="stat" title="How many sites have more than about 13 months of history, which is what it takes before month-of-year seasonality can be used."><label>Sites with seasonality</label><div id="cpjSeasonal">--</div></div>
+</section>
+<div id="cpjBody"></div>
+</div>
+
 <div class="page" id="page-cp-statistics">
 <header>
   <h1>Statistics</h1>
@@ -232,5 +252,6 @@
 <script src="members.js"></script>
 <script src="retail.js"></script>
 <script src="cryptopay.js"></script>
+<script src="cpproj.js"></script>
 </body>
 </html>
