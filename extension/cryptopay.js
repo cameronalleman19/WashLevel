@@ -184,6 +184,6 @@ async function cpInit(){
   await cpLoad();
   cpRender();
   const btn = $("cpSyncBtn");
-  if (btn) btn.addEventListener("click", cpInit);
+  if (btn) btn.addEventListener("click", cpSync);
 }
 document.addEventListener("DOMContentLoaded", cpInit);
