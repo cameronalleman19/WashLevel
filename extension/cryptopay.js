@@ -1,6 +1,6 @@
 const CP_BASE = "https://www.mycryptopay.com";
 const CP_SCHEMA = 1;
-const CP_HIST_SCHEMA = 2;
+const CP_HIST_SCHEMA = 3;
 const CP_MAX_BACKFILL_MONTHS = 72;
 const CP_EMPTY_MONTH_STOP = 3;
 
@@ -269,7 +269,7 @@ function cpAggregateCsv(rows){
     if (!date || !siteId) continue;
     const amt = cpMoneyNum(r.TotalCharge);
     bySiteDate[siteId] = bySiteDate[siteId] || {};
-    bySiteDate[siteId][date] = bySiteDate[siteId][date] || {revenue: 0, count: 0, byType: {}};
+    bySiteDate[siteId][date] = bySiteDate[siteId][date] || {revenue: 0, count: 0, byType: {}, byDevice: {}};
     bySiteDate[siteId][date].revenue += amt;
     bySiteDate[siteId][date].count += 1;
   }
@@ -285,6 +285,15 @@ function cpAggregateCsv(rows){
     bt[cat] = bt[cat] || {revenue: 0, count: 0};
     bt[cat].revenue += cpMoneyNum(r.Charge);
     bt[cat].count += 1;
+
+    if (cat !== "Sales Tax"){
+      const dev = (r.SwiperID || "Unknown").trim();
+      const bd = bySiteDate[siteId][date].byDevice;
+      bd[dev] = bd[dev] || {revenue: 0, count: 0, type: cat};
+      bd[dev].revenue += cpMoneyNum(r.Charge);
+      bd[dev].count += 1;
+      if (!bd[dev].type) bd[dev].type = cat;
+    }
   }
   return bySiteDate;
 }
@@ -304,7 +313,7 @@ function cpMonthRanges(start, end){
 }
 
 function cpSumRange(sid, from, to){
-  const out = {revenue: 0, count: 0, byType: {}};
+  const out = {revenue: 0, count: 0, byType: {}, byDevice: {}};
   for (const dt of Object.keys(cpHist[sid] || {})){
     if (dt >= from && dt <= to){
       const r = cpHist[sid][dt];
@@ -315,6 +324,13 @@ function cpSumRange(sid, from, to){
         out.byType[cat] = out.byType[cat] || {revenue: 0, count: 0};
         out.byType[cat].revenue += bt[cat].revenue || 0;
         out.byType[cat].count += bt[cat].count || 0;
+      }
+      const bd = r.byDevice || {};
+      for (const dev of Object.keys(bd)){
+        out.byDevice[dev] = out.byDevice[dev] || {revenue: 0, count: 0, type: bd[dev].type || ""};
+        out.byDevice[dev].revenue += bd[dev].revenue || 0;
+        out.byDevice[dev].count += bd[dev].count || 0;
+        if (!out.byDevice[dev].type && bd[dev].type) out.byDevice[dev].type = bd[dev].type;
       }
     }
   }
@@ -629,6 +645,33 @@ function cpOpenDetail(site){
   }
   if (!catRows) catRows = "<tr><td colspan=\"4\">No category detail stored yet - press Sync.</td></tr>";
 
+  const devNames = Object.keys(t30d.byDevice || {});
+  const bestByType = {};
+  for (const dev of devNames){
+    const v = t30d.byDevice[dev];
+    const t = v.type || "Other";
+    if (!bestByType[t] || v.revenue > bestByType[t]) bestByType[t] = v.revenue;
+  }
+  devNames.sort(function(a, b){
+    const va = t30d.byDevice[a], vb = t30d.byDevice[b];
+    const ta = va.type || "", tb = vb.type || "";
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return (vb.revenue || 0) - (va.revenue || 0);
+  });
+  let devRows = "";
+  for (const dev of devNames){
+    const v = t30d.byDevice[dev];
+    const t = v.type || "Other";
+    const best = bestByType[t] || 0;
+    const rel = best > 0 ? (v.revenue / best * 100) : 100;
+    const relCls = rel >= 80 ? "" : (rel >= 60 ? "cpj-fair" : "cpj-limited");
+    const relTxt = (devNames.filter(function(d){ return (t30d.byDevice[d].type || "Other") === t; }).length > 1)
+      ? "<td class=\"" + relCls + "\">" + rel.toFixed(0) + "%</td>"
+      : "<td>-</td>";
+    devRows += "<tr><td>" + dev + "</td><td>" + t + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td>" + relTxt + "</tr>";
+  }
+  if (!devRows) devRows = "<tr><td colspan=\"5\">No device detail stored yet - press Sync.</td></tr>";
+
   const sProj = cpSiteProjection(site.id);
   const sConf = cpConfidence(cpSiteDataDays(site.id));
 
@@ -639,6 +682,8 @@ function cpOpenDetail(site){
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<h3>Breakdown by device type - last 30 days</h3>" +
     "<table class=\"via\"><thead><tr><th>Type</th><th>Uses</th><th>Revenue</th><th>% of revenue</th></tr></thead><tbody>" + catRows + "</tbody></table>" +
+    "<h3>By device - last 30 days</h3>" +
+    "<table class=\"via\"><thead><tr><th>Device</th><th>Type</th><th>Uses</th><th>Revenue</th><th title=\"Revenue as a share of the best-performing device of the same type at this site. A low number can point to a mechanical problem or poor placement.\">vs best of type</th></tr></thead><tbody>" + devRows + "</tbody></table>" +
     "<h3>Revenue - last 30 days</h3>" +
     "<canvas id=\"cpSiteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +

@@ -178,10 +178,24 @@ function cpjSiteList(){
   });
 }
 
-function cpjConfidence(days, seasonal){
-  if (days >= CPJ_SEASON_MIN_DAYS && seasonal) return "good";
-  if (days >= 90) return "fair";
+// Confidence blends how much history a site has with how well the projection has
+// actually performed there. A long-running site whose daily revenue is genuinely
+// erratic should not read "good" just because the data is old.
+function cpjConfidence(days, seasonal, mape){
+  if (days < 90) return "limited";
+  if (mape === null || mape === undefined){
+    return (days >= CPJ_SEASON_MIN_DAYS && seasonal) ? "good" : "fair";
+  }
+  if (days >= 365 && mape <= 15) return "good";
+  if (mape <= 25) return "fair";
   return "limited";
+}
+
+function cpjConfidenceNote(conf, mape){
+  const acc = (mape === null || mape === undefined) ? "not measured yet" : "typically within " + mape.toFixed(0) + "% per day";
+  if (conf === "good") return "Plenty of history and the projection has tracked this site closely (" + acc + ").";
+  if (conf === "fair") return "Reasonable history, but day-to-day revenue moves around a fair bit here (" + acc + ").";
+  return "Either limited history or revenue here swings too much to project tightly (" + acc + "). Treat the number as a rough guide.";
 }
 
 // Record today's forward predictions once, so accuracy can be measured later
@@ -277,18 +291,15 @@ async function cpjRender(){
   perSite.sort(function(a, b){ return b.f.projected - a.f.projected; });
 
   for (const p of perSite){
-    const conf = cpjConfidence(p.f.model.days, p.f.model.seasonal);
-    const mape = p.bt.mape === null ? "-" : p.bt.mape.toFixed(0) + "%";
-    const bias = p.bt.bias === null ? "-" : (p.bt.bias >= 0 ? "+" : "") + p.bt.bias.toFixed(0) + "%";
+    const conf = cpjConfidence(p.f.model.days, p.f.model.seasonal, p.bt.mape);
+    const note = cpjConfidenceNote(conf, p.bt.mape).replace(/"/g, "&quot;");
     rows += "<tr>" +
       "<td>" + p.s.name + "</td>" +
       "<td>" + cpjMoney0(p.f.mtd) + "</td>" +
       "<td><strong>" + cpjMoney0(p.f.projected) + "</strong></td>" +
       "<td>" + cpjMoney0(p.f.lo) + " - " + cpjMoney0(p.f.hi) + "</td>" +
       "<td>" + p.f.model.days + "</td>" +
-      "<td class=\"cpj-" + conf + "\">" + conf + "</td>" +
-      "<td>" + mape + "</td>" +
-      "<td>" + bias + "</td>" +
+      "<td class=\"cpj-" + conf + "\" title=\"" + note + "\">" + conf + "</td>" +
       "</tr>";
   }
 
@@ -309,22 +320,8 @@ async function cpjRender(){
     "<h2>By site</h2>" +
     "<table class=\"via\"><thead><tr>" +
     "<th>Site</th><th>Month to date</th><th>Projected</th><th>80% range</th>" +
-    "<th>Days of history</th><th>Confidence</th><th>Backtest error</th><th>Bias</th>" +
+    "<th>Days of history</th><th title=\"How much to trust this site's number. Combines how much history it has with how closely projections have actually matched what happened. Hover a value for detail.\">Confidence</th>" +
     "</tr></thead><tbody>" + rows + "</tbody></table>" +
-
-    "<h2>How accurate is this?</h2>" +
-    "<div class=\"cards\">" +
-      "<div class=\"card\"><h3>Backtest (last 30 days)</h3>" +
-        "<div class=\"big\">" + (wMape === null ? "-" : wMape.toFixed(0) + "%") + "</div>" +
-        "<div class=\"row\"><span>Average daily error across sites</span></div>" +
-        "<div class=\"row\"><span>Bias: " + (wBias === null ? "-" : (wBias >= 0 ? "+" : "") + wBias.toFixed(0) + "%") + " (positive = over-predicting)</span></div>" +
-      "</div>" +
-      "<div class=\"card\"><h3>Live tracking</h3>" +
-        "<div class=\"big\">" + (live.mape === null ? "-" : live.mape.toFixed(0) + "%") + "</div>" +
-        "<div class=\"row\"><span>" + live.days + " day" + (live.days === 1 ? "" : "s") + " of logged predictions scored so far</span></div>" +
-        "<div class=\"row\"><span>Bias: " + (live.bias === null ? "-" : (live.bias >= 0 ? "+" : "") + live.bias.toFixed(0) + "%") + "</span></div>" +
-      "</div>" +
-    "</div>" +
 
     "<h2>How the projection works</h2>" +
     "<ul class=\"cpj-notes\">" +
@@ -333,6 +330,7 @@ async function cpjRender(){
       "<li>The projection is actual month-to-date plus a predicted value for every remaining day. The range is an 80% interval built from how much daily revenue has actually scattered around the model over the last 90 days.</li>" +
       "<li><strong>Backtest error</strong> re-fits the model using only data from before each of the last 30 days and compares its prediction with what really happened - so it is a fair test, not the model grading its own homework.</li>" +
       "<li><strong>Live tracking</strong> scores the predictions this page actually recorded on earlier visits. It stays empty until predictions have been logged and those days have passed.</li>" +
+      "<li>Checked against itself: re-running the model on the last 30 days, using only data from before each day, its daily predictions landed " + (wMape === null ? "within an unmeasured margin" : "within about " + wMape.toFixed(0) + "% on average") + " across sites" + (live.days ? ", and " + live.days + " day" + (live.days === 1 ? "" : "s") + " of live predictions have been scored so far" : "") + ". That measurement is what drives the confidence column.</li>" +
       "<li>Weather is <em>not</em> part of this yet. That comes next, and this page will then show both numbers side by side so the weather-adjusted version has to prove it is better.</li>" +
     "</ul>";
 }
