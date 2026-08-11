@@ -646,31 +646,31 @@ function cpOpenDetail(site){
   if (!catRows) catRows = "<tr><td colspan=\"4\">No category detail stored yet - press Sync.</td></tr>";
 
   const devNames = Object.keys(t30d.byDevice || {});
-  const bestByType = {};
+  const typeTotals = {}, typeCounts = {}, typeUses = {};
   for (const dev of devNames){
     const v = t30d.byDevice[dev];
     const t = v.type || "Other";
-    if (!bestByType[t] || v.revenue > bestByType[t]) bestByType[t] = v.revenue;
+    typeTotals[t] = (typeTotals[t] || 0) + (v.revenue || 0);
+    typeUses[t] = (typeUses[t] || 0) + (v.count || 0);
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
   }
-  devNames.sort(function(a, b){
-    const va = t30d.byDevice[a], vb = t30d.byDevice[b];
-    const ta = va.type || "", tb = vb.type || "";
-    if (ta !== tb) return ta < tb ? -1 : 1;
-    return (vb.revenue || 0) - (va.revenue || 0);
-  });
+  const typeOrder = Object.keys(typeTotals).sort(function(a, b){ return typeTotals[b] - typeTotals[a]; });
+  devNames.sort(function(a, b){ return (t30d.byDevice[b].revenue || 0) - (t30d.byDevice[a].revenue || 0); });
+
   let devRows = "";
-  for (const dev of devNames){
-    const v = t30d.byDevice[dev];
-    const t = v.type || "Other";
-    const best = bestByType[t] || 0;
-    const rel = best > 0 ? (v.revenue / best * 100) : 100;
-    const relCls = rel >= 80 ? "" : (rel >= 60 ? "cpj-fair" : "cpj-limited");
-    const relTxt = (devNames.filter(function(d){ return (t30d.byDevice[d].type || "Other") === t; }).length > 1)
-      ? "<td class=\"" + relCls + "\">" + rel.toFixed(0) + "%</td>"
-      : "<td>-</td>";
-    devRows += "<tr><td>" + dev + "</td><td>" + t + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td>" + relTxt + "</tr>";
+  for (const t of typeOrder){
+    const n = typeCounts[t];
+    const tot = typeTotals[t] || 0;
+    devRows += "<tr class=\"cp-devgroup\"><td><strong>" + t + "</strong></td><td>" + (typeUses[t] || 0) + "</td><td><strong>" + cpMoney(tot) + "</strong></td><td>" + (n > 1 ? n + " devices" : "1 device") + "</td></tr>";
+    for (const dev of devNames){
+      const v = t30d.byDevice[dev];
+      if ((v.type || "Other") !== t) continue;
+      const share = tot > 0 ? (v.revenue / tot * 100) : 0;
+      devRows += "<tr><td class=\"cp-devname\">" + dev + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td>" +
+        "<td>" + share.toFixed(0) + "%</td></tr>";
+    }
   }
-  if (!devRows) devRows = "<tr><td colspan=\"5\">No device detail stored yet - press Sync.</td></tr>";
+  if (!devRows) devRows = "<tr><td colspan=\"4\">No device detail stored yet - press Sync.</td></tr>";
 
   const sProj = cpSiteProjection(site.id);
   const sConf = cpConfidence(cpSiteDataDays(site.id));
@@ -683,7 +683,7 @@ function cpOpenDetail(site){
     "<h3>Breakdown by device type - last 30 days</h3>" +
     "<table class=\"via\"><thead><tr><th>Type</th><th>Uses</th><th>Revenue</th><th>% of revenue</th></tr></thead><tbody>" + catRows + "</tbody></table>" +
     "<h3>By device - last 30 days</h3>" +
-    "<table class=\"via\"><thead><tr><th>Device</th><th>Type</th><th>Uses</th><th>Revenue</th><th title=\"Revenue as a share of the best-performing device of the same type at this site. A low number can point to a mechanical problem or poor placement.\">vs best of type</th></tr></thead><tbody>" + devRows + "</tbody></table>" +
+    "<table class=\"via\"><thead><tr><th>Device</th><th>Uses</th><th>Revenue</th><th title=\"Each device's share of revenue from all devices of that same type at this site. Devices within a type add up to 100%.\">% of type</th></tr></thead><tbody>" + devRows + "</tbody></table>" +
     "<h3>Revenue - last 30 days</h3>" +
     "<canvas id=\"cpSiteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +
