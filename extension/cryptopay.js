@@ -779,6 +779,124 @@ function cpBreakdownHtml(sid, from, to, label){
     "<table class=\"via\"><thead><tr><th>Device</th><th>Uses</th><th>Revenue</th><th title=\"Each device's share of revenue from all devices of that same type at this site. Devices within a type add up to 100%.\">% of type</th></tr></thead><tbody>" + devRows + "</tbody></table>";
 }
 
+let cpWkVisible = [true, true, true, true, true, true, true]; // Sun..Sat
+const CP_WK_COLORS = ["#f87171", "#fb923c", "#facc15", "#4ade80", "#4da3ff", "#a78bfa", "#f472b6"];
+const CP_WK_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function cpDateFromKey(k){
+  const p = k.split("-");
+  return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+}
+
+// Revenue by hour (0-23), split into one array per day of week, summed across
+// every stored day in the range whose hourly buckets fall on that weekday.
+function cpWeekdayHourSeries(sid, from, to){
+  const sums = [];
+  for (let d = 0; d < 7; d++) sums.push(new Array(24).fill(0));
+  const hist = cpHist[sid] || {};
+  for (const dt of Object.keys(hist)){
+    if (dt < from || dt > to) continue;
+    const rec = hist[dt];
+    if (!rec.hourly) continue;
+    const wd = cpDateFromKey(dt).getDay();
+    for (let h = 0; h < 24; h++) sums[wd][h] += rec.hourly[h].r || 0;
+  }
+  return sums;
+}
+
+function cpHourLabel(h){
+  if (h === 0) return "12am";
+  if (h < 12) return h + "am";
+  if (h === 12) return "12pm";
+  return (h - 12) + "pm";
+}
+
+// Multi-series line chart for the weekday/hour overlay. Kept separate from the
+// single-series drawLine() used elsewhere since it needs a legend-style hover
+// across several simultaneous lines rather than one.
+function cpDrawMultiLine(canvas, series){
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width = canvas.clientWidth || 800;
+  const H = canvas.height = 260;
+  ctx.clearRect(0, 0, W, H);
+  const padL = 60, padB = 30, padT = 14, padR = 14;
+  let max = 1;
+  for (const s of series){ for (const v of s.vals){ if (v > max) max = v; } }
+  ctx.strokeStyle = "#3a4a63";
+  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+  ctx.fillStyle = "#8fa3c0"; ctx.font = "11px sans-serif";
+  ctx.fillText(cpMoney(max), 4, padT + 10);
+  const xw = (W - padL - padR) / 23;
+  for (const h of [0, 4, 8, 12, 16, 20]){
+    ctx.fillText(cpHourLabel(h), padL + h * xw - 10, H - 8);
+  }
+  if (!series.length){
+    ctx.fillStyle = "#8fa3c0";
+    ctx.fillText("No days selected above", padL + 10, (H - padB - padT) / 2 + padT);
+  }
+  for (const s of series){
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    for (let h = 0; h < 24; h++){
+      const x = padL + h * xw;
+      const y = H - padB - (s.vals[h] / max) * (H - padB - padT);
+      if (h === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  canvas.__cpwk = {series: series, padL: padL, xw: xw};
+  if (!canvas.__cpwkBound){
+    canvas.__cpwkBound = true;
+    const tip = document.createElement("div");
+    tip.className = "chart-tip"; tip.style.display = "none";
+    document.body.appendChild(tip);
+    canvas.addEventListener("mousemove", function(e){
+      const st = canvas.__cpwk;
+      if (!st || !st.series.length) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+      let h = Math.round((mx - st.padL) / st.xw);
+      if (h < 0) h = 0; if (h > 23) h = 23;
+      tip.textContent = cpHourLabel(h) + ": " + st.series.map(function(s){ return s.label + " " + cpMoney(s.vals[h]); }).join("  |  ");
+      tip.style.display = "block";
+      tip.style.left = (e.pageX + 14) + "px";
+      tip.style.top = (e.pageY - 34) + "px";
+    });
+    canvas.addEventListener("mouseleave", function(){ tip.style.display = "none"; });
+  }
+}
+
+function cpRenderWeekdayChart(sid, from, to){
+  const canvas = $("cpWkChart");
+  if (!canvas) return;
+  const sums = cpWeekdayHourSeries(sid, from, to);
+  const series = [];
+  for (let d = 0; d < 7; d++){
+    if (!cpWkVisible[d]) continue;
+    series.push({label: CP_WK_LABELS[d], color: CP_WK_COLORS[d], vals: sums[d]});
+  }
+  cpDrawMultiLine(canvas, series);
+}
+
+function cpCustomerHtml(sid, from, to){
+  const s = cpCardStats(sid, from, to);
+  const estTxt = s.reliable ? Math.round(s.estimated).toLocaleString("en-US") : s.distinct.toLocaleString("en-US");
+  const note = s.reliable
+    ? "Corrected for last-four collisions (raw count observed was " + s.distinct.toLocaleString("en-US") + ")."
+    : "Too few cards this period for a reliable correction - showing the raw count.";
+  return "<div class=\"cards\">" +
+    "<div class=\"card\"><h3>Unique cards</h3>" +
+      "<div class=\"big\">" + estTxt + "</div>" +
+      "<div class=\"row\"><span>" + note + "</span></div>" +
+    "</div>" +
+    "<div class=\"card\"><h3>Returning</h3>" +
+      "<div class=\"big\">" + s.returning.toLocaleString("en-US") + " (" + s.returnRate.toFixed(0) + "%)</div>" +
+      "<div class=\"row\"><span>Same card seen on 2+ different days this period.</span></div>" +
+    "</div>" +
+    "</div>" +
+    "<p class=\"cp-periodnote\">Identified only by the card's last four digits, since that is all CryptoPay exports - two different cards can occasionally share the same last four, which slightly overstates returns and, before correction, understates unique cards. Compare only within this one site; combining sites multiplies the collision risk.</p>";
+}
+
 function cpRenderBreakdown(){
   if (!cpDetailSite) return;
   const sel = $("cpDetailPeriod");
@@ -786,6 +904,9 @@ function cpRenderBreakdown(){
   if (!wrap) return;
   const r = cpPeriodRange(sel ? sel.value : "30d", cpDetailSite.id);
   wrap.innerHTML = cpBreakdownHtml(cpDetailSite.id, r[0], r[1], r[2]);
+  cpRenderWeekdayChart(cpDetailSite.id, r[0], r[1]);
+  const custEl = $("cpCustomers");
+  if (custEl) custEl.innerHTML = cpCustomerHtml(cpDetailSite.id, r[0], r[1]);
 }
 
 function cpOpenDetail(site){
@@ -828,6 +949,11 @@ function cpOpenDetail(site){
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<h3>Breakdown <select id=\"cpDetailPeriod\">" + cpPeriodOptions(site.id) + "</select></h3>" +
     "<div id=\"cpBreakdown\"></div>" +
+    "<h3>Activity by day of week &amp; time</h3>" +
+    "<div id=\"cpWkToggles\"></div>" +
+    "<canvas id=\"cpWkChart\"></canvas>" +
+    "<h3>Customers</h3>" +
+    "<div id=\"cpCustomers\"></div>" +
     "<h3>Revenue - last 30 days</h3>" +
     "<canvas id=\"cpSiteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +
@@ -836,6 +962,21 @@ function cpOpenDetail(site){
   cpDetailSite = site;
   const perSel = $("cpDetailPeriod");
   if (perSel) perSel.addEventListener("change", cpRenderBreakdown);
+  const wkWrap = $("cpWkToggles");
+  if (wkWrap){
+    let wkHtml = "";
+    for (let d = 0; d < 7; d++){
+      wkHtml += "<label style=\"margin-right:12px;font-size:13px;color:" + CP_WK_COLORS[d] + "\"><input type=\"checkbox\" data-day=\"" + d + "\"" + (cpWkVisible[d] ? " checked" : "") + "> " + CP_WK_LABELS[d] + "</label>";
+    }
+    wkWrap.innerHTML = wkHtml;
+    Array.from(wkWrap.querySelectorAll("input[type=checkbox]")).forEach(function(cb){
+      cb.addEventListener("change", function(){
+        cpWkVisible[parseInt(cb.dataset.day, 10)] = cb.checked;
+        const r2 = cpPeriodRange(perSel ? perSel.value : "30d", site.id);
+        cpRenderWeekdayChart(site.id, r2[0], r2[1]);
+      });
+    });
+  }
   cpRenderBreakdown();
 
   const chartDates = [], vals = [];
