@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "Aggregated Dencar sales, pass, and VIA analytics with projections",
   "permissions": [
-    "storage"
+    "storage",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://admin.dencar.sancsoft.net/*",

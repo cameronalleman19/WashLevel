@@ -1,6 +1,6 @@
 const CP_BASE = "https://www.mycryptopay.com";
 const CP_SCHEMA = 1;
-const CP_HIST_SCHEMA = 3;
+const CP_HIST_SCHEMA = 4;
 const CP_MAX_BACKFILL_MONTHS = 72;
 const CP_EMPTY_MONTH_STOP = 3;
 
@@ -269,10 +269,39 @@ function cpAggregateCsv(rows){
     if (!date || !siteId) continue;
     const amt = cpMoneyNum(r.TotalCharge);
     bySiteDate[siteId] = bySiteDate[siteId] || {};
-    bySiteDate[siteId][date] = bySiteDate[siteId][date] || {revenue: 0, count: 0, byType: {}, byDevice: {}};
-    bySiteDate[siteId][date].revenue += amt;
-    bySiteDate[siteId][date].count += 1;
+    bySiteDate[siteId][date] = bySiteDate[siteId][date] || {revenue: 0, count: 0, byType: {}, byDevice: {}, cardSet: {}, hourly: null};
+    const slot = bySiteDate[siteId][date];
+    slot.revenue += amt;
+    slot.count += 1;
+
+    const lf = (r.LastFour || "").trim();
+    if (lf) slot.cardSet[lf] = 1;
+
+    const hh = parseInt((r.Time || "").slice(11, 13), 10);
+    if (!isNaN(hh) && hh >= 0 && hh <= 23){
+      if (!slot.hourly){
+        slot.hourly = [];
+        for (let i = 0; i < 24; i++) slot.hourly.push({r: 0, c: 0});
+      }
+      slot.hourly[hh].r += amt;
+      slot.hourly[hh].c += 1;
+    }
   }
+  // Convert the day's card set to a plain array (storage-friendly) and make
+  // sure every day has a full 24-slot hourly array even if a day somehow had
+  // no timestamped rows.
+  for (const siteId of Object.keys(bySiteDate)){
+    for (const date of Object.keys(bySiteDate[siteId])){
+      const slot = bySiteDate[siteId][date];
+      slot.cards = Object.keys(slot.cardSet);
+      delete slot.cardSet;
+      if (!slot.hourly){
+        slot.hourly = [];
+        for (let i = 0; i < 24; i++) slot.hourly.push({r: 0, c: 0});
+      }
+    }
+  }
+
   // Second pass over every line item (not deduped) for the category breakdown.
   // Sales Tax is kept as its own category so categories sum to the day total.
   for (const r of rows){
@@ -313,12 +342,24 @@ function cpMonthRanges(start, end){
 }
 
 function cpSumRange(sid, from, to){
-  const out = {revenue: 0, count: 0, byType: {}, byDevice: {}};
+  const out = {revenue: 0, count: 0, byType: {}, byDevice: {}, hourly: null, cardDays: {}};
+  out.hourly = [];
+  for (let i = 0; i < 24; i++) out.hourly.push({r: 0, c: 0});
   for (const dt of Object.keys(cpHist[sid] || {})){
     if (dt >= from && dt <= to){
       const r = cpHist[sid][dt];
       out.revenue += r.revenue || 0;
       out.count += r.count || 0;
+      if (r.hourly){
+        for (let h = 0; h < 24; h++){
+          out.hourly[h].r += r.hourly[h].r || 0;
+          out.hourly[h].c += r.hourly[h].c || 0;
+        }
+      }
+      for (const card of (r.cards || [])){
+        out.cardDays[card] = out.cardDays[card] || [];
+        out.cardDays[card].push(dt);
+      }
       const bt = r.byType || {};
       for (const cat of Object.keys(bt)){
         out.byType[cat] = out.byType[cat] || {revenue: 0, count: 0};
@@ -393,6 +434,42 @@ function cpAllSitesRange(from, to){
 }
 
 function cpAvgTicket(t){ return t.count ? t.revenue / t.count : 0; }
+
+// CryptoPay's export only gives the last four digits of the card, so two
+// different cards can collide. Given the count of distinct last-fours actually
+// observed, this recovers an estimate of the true number of distinct cards by
+// inverting the expected-distinct-values formula for drawing from a 10,000-slot
+// space (0000-9999) with replacement.
+function cpEstimateTrueCards(distinct, space){
+  space = space || 10000;
+  if (distinct <= 0) return 0;
+  if (distinct >= space) return distinct;
+  return Math.log(1 - distinct / space) / Math.log(1 - 1 / space);
+}
+
+// Per-site card stats for a period. "Returning" means the same last-four was
+// seen on 2+ different days in the window - a same-day repeat swipe does not
+// count as a return visit. Last-four collisions mean this slightly overstates
+// returns and undercounts unique cards; the corrected figure adjusts for that
+// but is still an estimate, most reliable once there are a couple dozen cards.
+function cpCardStats(sid, from, to){
+  const t = cpSumRange(sid, from, to);
+  const cards = Object.keys(t.cardDays);
+  const distinct = cards.length;
+  let returning = 0;
+  for (const card of cards){
+    if (t.cardDays[card].length >= 2) returning++;
+  }
+  const reliable = distinct >= 20;
+  const estimated = reliable ? cpEstimateTrueCards(distinct) : distinct;
+  return {
+    distinct: distinct,
+    estimated: estimated,
+    returning: returning,
+    returnRate: distinct ? (returning / distinct * 100) : 0,
+    reliable: reliable
+  };
+}
 
 function cpPeriodRow(label, t){
   return "<tr><td>" + label + "</td><td>" + cpMoney(t.revenue) + "</td><td>" + t.count + "</td><td>" + cpMoney(cpAvgTicket(t)) + "</td></tr>";
@@ -603,6 +680,114 @@ function cpOvRenderSiteCards(todayStr){
   }
 }
 
+let cpDetailSite = null;
+
+// Period choices for the breakdown tables: rolling windows, to-date ranges, and
+// every individual month that actually has stored data.
+function cpPeriodOptions(sid){
+  const opts = [
+    ["30d", "Last 30 days"],
+    ["7d", "Last 7 days"],
+    ["90d", "Last 90 days"],
+    ["365d", "Last 12 months"],
+    ["mtd", "Month to date"],
+    ["ytd", "Year to date"],
+    ["all", "All time"]
+  ];
+  const months = {};
+  for (const k of Object.keys(cpHist[sid] || {})) months[k.slice(0, 7)] = 1;
+  const sorted = Object.keys(months).sort().reverse();
+  let html = "";
+  for (const o of opts) html += "<option value=\"" + o[0] + "\">" + o[1] + "</option>";
+  if (sorted.length){
+    html += "<optgroup label=\"Single month\">";
+    for (const m of sorted){
+      const d = new Date(parseInt(m.slice(0, 4), 10), parseInt(m.slice(5, 7), 10) - 1, 1);
+      html += "<option value=\"m:" + m + "\">" + d.toLocaleDateString("en-US", {month: "long", year: "numeric"}) + "</option>";
+    }
+    html += "</optgroup>";
+  }
+  return html;
+}
+
+function cpPeriodRange(val, sid){
+  const today = new Date();
+  const todayStr = cpDs(today);
+  function back(n){ const d = new Date(today); d.setDate(d.getDate() - (n - 1)); return cpDs(d); }
+  if (val === "7d") return [back(7), todayStr, "last 7 days"];
+  if (val === "90d") return [back(90), todayStr, "last 90 days"];
+  if (val === "365d") return [back(365), todayStr, "last 12 months"];
+  if (val === "mtd") return [todayStr.slice(0, 8) + "01", todayStr, "month to date"];
+  if (val === "ytd") return [todayStr.slice(0, 4) + "-01-01", todayStr, "year to date"];
+  if (val === "all"){
+    const keys = Object.keys(cpHist[sid] || {}).sort();
+    return [keys.length ? keys[0] : todayStr, todayStr, "all time"];
+  }
+  if (val.indexOf("m:") === 0){
+    const m = val.slice(2);
+    const y = parseInt(m.slice(0, 4), 10), mo = parseInt(m.slice(5, 7), 10);
+    const last = new Date(y, mo, 0);
+    const label = new Date(y, mo - 1, 1).toLocaleDateString("en-US", {month: "long", year: "numeric"});
+    return [m + "-01", cpDs(last), label];
+  }
+  return [back(30), todayStr, "last 30 days"];
+}
+
+function cpBreakdownHtml(sid, from, to, label){
+  const t = cpSumRange(sid, from, to);
+
+  const catNames = Object.keys(t.byType || {}).sort(function(a, b){
+    return (t.byType[b].revenue || 0) - (t.byType[a].revenue || 0);
+  });
+  let catRows = "";
+  for (const cat of catNames){
+    const v = t.byType[cat];
+    const pct = t.revenue ? (v.revenue / t.revenue * 100) : 0;
+    catRows += "<tr><td>" + cat + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td><td>" + pct.toFixed(1) + "%</td></tr>";
+  }
+  if (!catRows) catRows = "<tr><td colspan=\"4\">No data for this period.</td></tr>";
+
+  const devNames = Object.keys(t.byDevice || {});
+  const typeTotals = {}, typeCounts = {}, typeUses = {};
+  for (const dev of devNames){
+    const v = t.byDevice[dev];
+    const ty = v.type || "Other";
+    typeTotals[ty] = (typeTotals[ty] || 0) + (v.revenue || 0);
+    typeUses[ty] = (typeUses[ty] || 0) + (v.count || 0);
+    typeCounts[ty] = (typeCounts[ty] || 0) + 1;
+  }
+  const typeOrder = Object.keys(typeTotals).sort(function(a, b){ return typeTotals[b] - typeTotals[a]; });
+  devNames.sort(function(a, b){ return (t.byDevice[b].revenue || 0) - (t.byDevice[a].revenue || 0); });
+  let devRows = "";
+  for (const ty of typeOrder){
+    const n = typeCounts[ty];
+    const tot = typeTotals[ty] || 0;
+    devRows += "<tr class=\"cp-devgroup\"><td><strong>" + ty + "</strong></td><td>" + (typeUses[ty] || 0) + "</td><td><strong>" + cpMoney(tot) + "</strong></td><td>" + (n > 1 ? n + " devices" : "1 device") + "</td></tr>";
+    for (const dev of devNames){
+      const v = t.byDevice[dev];
+      if ((v.type || "Other") !== ty) continue;
+      const share = tot > 0 ? (v.revenue / tot * 100) : 0;
+      devRows += "<tr><td class=\"cp-devname\">" + dev + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td><td>" + share.toFixed(0) + "%</td></tr>";
+    }
+  }
+  if (!devRows) devRows = "<tr><td colspan=\"4\">No device detail for this period.</td></tr>";
+
+  return "<p class=\"cp-periodnote\">" + cpMoney(t.revenue) + " over " + t.count + " transactions - " + label + "</p>" +
+    "<h3>Breakdown by device type</h3>" +
+    "<table class=\"via\"><thead><tr><th>Type</th><th>Uses</th><th>Revenue</th><th>% of revenue</th></tr></thead><tbody>" + catRows + "</tbody></table>" +
+    "<h3>By device</h3>" +
+    "<table class=\"via\"><thead><tr><th>Device</th><th>Uses</th><th>Revenue</th><th title=\"Each device's share of revenue from all devices of that same type at this site. Devices within a type add up to 100%.\">% of type</th></tr></thead><tbody>" + devRows + "</tbody></table>";
+}
+
+function cpRenderBreakdown(){
+  if (!cpDetailSite) return;
+  const sel = $("cpDetailPeriod");
+  const wrap = $("cpBreakdown");
+  if (!wrap) return;
+  const r = cpPeriodRange(sel ? sel.value : "30d", cpDetailSite.id);
+  wrap.innerHTML = cpBreakdownHtml(cpDetailSite.id, r[0], r[1], r[2]);
+}
+
 function cpOpenDetail(site){
   const today = new Date();
   const todayStr = cpDs(today);
@@ -633,45 +818,6 @@ function cpOpenDetail(site){
   }
   if (!dailyRows) dailyRows = "<tr><td colspan=\"4\">No activity recorded</td></tr>";
 
-  const t30d = cpSumRange(site.id, cpDs(d30), todayStr);
-  const catNames = Object.keys(t30d.byType || {}).sort(function(a, b){
-    return (t30d.byType[b].revenue || 0) - (t30d.byType[a].revenue || 0);
-  });
-  let catRows = "";
-  for (const cat of catNames){
-    const v = t30d.byType[cat];
-    const pct = t30d.revenue ? (v.revenue / t30d.revenue * 100) : 0;
-    catRows += "<tr><td>" + cat + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td><td>" + pct.toFixed(1) + "%</td></tr>";
-  }
-  if (!catRows) catRows = "<tr><td colspan=\"4\">No category detail stored yet - press Sync.</td></tr>";
-
-  const devNames = Object.keys(t30d.byDevice || {});
-  const typeTotals = {}, typeCounts = {}, typeUses = {};
-  for (const dev of devNames){
-    const v = t30d.byDevice[dev];
-    const t = v.type || "Other";
-    typeTotals[t] = (typeTotals[t] || 0) + (v.revenue || 0);
-    typeUses[t] = (typeUses[t] || 0) + (v.count || 0);
-    typeCounts[t] = (typeCounts[t] || 0) + 1;
-  }
-  const typeOrder = Object.keys(typeTotals).sort(function(a, b){ return typeTotals[b] - typeTotals[a]; });
-  devNames.sort(function(a, b){ return (t30d.byDevice[b].revenue || 0) - (t30d.byDevice[a].revenue || 0); });
-
-  let devRows = "";
-  for (const t of typeOrder){
-    const n = typeCounts[t];
-    const tot = typeTotals[t] || 0;
-    devRows += "<tr class=\"cp-devgroup\"><td><strong>" + t + "</strong></td><td>" + (typeUses[t] || 0) + "</td><td><strong>" + cpMoney(tot) + "</strong></td><td>" + (n > 1 ? n + " devices" : "1 device") + "</td></tr>";
-    for (const dev of devNames){
-      const v = t30d.byDevice[dev];
-      if ((v.type || "Other") !== t) continue;
-      const share = tot > 0 ? (v.revenue / tot * 100) : 0;
-      devRows += "<tr><td class=\"cp-devname\">" + dev + "</td><td>" + v.count + "</td><td>" + cpMoney(v.revenue) + "</td>" +
-        "<td>" + share.toFixed(0) + "%</td></tr>";
-    }
-  }
-  if (!devRows) devRows = "<tr><td colspan=\"4\">No device detail stored yet - press Sync.</td></tr>";
-
   const sProj = cpSiteProjection(site.id);
   const sConf = cpConfidence(cpSiteDataDays(site.id));
 
@@ -680,15 +826,17 @@ function cpOpenDetail(site){
     "<p style=\"color:#8fa3c0;font-size:13px;margin:0 0 6px\">Month projection: <strong style=\"color:#eaeef5\">" + cpMoney(sProj.projected) + "</strong> &nbsp;(" + cpSiteDataDays(site.id) + " days of history - confidence: " + sConf.label + ". " + sConf.note + ")</p>" +
     "<h3>Period totals</h3>" +
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + rows + "</tbody></table>" +
-    "<h3>Breakdown by device type - last 30 days</h3>" +
-    "<table class=\"via\"><thead><tr><th>Type</th><th>Uses</th><th>Revenue</th><th>% of revenue</th></tr></thead><tbody>" + catRows + "</tbody></table>" +
-    "<h3>By device - last 30 days</h3>" +
-    "<table class=\"via\"><thead><tr><th>Device</th><th>Uses</th><th>Revenue</th><th title=\"Each device's share of revenue from all devices of that same type at this site. Devices within a type add up to 100%.\">% of type</th></tr></thead><tbody>" + devRows + "</tbody></table>" +
+    "<h3>Breakdown <select id=\"cpDetailPeriod\">" + cpPeriodOptions(site.id) + "</select></h3>" +
+    "<div id=\"cpBreakdown\"></div>" +
     "<h3>Revenue - last 30 days</h3>" +
     "<canvas id=\"cpSiteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +
     "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
   modal.style.display = "flex";
+  cpDetailSite = site;
+  const perSel = $("cpDetailPeriod");
+  if (perSel) perSel.addEventListener("change", cpRenderBreakdown);
+  cpRenderBreakdown();
 
   const chartDates = [], vals = [];
   for (let i = 29; i >= 0; i--){
