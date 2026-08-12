@@ -120,6 +120,7 @@ function parseReport(html, siteId, date){
     date: date, siteId: siteId,
     revenue: sumRow ? num(sumRow.children[0].textContent) : 0,
     cash: num(sums["Cash"]), credit: num(sums["Credit Card"]),
+    cashCount: num(counts["Cash"]), creditCount: num(counts["Credit Card"]),
     passRenewAmt: num(sums["Pass Renew"]), newPassAmt: num(sums["New Pass"]),
     viaPayAmt: num(sums["VIA Pay"]), viaAddAmt: num(sums["VIA Add"]),
     newPassOnlineAmt: num(sums["New Pass Online"]), onlineGiftAmt: num(sums["Online Gift Pass"]),
@@ -212,6 +213,14 @@ function projection(byDate){
   return {mtd: mtd, projected: mtd + todayRemain + rest};
 }
 
+function paymentSplit(t){
+  const tot = (t.cash || 0) + (t.credit || 0);
+  function part(rev, cnt){
+    return {revenue: rev, count: cnt, avg: cnt ? rev / cnt : 0, pct: tot ? (rev / tot * 100) : 0};
+  }
+  return {cash: part(t.cash || 0, t.cashCount || 0), credit: part(t.credit || 0, t.creditCount || 0), total: tot};
+}
+
 function render(){
   const today = new Date();
   const todayStr = ds(today);
@@ -244,6 +253,17 @@ function render(){
     totMembers += latestMembers(s.id);
   }
   $("sumMemberUse").textContent = totMembers ? (totUse / totMembers).toFixed(1) + "x" : "--";
+  const moStartCC = todayStr.slice(0, 8) + "01";
+  let mtdCash = 0, mtdCredit = 0, mtdCashCount = 0, mtdCreditCount = 0;
+  for (const s of sites){
+    const rs = sumRange(s.id, moStartCC, todayStr);
+    mtdCash += rs.cash || 0; mtdCredit += rs.credit || 0;
+    mtdCashCount += rs.cashCount || 0; mtdCreditCount += rs.creditCount || 0;
+  }
+  const ovSplit = paymentSplit({cash: mtdCash, credit: mtdCredit, cashCount: mtdCashCount, creditCount: mtdCreditCount});
+  const sumCashEl = $("sumCash"), sumCreditEl = $("sumCredit");
+  if (sumCashEl) sumCashEl.textContent = fmtMoney(ovSplit.cash.revenue) + " (" + ovSplit.cash.pct.toFixed(0) + "%)";
+  if (sumCreditEl) sumCreditEl.textContent = fmtMoney(ovSplit.credit.revenue) + " (" + ovSplit.credit.pct.toFixed(0) + "%)";
   if (typeof wlTips === "function") wlTips("ovTiles", WL_TIP_OVERVIEW);
   renderSiteCards(todayStr, today);
   renderChart(byDate, today);
@@ -279,7 +299,7 @@ function renderSiteCards(todayStr, today){
 }
 
 function sumRange(sid, from, to){
-  const out = {revenue: 0, washes: 0, passUse: 0, newPassAmt: 0, passRenewAmt: 0, viaPayAmt: 0, viaAddAmt: 0, newPassOnlineAmt: 0, onlineGiftAmt: 0, sales: 0, days: 0};
+  const out = {revenue: 0, washes: 0, passUse: 0, newPassAmt: 0, passRenewAmt: 0, viaPayAmt: 0, viaAddAmt: 0, newPassOnlineAmt: 0, onlineGiftAmt: 0, sales: 0, days: 0, cash: 0, credit: 0, cashCount: 0, creditCount: 0};
   for (const dt of Object.keys(hist[sid] || {})){
     if (dt >= from && dt <= to){
       const r = hist[sid][dt];
@@ -288,6 +308,8 @@ function sumRange(sid, from, to){
       out.viaPayAmt += r.viaPayAmt || 0; out.viaAddAmt += r.viaAddAmt || 0;
       out.newPassOnlineAmt += r.newPassOnlineAmt || 0; out.onlineGiftAmt += r.onlineGiftAmt || 0;
       out.sales += r.sales || 0; out.days++;
+      out.cash += r.cash || 0; out.credit += r.credit || 0;
+      out.cashCount += r.cashCount || 0; out.creditCount += r.creditCount || 0;
     }
   }
   return out;
