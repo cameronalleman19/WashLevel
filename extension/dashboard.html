@@ -163,7 +163,9 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
   <div class="stat"><label>Last month</label><div id="cpOvLastMo">--</div></div>
   <div class="stat"><label>Month projection</label><div id="cpOvProj">--</div></div>
   <div class="stat"><label>Avg ticket (30d)</label><div id="cpOvAvgTicket">--</div></div>
+  <div class="stat" title="Same month projection, but each remaining forecasted day is adjusted using each site's own learned response to rain and temperature, fitted separately for self-serve equipment and the automatic tunnel. Falls back to the plain baseline beyond the forecast horizon or before enough weather history is synced."><label>Weather projection</label><div id="cpOvWeatherProj">--</div></div>
 </section>
+<p id="cpOvWeatherNote" style="color:#8fa3c0;font-size:13px;margin:-6px 0 14px"></p>
 <h2>Today by site</h2>
 <div id="cpOvSiteCards" class="cards"></div>
 <h2>Revenue - last 30 days (all sites)</h2>
@@ -207,8 +209,11 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <div class="page" id="page-cp-statistics">
 <header>
   <h1>Statistics</h1>
+  <select id="cpwSiteSelect"></select>
+  <button id="cpwSyncBtn">Sync Weather</button>
 </header>
-<p>Coming soon.</p>
+<div id="cpwStatus"></div>
+<div id="cpwBody"></div>
 </div>
 
 <div class="page" id="page-settings">
@@ -253,5 +258,6 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <script src="retail.js"></script>
 <script src="cryptopay.js"></script>
 <script src="cpproj.js"></script>
+<script src="cpweather.js"></script>
 </body>
 </html>

@@ -635,6 +635,7 @@ function cpOvRender(){
   const avgTicketEl = $("cpOvAvgTicket");
   if (avgTicketEl) avgTicketEl.textContent = cpMoney(cpAvgTicket(allTicket));
   if (typeof wlTips === "function") wlTips("cpOvTiles", WL_TIP_CP_OVERVIEW);
+  if (typeof cpwRenderOverviewTile === "function") cpwRenderOverviewTile();
   cpOvRenderSiteCards(todayStr, today);
   cpOvRenderChart(byDate, today);
   cpOvRenderAnomalies(today);
