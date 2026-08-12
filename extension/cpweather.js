@@ -325,6 +325,9 @@ function cpwFitWeatherFactors(siteId, group){
   const weather = cpWeather[siteId] || {};
   const precipBuckets = {}; CPW_PRECIP_BUCKETS.forEach(function(b){ precipBuckets[b] = []; });
   const tempBuckets = {}; CPW_TEMP_BUCKETS.forEach(function(b){ tempBuckets[b] = []; });
+  const snowBuckets = {}; CPW_SNOW_BUCKETS.forEach(function(b){ snowBuckets[b] = []; });
+  const recencyMap = cpwSnowRecencyMap(siteId, null);
+  const recencyBuckets = {}; CPW_SNOW_RECENCY_BUCKETS.forEach(function(b){ recencyBuckets[b] = []; });
 
   let matched = 0;
   for (const dt of Object.keys(series)){
@@ -337,6 +340,9 @@ function cpwFitWeatherFactors(siteId, group){
     const resid = series[dt] / expected;
     precipBuckets[cpwPrecipBucket(w.precip)].push(resid);
     if (w.tmax !== undefined && w.tmax !== null) tempBuckets[cpwTempBucket(w.tmax)].push(resid);
+    snowBuckets[cpwSnowBucket(w)].push(resid);
+    const rb = recencyMap[dt];
+    if (rb && recencyBuckets[rb]) recencyBuckets[rb].push(resid);
     matched++;
   }
 
@@ -355,7 +361,9 @@ function cpwFitWeatherFactors(siteId, group){
     reliable: matched >= CPW_MIN_DAYS_FOR_FACTORS,
     baseline: baseline,
     precip: factorsFor(precipBuckets, 8),
-    temp: factorsFor(tempBuckets, 8)
+    temp: factorsFor(tempBuckets, 8),
+    snow: factorsFor(snowBuckets, 8),
+    snowRecency: factorsFor(recencyBuckets, 6)
   };
 }
 
@@ -366,7 +374,7 @@ function cpwFactorText(factor){
 }
 
 // --------------------------------------------------------------- projection
-function cpwExpectedDayTotal(d, groupFits, otherBaseline, fmap, applyWeather){
+function cpwExpectedDayTotal(d, groupFits, otherBaseline, fmap, applyWeather, recencyMap){
   const dk = cpwDs(d);
   let total = 0;
   const flags = [];
@@ -377,7 +385,12 @@ function cpwExpectedDayTotal(d, groupFits, otherBaseline, fmap, applyWeather){
     if (applyWeather && fit.reliable && w){
       const pf = fit.precip[cpwPrecipBucketForecast(w.precip, w.pop)];
       const tf = fit.temp[cpwTempBucket(w.tmax)];
-      mult = (pf ? pf.factor : 1) * (tf ? tf.factor : 1);
+      const sf = fit.snow[cpwSnowBucket(w)];
+      mult = (pf ? pf.factor : 1) * (tf ? tf.factor : 1) * (sf ? sf.factor : 1);
+      const rb = recencyMap ? recencyMap[dk] : null;
+      if (rb && fit.snowRecency[rb]){
+        mult *= fit.snowRecency[rb].factor;
+      }
     }
     const base = fit.baseline.level * fit.baseline.dow[d.getDay()];
     total += base * mult;
@@ -410,6 +423,7 @@ function cpwSiteWeatherProjection(siteId){
 
   const groupFits = {};
   for (const g of Object.keys(CPW_GROUPS)) groupFits[g] = cpwFitWeatherFactors(siteId, g);
+  const recencyMap = cpwSnowRecencyMap(siteId, forecast);
 
   const otherSeries = {};
   for (const dt of Object.keys(hist)){
@@ -422,13 +436,13 @@ function cpwSiteWeatherProjection(siteId){
   }
   const otherBaseline = cpwFitBaseline(otherSeries);
 
-  const todayExp = cpwExpectedDayTotal(today, groupFits, otherBaseline, fmap, true);
+  const todayExp = cpwExpectedDayTotal(today, groupFits, otherBaseline, fmap, true, recencyMap);
   let rest = Math.max(0, todayExp.total - (hist[todayStr] ? (hist[todayStr].revenue || 0) : 0));
   let flagged = todayExp.flags.slice();
 
   for (let day = today.getDate() + 1; day <= daysInMonth; day++){
     const d = new Date(y, m, day);
-    const r = cpwExpectedDayTotal(d, groupFits, otherBaseline, fmap, true);
+    const r = cpwExpectedDayTotal(d, groupFits, otherBaseline, fmap, true, recencyMap);
     rest += r.total;
     flagged = flagged.concat(r.flags);
   }
