@@ -2,6 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".nav-group-toggle").forEach(g => {
     g.addEventListener("click", () => {
       g.closest(".nav-group").classList.toggle("open");
+      const firstItem = g.closest(".nav-group").querySelector(".nav-subgroup .nav-btn[data-page]");
+      if (firstItem) firstItem.click();
     });
   });
 
