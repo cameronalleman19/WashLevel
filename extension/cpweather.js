@@ -152,16 +152,18 @@ async function cpwFetchHistory(lat, lon, startDate, endDate){
 async function cpwFetchForecast(lat, lon){
   try {
     const url = CPW_FCST_URL + "?latitude=" + lat + "&longitude=" + lon +
-      "&daily=precipitation_sum,temperature_2m_max,temperature_2m_min" +
+      "&daily=precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min" +
       "&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FNew_York&forecast_days=10";
     const res = await fetch(url);
     const data = await res.json();
     if (!data || !data.daily || !data.daily.time) return [];
     const out = [];
+    const popArr = data.daily.precipitation_probability_max || [];
     for (let i = 0; i < data.daily.time.length; i++){
       out.push({
         date: data.daily.time[i],
         precip: data.daily.precipitation_sum[i],
+        pop: popArr[i],
         tmax: data.daily.temperature_2m_max[i],
         tmin: data.daily.temperature_2m_min[i]
       });
@@ -259,6 +261,18 @@ function cpwPrecipBucket(inches){
   if (inches <= 0.5) return "rain";
   return "heavy";
 }
+const CPW_BUCKET_ORDER = ["dry", "light", "rain", "heavy"];
+function cpwPrecipBucketForecast(inches, popPct){
+  const amountBucket = cpwPrecipBucket(inches);
+  if (popPct === undefined || popPct === null) return amountBucket;
+  let probFloor = "dry";
+  if (popPct >= 50) probFloor = "rain";
+  else if (popPct >= 20) probFloor = "light";
+  const ai = CPW_BUCKET_ORDER.indexOf(amountBucket);
+  const pi = CPW_BUCKET_ORDER.indexOf(probFloor);
+  return CPW_BUCKET_ORDER[Math.max(ai, pi)];
+}
+
 function cpwTempBucket(tmaxF){
   if (tmaxF === undefined || tmaxF === null) return "mild";
   if (tmaxF < 40) return "cold";
@@ -361,7 +375,7 @@ function cpwExpectedDayTotal(d, groupFits, otherBaseline, fmap, applyWeather){
     let mult = 1;
     const w = fmap[dk];
     if (applyWeather && fit.reliable && w){
-      const pf = fit.precip[cpwPrecipBucket(w.precip)];
+      const pf = fit.precip[cpwPrecipBucketForecast(w.precip, w.pop)];
       const tf = fit.temp[cpwTempBucket(w.tmax)];
       mult = (pf ? pf.factor : 1) * (tf ? tf.factor : 1);
     }
@@ -499,9 +513,10 @@ async function cpwRenderStatsPage(){
     fcRows += "<tr><td>" + d.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"}) + "</td><td>" +
       (f.tmax !== undefined ? Math.round(f.tmax) + "\u00b0F" : "-") + "</td><td>" +
       (f.tmin !== undefined ? Math.round(f.tmin) + "\u00b0F" : "-") + "</td><td>" +
-      (f.precip !== undefined ? f.precip.toFixed(2) + "\"" : "-") + "</td></tr>";
+      (f.precip !== undefined ? f.precip.toFixed(2) + "\"" : "-") + "</td><td>" +
+      (f.pop !== undefined ? Math.round(f.pop) + "%" : "-") + "</td></tr>";
   }
-  if (!fcRows) fcRows = "<tr><td colspan=\"4\">No forecast synced yet.</td></tr>";
+  if (!fcRows) fcRows = "<tr><td colspan=\"5\">No forecast synced yet.</td></tr>";
 
   let factorRows = "";
   const groupFitsForTable = {};
@@ -547,7 +562,7 @@ async function cpwRenderStatsPage(){
     "<h2>Days worth watching in the forecast</h2>" +
     "<ul class=\"cpj-notes\">" + flagRows + "</ul>" +
     "<h2>10-day forecast</h2>" +
-    "<table class=\"via\"><thead><tr><th>Day</th><th>High</th><th>Low</th><th>Precipitation</th></tr></thead><tbody>" + fcRows + "</tbody></table>" +
+    "<table class=\"via\"><thead><tr><th>Day</th><th>High</th><th>Low</th><th>Precipitation</th><th>Chance of rain</th></tr></thead><tbody>" + fcRows + "</tbody></table>" +
     "<h2>This site's learned weather response</h2>" +
     "<table class=\"via\"><thead><tr><th>Condition</th><th>Days observed</th><th>Effect on revenue</th></tr></thead><tbody>" + factorRows + "</tbody></table>" +
     "<ul class=\"cpj-notes\">" +
