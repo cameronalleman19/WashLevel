@@ -14,7 +14,7 @@
 // shape has drifted, cpwFetchHistory/cpwFetchForecast fail closed (empty
 // array) rather than throwing, so the rest of the page still renders.
 
-const CP_WEATHER_SCHEMA = 1;
+const CP_WEATHER_SCHEMA = 2;
 const CPW_GEO_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const CPW_HIST_URL = "https://archive-api.open-meteo.com/v1/archive";
 const CPW_FCST_URL = "https://api.open-meteo.com/v1/forecast";
@@ -26,8 +26,13 @@ const CPW_GROUPS = {
 };
 const CPW_PRECIP_BUCKETS = ["dry", "light", "rain", "heavy"];
 const CPW_PRECIP_LABELS = {dry: "Dry", light: "Light rain", rain: "Rain", heavy: "Heavy rain"};
-const CPW_TEMP_BUCKETS = ["cold", "cool", "mild", "hot"];
-const CPW_TEMP_LABELS = {cold: "Cold (under 40\u00b0F)", cool: "Cool (40-59\u00b0F)", mild: "Mild (60-84\u00b0F)", hot: "Hot (85\u00b0F+)"};
+const CPW_TEMP_BUCKETS = ["extreme", "cold", "cool", "mild", "hot"];
+const CPW_TEMP_LABELS = {extreme: "Extreme cold (under 32" + String.fromCharCode(176) + "F)", cold: "Cold (32-39" + String.fromCharCode(176) + "F)", cool: "Cool (40-59" + String.fromCharCode(176) + "F)", mild: "Mild (60-84" + String.fromCharCode(176) + "F)", hot: "Hot (85" + String.fromCharCode(176) + "F+)"};
+const CPW_SNOW_BUCKETS = ["no", "yes"];
+const CPW_SNOW_LABELS = {no: "No snow that day", yes: "Snow that day"};
+const CPW_SNOW_RECENCY_BUCKETS = ["day1", "day2", "day3to5"];
+const CPW_SNOW_RECENCY_LABELS = {day1: "1 day after snow", day2: "2 days after snow", day3to5: "3-5 days after snow"};
+const CPW_SNOW_THRESHOLD_IN = 0.1;
 
 let cpwHist = {};
 let cpwSites = [];
@@ -129,7 +134,7 @@ async function cpwFetchHistory(lat, lon, startDate, endDate){
   try {
     const url = CPW_HIST_URL + "?latitude=" + lat + "&longitude=" + lon +
       "&start_date=" + startDate + "&end_date=" + endDate +
-      "&daily=precipitation_sum,temperature_2m_max,temperature_2m_min" +
+      "&daily=precipitation_sum,snowfall_sum,weathercode,temperature_2m_max,temperature_2m_min" +
       "&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FNew_York";
     const res = await fetch(url);
     const data = await res.json();
@@ -139,6 +144,8 @@ async function cpwFetchHistory(lat, lon, startDate, endDate){
       out.push({
         date: data.daily.time[i],
         precip: data.daily.precipitation_sum[i],
+        snow: data.daily.snowfall_sum ? data.daily.snowfall_sum[i] : undefined,
+        code: data.daily.weathercode ? data.daily.weathercode[i] : undefined,
         tmax: data.daily.temperature_2m_max[i],
         tmin: data.daily.temperature_2m_min[i]
       });
@@ -152,7 +159,7 @@ async function cpwFetchHistory(lat, lon, startDate, endDate){
 async function cpwFetchForecast(lat, lon){
   try {
     const url = CPW_FCST_URL + "?latitude=" + lat + "&longitude=" + lon +
-      "&daily=precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min" +
+      "&daily=precipitation_sum,precipitation_probability_max,snowfall_sum,weathercode,temperature_2m_max,temperature_2m_min" +
       "&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FNew_York&forecast_days=10";
     const res = await fetch(url);
     const data = await res.json();
@@ -164,6 +171,8 @@ async function cpwFetchForecast(lat, lon){
         date: data.daily.time[i],
         precip: data.daily.precipitation_sum[i],
         pop: popArr[i],
+        snow: data.daily.snowfall_sum ? data.daily.snowfall_sum[i] : undefined,
+        code: data.daily.weathercode ? data.daily.weathercode[i] : undefined,
         tmax: data.daily.temperature_2m_max[i],
         tmin: data.daily.temperature_2m_min[i]
       });
@@ -275,10 +284,48 @@ function cpwPrecipBucketForecast(inches, popPct){
 
 function cpwTempBucket(tmaxF){
   if (tmaxF === undefined || tmaxF === null) return "mild";
+  if (tmaxF < 32) return "extreme";
   if (tmaxF < 40) return "cold";
   if (tmaxF < 60) return "cool";
   if (tmaxF < 85) return "mild";
   return "hot";
+}
+
+function cpwHadSnow(rec){
+  return !!(rec && rec.snow !== undefined && rec.snow !== null && rec.snow > CPW_SNOW_THRESHOLD_IN);
+}
+function cpwSnowBucket(rec){
+  return cpwHadSnow(rec) ? "yes" : "no";
+}
+
+function cpwWinterEventLabel(code){
+  if (code === undefined || code === null) return null;
+  if (code === 56 || code === 57 || code === 66 || code === 67) return "Freezing rain";
+  if (code === 77) return "Sleet";
+  if (code === 85 || code === 86) return "Heavy snow showers";
+  return null;
+}
+
+function cpwSnowRecencyMap(siteId, forecastDays){
+  const hist = cpWeather[siteId] || {};
+  const rows = [];
+  for (const dt of Object.keys(hist)) rows.push({key: dt, d: cpwDateFromKey(dt), snow: cpwHadSnow(hist[dt])});
+  for (const f of (forecastDays || [])) rows.push({key: f.date, d: cpwDateFromKey(f.date), snow: cpwHadSnow(f)});
+  rows.sort(function(a, b){ return a.d - b.d; });
+  const map = {};
+  let daysSince = null;
+  for (const r of rows){
+    if (r.snow){
+      map[r.key] = "day0";
+      daysSince = 0;
+    } else if (daysSince !== null){
+      daysSince++;
+      map[r.key] = daysSince === 1 ? "day1" : daysSince === 2 ? "day2" : (daysSince <= 5 ? "day3to5" : "none");
+    } else {
+      map[r.key] = "none";
+    }
+  }
+  return map;
 }
 
 function cpwGroupSeries(siteId, group){
@@ -546,7 +593,29 @@ async function cpwRenderStatsPage(){
       const f = fit.temp[b];
       factorRows += "<tr><td>" + CPW_TEMP_LABELS[b] + "</td><td>" + f.n + " day" + (f.n === 1 ? "" : "s") + "</td><td>" + cpwFactorText(f.factor) + "</td></tr>";
     }
+    const sfy = fit.snow.yes;
+    factorRows += "<tr><td>" + CPW_SNOW_LABELS.yes + "</td><td>" + sfy.n + " day" + (sfy.n === 1 ? "" : "s") + "</td><td>" + cpwFactorText(sfy.factor) + "</td></tr>";
+    for (const b of CPW_SNOW_RECENCY_BUCKETS){
+      const f = fit.snowRecency[b];
+      factorRows += "<tr><td>" + CPW_SNOW_RECENCY_LABELS[b] + "</td><td>" + f.n + " day" + (f.n === 1 ? "" : "s") + "</td><td>" + cpwFactorText(f.factor) + "</td></tr>";
+    }
   }
+
+  const winterHist = cpWeather[cpwSelectedSite] || {};
+  const winterRows = [];
+  for (const dt of Object.keys(winterHist).sort().reverse()){
+    const label = cpwWinterEventLabel(winterHist[dt].code);
+    if (!label) continue;
+    const rev = (cpwHist[cpwSelectedSite] && cpwHist[cpwSelectedSite][dt]) ? (cpwHist[cpwSelectedSite][dt].revenue || 0) : null;
+    winterRows.push({date: dt, label: label, revenue: rev});
+    if (winterRows.length >= 20) break;
+  }
+  let winterEventRows = "";
+  for (const wr of winterRows){
+    const d = cpwDateFromKey(wr.date);
+    winterEventRows += "<tr><td>" + d.toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"}) + "</td><td>" + wr.label + "</td><td>" + (wr.revenue === null ? "-" : cpwMoney(wr.revenue)) + "</td></tr>";
+  }
+  if (!winterEventRows) winterEventRows = "<tr><td colspan=\"3\">None recorded for this site yet.</td></tr>";
 
   const baseline = (typeof cpSiteProjection === "function") ? cpSiteProjection(cpwSelectedSite) : {projected: 0};
   const wproj = cpwSiteWeatherProjection(cpwSelectedSite);
@@ -582,9 +651,13 @@ async function cpwRenderStatsPage(){
     "<ul class=\"cpj-notes\">" +
       "<li>Effects are learned separately for self-serve equipment (exposed to weather) and the automatic tunnel (sheltered, usually far less weather-sensitive), then applied only to each group's own forecasted days.</li>" +
       "<li>A condition needs a real sample of matching days before its effect is trusted; thin buckets are pulled toward \"about normal\" rather than swinging on one unusual day.</li>" +
+      "<li>\"Days after snow\" is fit on its own, separately from that day's own rain/temperature - the two effects then multiply together, so a sunny, mild day after snow gets both boosts, while a rainy day after snow has the rain penalty working against the snow bump.</li>" +
       "<li>The forecast only reaches about 10 days out. Days beyond that use the plain baseline, same as the regular Projections page.</li>" +
       "<li>" + weatherDays + " day" + (weatherDays === 1 ? "" : "s") + " of historical weather stored for this site.</li>" +
-    "</ul>";
+    "</ul>" +
+    "<h2>Freezing rain, sleet &amp; heavy snow log</h2>" +
+    "<p class=\"cp-periodnote\">These are too rare at any single site to fit a reliable percentage for, so they are listed rather than modeled - use this to judge the pattern yourself.</p>" +
+    "<table class=\"via\"><thead><tr><th>Date</th><th>Condition</th><th>Revenue that day</th></tr></thead><tbody>" + winterEventRows + "</tbody></table>";
 }
 
 async function cpwInit(){
