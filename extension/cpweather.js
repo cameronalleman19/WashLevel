@@ -232,7 +232,7 @@ async function cpwSync(){
         const days = await cpwFetchHistory(lat, lon, startDate, lagCutoffStr);
         if (days.length){
           cpWeather[s.id] = cpWeather[s.id] || {};
-          for (const d of days) cpWeather[s.id][d.date] = {precip: d.precip, tmax: d.tmax, tmin: d.tmin};
+          for (const d of days) cpWeather[s.id][d.date] = {precip: d.precip, snow: d.snow, code: d.code, tmax: d.tmax, tmin: d.tmin};
           cpwSyncedThrough[s.id] = lagCutoffStr;
           historyFetched++;
           await cpwSave();
