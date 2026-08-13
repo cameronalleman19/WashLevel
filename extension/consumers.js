@@ -94,21 +94,42 @@ async function consSync(){
       const batch = await fetchConsumerPage(page);
       list.push.apply(list, batch);
       if (batch.length < 500) break;
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 80));
     }
     if (!list.length){ C$("consStatus").textContent = "No consumers found - are you logged into Dencar?"; C$("consSyncBtn").disabled = false; return; }
+    const stored = await chrome.storage.local.get(["washTiers", "plateVisits", "plateSiteMap", "lastPaymentSync"]);
+    const tiers = stored.washTiers || {};
+    const pv = stored.plateVisits || {};
+    const psm = stored.plateSiteMap || [];
+    const isIncr = !!stored.lastPaymentSync;
     const byName = {};
     const fresh = {};
     for (const c of list){
-      fresh[c.id] = {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0};
+      const ex = isIncr ? consumers[c.id] : null;
+      fresh[c.id] = ex
+        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0}
+        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0};
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
-    const tiers = {};
-    const pv = {};
-    const psm = [];
     const endStr = new Date().toLocaleDateString("en-CA");
-    const startStr = "2015-01-01";
+    let startStr;
+    if (isIncr){
+      const lpd = new Date(stored.lastPaymentSync + "T12:00:00");
+      lpd.setDate(lpd.getDate() + 1);
+      startStr = lpd.toLocaleDateString("en-CA");
+      if (startStr > endStr){
+        consumers = fresh;
+        await consSave();
+        C$("consStatus").textContent = "Up to date. " + list.length + " consumers.";
+        renderConsumers();
+        C$("consSyncBtn").disabled = false;
+        return;
+      }
+      C$("consStatus").textContent = "Incremental sync from " + startStr + "...";
+    } else {
+      startStr = "2015-01-01";
+    }
     for (let page = 1; page <= 500; page++){
       C$("consStatus").textContent = "Loading payments page " + page + "...";
       const batch = await fetchPaymentsPage(page, startStr, endStr);
@@ -154,12 +175,12 @@ async function consSync(){
         }
       }
       if (batch.length < 500) break;
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 80));
     }
     consumers = fresh;
-    await chrome.storage.local.set({washTiers: tiers, plateVisits: pv, plateSiteMap: psm});
+    await chrome.storage.local.set({washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: endStr});
     await consSave();
-    C$("consStatus").textContent = "Synced " + list.length + " consumers.";
+    C$("consStatus").textContent = "Synced " + list.length + " consumers" + (isIncr ? " (incremental from " + startStr + ")" : " (full history)") + ".";
     renderConsumers();
   } catch(e){
     C$("consStatus").textContent = "Consumer sync failed: " + e.message;
