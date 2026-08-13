@@ -1,12 +1,12 @@
 const BASE = "https://admin.dencar.sancsoft.net";
-const SCHEMA = 6;
+const SCHEMA = 7;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
 
 let hist = {};
 let sites = [];
 
-function backfillStart(){ const n = new Date(); return new Date(n.getFullYear(), 0, 1); }
+let siteOrigins = {};
 function fmtMoney(n){ return "$" + (n || 0).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function ds(d){ return d.toLocaleDateString("en-CA"); }
 function fmtDate(k){ const p = k.split("-"); return parseInt(p[1], 10) + "/" + parseInt(p[2], 10) + "/" + p[0]; }
@@ -37,7 +37,7 @@ function passUseRange(sid, from, to){
 }
 
 async function load(){
-  const st = await chrome.storage.local.get(["hist", "sites", "lastSync", "schema"]);
+  const st = await chrome.storage.local.get(["hist", "sites", "lastSync", "schema", "siteOrigins"]);
   if (st.schema !== SCHEMA){
     hist = {};
     await chrome.storage.local.set({hist: {}, schema: SCHEMA});
@@ -46,9 +46,10 @@ async function load(){
     hist = st.hist || {};
   }
   sites = st.sites || [];
+  siteOrigins = st.siteOrigins || {};
   if (st.lastSync) $("lastSync").textContent = "Last sync: " + new Date(st.lastSync).toLocaleString();
 }
-async function save(){ await chrome.storage.local.set({hist: hist, sites: sites, lastSync: Date.now(), schema: SCHEMA}); }
+async function save(){ await chrome.storage.local.set({hist: hist, sites: sites, lastSync: Date.now(), schema: SCHEMA, siteOrigins: siteOrigins}); }
 
 async function discoverSites(){
   const re = /<option[^>]*value="([0-9a-fA-F-]{36})"[^>]*>\s*([^<]+?)\s*<\/option>/g;
@@ -152,12 +153,15 @@ async function sync(){
   const todayStr = ds(today);
   const yest = new Date(today); yest.setDate(yest.getDate() - 1);
   const yestStr = ds(yest);
-  const dates = [];
-  for (let d = backfillStart(); ds(d) <= todayStr; d.setDate(d.getDate() + 1)){ dates.push(ds(d)); }
+  // ── Forward sync: from known origin (or Jan 1 this year) to today ──
   const tasks = [];
   for (const s of sites){
     hist[s.id] = hist[s.id] || {};
-    for (const dt of dates){ if (!hist[s.id][dt] || dt === todayStr || dt === yestStr) tasks.push([s.id, dt]); }
+    const origin = siteOrigins[s.id] ? new Date(siteOrigins[s.id]) : new Date(today.getFullYear(), 0, 1);
+    for (let d = new Date(origin); ds(d) <= todayStr; d.setDate(d.getDate() + 1)){
+      const dt = ds(d);
+      if (!hist[s.id][dt] || dt === todayStr || dt === yestStr) tasks.push([s.id, dt]);
+    }
   }
   let done = 0;
   for (const t of tasks){
@@ -167,6 +171,31 @@ async function sync(){
     done++;
     if (done % 20 === 0){ await save(); render(); }
     await new Promise(r => setTimeout(r, 120));
+  }
+  await save();
+  // ── Backward probe: discover each site's full history ──
+  for (const s of sites){
+    if (siteOrigins[s.id]) continue;
+    const stored = Object.keys(hist[s.id] || {}).sort();
+    if (!stored.length) continue;
+    let probe = new Date(stored[0]);
+    let streak = 0;
+    let earliest = stored[0];
+    let probed = 0;
+    setStatus("Probing history for " + s.name + "...");
+    while (streak < 30){
+      probe.setDate(probe.getDate() - 1);
+      const dt = ds(probe);
+      const rec = await fetchDay(s.id, dt);
+      if (rec){ hist[s.id][dt] = rec; streak = 0; earliest = dt; }
+      else { streak++; }
+      probed++;
+      if (probed % 20 === 0){ setStatus("Probing " + s.name + " \u2014 " + dt + " (" + probed + " days checked)"); await save(); }
+      await new Promise(r => setTimeout(r, 120));
+    }
+    siteOrigins[s.id] = earliest;
+    await save();
+    setStatus(s.name + " history starts " + earliest);
   }
   await save();
   $("lastSync").textContent = "Last sync: " + new Date().toLocaleString();
@@ -478,19 +507,38 @@ function openDetail(site){
   const yr = today.getFullYear();
   let ytdUse = 0;
   const moCount = today.getMonth() + 1;
-  for (let mo = 0; mo <= today.getMonth(); mo++){
-    const from = ds(new Date(yr, mo, 1));
-    const to = mo === today.getMonth() ? todayStr : ds(new Date(yr, mo + 1, 0));
+  const originDt = siteOrigins[site.id] ? new Date(siteOrigins[site.id]) : new Date(yr, 0, 1);
+  let prevYr = -1;
+  for (let d = new Date(originDt.getFullYear(), originDt.getMonth(), 1); d <= today; d.setMonth(d.getMonth() + 1)){
+    const mYr = d.getFullYear();
+    const mMo = d.getMonth();
+    const from = ds(new Date(mYr, mMo, 1));
+    const isCur = (mYr === yr && mMo === today.getMonth());
+    const to = isCur ? todayStr : ds(new Date(mYr, mMo + 1, 0));
     const use = passUseRange(site.id, from, to);
-    ytdUse += use;
-    const label = new Date(yr, mo, 1).toLocaleString("en-US", {month: "long"});
+    if (mYr === yr) ytdUse += use;
+    if (mYr !== prevYr){ monthRows += "<tr class=\"year-sep\"><td colspan=\"3\">" + mYr + "</td></tr>"; prevYr = mYr; }
+    const label = new Date(mYr, mMo, 1).toLocaleString("en-US", {month: "long"});
     monthRows += "<tr><td>" + label + "</td><td>" + use + "</td><td>" + (members ? (use / members).toFixed(1) + "x" : "--") + "</td></tr>";
   }
   let memberRows = "";
   let yN = 0, yC = 0, yD = 0, yF = 0;
-  for (let mo = 0; mo <= today.getMonth(); mo++){
-    const mFrom = ds(new Date(yr, mo, 1));
-    const mTo = mo === today.getMonth() ? todayStr : ds(new Date(yr, mo + 1, 0));
+  let mPrevYr = -1;
+  let annN = 0, annC = 0, annD = 0, annF = 0;
+  for (let d = new Date(originDt.getFullYear(), originDt.getMonth(), 1); d <= today; d.setMonth(d.getMonth() + 1)){
+    const mYr = d.getFullYear();
+    const mMo = d.getMonth();
+    if (mYr !== mPrevYr){
+      if (mPrevYr > 0){
+        const aNet = annN - annC;
+        memberRows += "<tr class=\"year-total\"><td><strong>" + mPrevYr + " Total</strong></td><td><strong>" + annN + "</strong></td><td><strong>" + annC + "</strong></td><td class=\"" + (aNet >= 0 ? "net-up" : "net-down") + "\"><strong>" + (aNet >= 0 ? "+" : "") + aNet + "</strong></td><td><strong>" + annD + "</strong></td><td><strong>" + annF + "</strong></td></tr>";
+      }
+      memberRows += "<tr class=\"year-sep\"><td colspan=\"6\">" + mYr + "</td></tr>";
+      mPrevYr = mYr; annN = 0; annC = 0; annD = 0; annF = 0;
+    }
+    const mFrom = ds(new Date(mYr, mMo, 1));
+    const isCur = (mYr === yr && mMo === today.getMonth());
+    const mTo = isCur ? todayStr : ds(new Date(mYr, mMo + 1, 0));
     let n = 0, c = 0, dcl = 0, rf = 0;
     for (const dt of Object.keys(hist[site.id] || {})){
       if (dt >= mFrom && dt <= mTo){
@@ -501,9 +549,10 @@ function openDetail(site){
         rf += rec2.renewFailure || 0;
       }
     }
-    yN += n; yC += c; yD += dcl; yF += rf;
+    annN += n; annC += c; annD += dcl; annF += rf;
+    if (mYr === yr){ yN += n; yC += c; yD += dcl; yF += rf; }
     const net = n - c;
-    const mLabel = new Date(yr, mo, 1).toLocaleString("en-US", {month: "long"});
+    const mLabel = new Date(mYr, mMo, 1).toLocaleString("en-US", {month: "long"});
     memberRows += "<tr><td>" + mLabel + "</td><td>" + n + "</td><td>" + c + "</td><td class=\"" + (net >= 0 ? "net-up" : "net-down") + "\">" + (net >= 0 ? "+" : "") + net + "</td><td>" + dcl + "</td><td>" + rf + "</td></tr>";
   }
   const yNet = yN - yC;

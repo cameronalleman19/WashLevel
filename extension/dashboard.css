@@ -41,6 +41,8 @@ ul#anomalies li.ok{color:#4ade80;list-style:none;margin-left:-18px;}
 
 .net-up{color:#4ade80;font-weight:600;}
 .net-down{color:#f87171;font-weight:600;}
+.year-sep td{background:#1e293b;color:#94a3b8;font-weight:700;font-size:.85em;padding:6px 8px;letter-spacing:.5px;border-top:2px solid #334155;}
+.year-total td{border-top:1px solid #475569;}
 
 .via-sync{padding:5px 14px;font-size:13px;margin-left:10px;}
 .via-status{font-size:12px;color:#ffd166;margin-left:10px;text-transform:none;letter-spacing:0;}

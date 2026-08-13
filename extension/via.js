@@ -234,8 +234,7 @@ async function enrichConsumer(d){
   if (!d.consumerId) return;
   try {
     const end = new Date();
-    const start = new Date(end); start.setMonth(start.getMonth() - 12);
-    const body = "currentPage=1&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=" + start.toLocaleDateString("en-CA") + "&EndDate=" + end.toLocaleDateString("en-CA") + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=" + d.consumerId;
+    const body = "currentPage=1&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=2015-01-01&EndDate=" + end.toLocaleDateString("en-CA") + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=" + d.consumerId;
     const res = await fetch(VBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
     if (!res.ok) return;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");

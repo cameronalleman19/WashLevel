@@ -107,11 +107,9 @@ async function consSync(){
     const tiers = {};
     const pv = {};
     const psm = [];
-    const end = new Date();
-    const start = new Date(end); start.setMonth(start.getMonth() - 12);
-    const startStr = start.toLocaleDateString("en-CA");
-    const endStr = end.toLocaleDateString("en-CA");
-    for (let page = 1; page <= 70; page++){
+    const endStr = new Date().toLocaleDateString("en-CA");
+    const startStr = "2015-01-01";
+    for (let page = 1; page <= 500; page++){
       C$("consStatus").textContent = "Loading payments page " + page + "...";
       const batch = await fetchPaymentsPage(page, startStr, endStr);
       for (const row of batch){
