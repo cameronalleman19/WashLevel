@@ -203,11 +203,42 @@ async function retRender(){
   rRenderCapture();
   await rRenderPackages();
   rRenderAnoms();
+  await rRenderPlates();
   R$("retStatus").textContent = "";
+}
+
+function rPlatePeriodRange(){
+  const sel = R$("retPlatePeriod");
+  const mode = sel ? sel.value : "30d";
+  const today = new Date();
+  const to = rDs(today);
+  let from;
+  if (mode === "90d"){ const d = new Date(today); d.setDate(d.getDate() - 89); from = rDs(d); }
+  else if (mode === "6mo"){ const d = new Date(today); d.setMonth(d.getMonth() - 6); from = rDs(d); }
+  else if (mode === "12mo"){ const d = new Date(today); d.setFullYear(d.getFullYear() - 1); from = rDs(d); }
+  else if (mode === "ytd"){ from = to.slice(0, 4) + "-01-01"; }
+  else if (mode === "all"){ from = "2020-01-01"; }
+  else { const d = new Date(today); d.setDate(d.getDate() - 29); from = rDs(d); }
+  return {from: from, to: to};
+}
+
+async function rRenderPlates(){
+  await platesLoad();
+  const el = R$("retPlateInsights");
+  if (!el) return;
+  const r = rPlatePeriodRange();
+  const stats = plateStats(null, r.from, r.to);
+  const crossOver = plateCrossOver(r.from, r.to);
+  const conv = plateConversions(r.from, r.to);
+  el.innerHTML = pRenderStatsHtml(stats, false) +
+    pRenderCrossOverHtml(crossOver, r.from, r.to) +
+    pRenderConversionsHtml(conv);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   retRender();
+  const plateSel = R$("retPlatePeriod");
+  if (plateSel) plateSel.addEventListener("change", () => rRenderPlates());
   const btn = document.querySelector('[data-page="retail"]');
   if (btn) btn.addEventListener("click", () => retRender());
 });
