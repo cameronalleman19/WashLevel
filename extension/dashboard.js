@@ -1,5 +1,5 @@
 const BASE = "https://admin.dencar.sancsoft.net";
-const SCHEMA = 5;
+const SCHEMA = 6;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
 
@@ -439,6 +439,18 @@ function dcRenderBreakdown(){
   dcRenderWeekdayChart(dcDetailSite.id, r[0], r[1]);
 }
 
+async function dcRenderPlates(){
+  await platesLoad();
+  var el = $("dcPlateInsights");
+  if (!el) return;
+  var sel = $("dcDetailPeriod");
+  var r = dcPeriodRange(sel ? sel.value : "30d", dcDetailSite.id);
+  var si = pSiteIdx(dcDetailSite.id, sites);
+  var stats = plateStats(si, r[0], r[1]);
+  var convData = plateConversions(r[0], r[1]);
+  el.innerHTML = pRenderStatsHtml(stats, true) + pRenderConversionsHtml(convData);
+}
+
 function openDetail(site){
   const today = new Date();
   const todayStr = ds(today);
@@ -525,11 +537,15 @@ function openDetail(site){
     "<h3>Revenue - last 30 days</h3>" +
     "<canvas id=\"siteChart\"></canvas>" +
     "<h3>Last 14 days</h3>" +
-    "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Member washes</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
+    "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Member washes</th></tr></thead><tbody>" + dailyRows + "</tbody></table>" +
+    "<div id=\"dcPlateInsights\"><p style=\"color:#888;\">Loading plate data...</p></div>";
   modal.style.display = "flex";
   dcDetailSite = site;
   const perSel = $("dcDetailPeriod");
-  if (perSel) perSel.addEventListener("change", dcRenderBreakdown);
+  if (perSel){
+    perSel.addEventListener("change", dcRenderBreakdown);
+    perSel.addEventListener("change", dcRenderPlates);
+  }
   const wkWrap = $("dcWkToggles");
   if (wkWrap){
     let wkHtml = "";
@@ -546,6 +562,7 @@ function openDetail(site){
     });
   }
   dcRenderBreakdown();
+  dcRenderPlates();
   const chartDates = [], vals = [];
   for (let i = 29; i >= 0; i--){
     const d = new Date(today); d.setDate(d.getDate() - i);

@@ -105,6 +105,8 @@ async function consSync(){
       if (k) byName[k] = fresh[c.id];
     }
     const tiers = {};
+    const pv = {};
+    const psm = [];
     const end = new Date();
     const start = new Date(end); start.setMonth(start.getMonth() - 12);
     const startStr = start.toLocaleDateString("en-CA");
@@ -123,6 +125,20 @@ async function consSync(){
           const cur = dObj[key] = dObj[key] || [0, 0];
           cur[0] += 1;
           cur[1] += base;
+        }
+        if (row.lp && row.lp !== "N/A" && row.lp !== "-"){
+          const pSite = (row.device || "").split(" - ")[0].trim() || "Unknown";
+          let psi = psm.indexOf(pSite);
+          if (psi === -1){ psi = psm.length; psm.push(pSite); }
+          const pdk = new Date(row.t).toLocaleDateString("en-CA");
+          if (/^(credit card|cash)$/i.test(row.method)){
+            const pr = pv[row.lp] = pv[row.lp] || {v: []};
+            if (!pr.v.some(function(e){ return e[0] === pdk && e[1] === psi; })) pr.v.push([pdk, psi]);
+          }
+          if (/new pass/i.test(row.method)){
+            const pr = pv[row.lp] = pv[row.lp] || {v: []};
+            pr.conv = pdk;
+          }
         }
         const c = byName[cNorm(row.name)];
         if (!c) continue;
@@ -143,7 +159,7 @@ async function consSync(){
       await new Promise(r => setTimeout(r, 150));
     }
     consumers = fresh;
-    await chrome.storage.local.set({washTiers: tiers});
+    await chrome.storage.local.set({washTiers: tiers, plateVisits: pv, plateSiteMap: psm});
     await consSave();
     C$("consStatus").textContent = "Synced " + list.length + " consumers.";
     renderConsumers();
