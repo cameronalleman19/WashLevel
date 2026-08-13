@@ -476,7 +476,7 @@ async function dcRenderPlates(){
   var r = dcPeriodRange(sel ? sel.value : "30d", dcDetailSite.id);
   var si = pSiteIdx(dcDetailSite.id, sites);
   var stats = plateStats(si, r[0], r[1]);
-  var convData = plateConversions(r[0], r[1]);
+  var convData = plateConversions(si, r[0], r[1]);
   el.innerHTML = pRenderStatsHtml(stats, true) + pRenderConversionsHtml(convData);
 }
 

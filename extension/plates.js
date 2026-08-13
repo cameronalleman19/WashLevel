@@ -166,7 +166,7 @@ function plateCrossOverTotal(from, to){
 
 /* ── conversion analysis ─────────────────────────────────── */
 
-function plateConversions(from, to){
+function plateConversions(siteIdx, from, to){
   var conversions = [];
   for (var plate in plateData){
     if (!plateData.hasOwnProperty(plate)) continue;
@@ -174,7 +174,12 @@ function plateConversions(from, to){
     if (!rec.conv) continue;
     if (from && rec.conv < from) continue;
     if (to && rec.conv > to) continue;
-    var priorVisits = (rec.v || []).filter(function(v){ return v[0] < rec.conv; });
+    var allVisits = rec.v || [];
+    if (siteIdx !== null && siteIdx !== undefined){
+      var hasSiteVisit = allVisits.some(function(v){ return v[1] === siteIdx; });
+      if (!hasSiteVisit) continue;
+    }
+    var priorVisits = pFilterVisits(allVisits, siteIdx, null, null).filter(function(v){ return v[0] < rec.conv; });
     var uniquePrior = pUniqueDays(priorVisits).length;
     conversions.push({plate: plate, convDate: rec.conv, priorVisits: uniquePrior});
   }
