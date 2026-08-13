@@ -1,5 +1,5 @@
 const BASE = "https://admin.dencar.sancsoft.net";
-const SCHEMA = 4;
+const SCHEMA = 5;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
 
@@ -322,6 +322,123 @@ function periodRow(label, t, members, div){
   return "<tr><td>" + label + "</td><td>" + fmtMoney(t.revenue) + "</td><td>" + t.washes + "</td><td>" + fmtMoney(overall) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td><td>" + t.passUse + "</td><td>" + mu + "</td></tr>";
 }
 
+let dcDetailSite = null;
+let dcWkVisible = [true, true, true, true, true, true, true]; // Sun..Sat
+const DC_WK_COLORS = ["#f87171", "#fb923c", "#facc15", "#4ade80", "#4da3ff", "#a78bfa", "#f472b6"];
+const DC_WK_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function dcDateFromKey(k){
+  const p = k.split("-");
+  return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+}
+
+// Period choices for the payment-method breakdown: rolling windows, to-date
+// ranges, and every individual month that actually has stored data.
+function dcPeriodOptions(sid){
+  const opts = [
+    ["30d", "Last 30 days"],
+    ["7d", "Last 7 days"],
+    ["90d", "Last 90 days"],
+    ["365d", "Last 12 months"],
+    ["mtd", "Month to date"],
+    ["ytd", "Year to date"],
+    ["all", "All time"]
+  ];
+  const months = {};
+  for (const k of Object.keys(hist[sid] || {})) months[k.slice(0, 7)] = 1;
+  const sorted = Object.keys(months).sort().reverse();
+  let html = "";
+  for (const o of opts) html += "<option value=\"" + o[0] + "\">" + o[1] + "</option>";
+  if (sorted.length){
+    html += "<optgroup label=\"Single month\">";
+    for (const m of sorted){
+      const d = new Date(parseInt(m.slice(0, 4), 10), parseInt(m.slice(5, 7), 10) - 1, 1);
+      html += "<option value=\"m:" + m + "\">" + d.toLocaleDateString("en-US", {month: "long", year: "numeric"}) + "</option>";
+    }
+    html += "</optgroup>";
+  }
+  return html;
+}
+
+function dcPeriodRange(val, sid){
+  const today = new Date();
+  const todayStr = ds(today);
+  function back(n){ const d = new Date(today); d.setDate(d.getDate() - (n - 1)); return ds(d); }
+  if (val === "7d") return [back(7), todayStr, "last 7 days"];
+  if (val === "90d") return [back(90), todayStr, "last 90 days"];
+  if (val === "365d") return [back(365), todayStr, "last 12 months"];
+  if (val === "mtd") return [todayStr.slice(0, 8) + "01", todayStr, "month to date"];
+  if (val === "ytd") return [todayStr.slice(0, 4) + "-01-01", todayStr, "year to date"];
+  if (val === "all"){
+    const keys = Object.keys(hist[sid] || {}).sort();
+    return [keys.length ? keys[0] : todayStr, todayStr, "all time"];
+  }
+  if (val.indexOf("m:") === 0){
+    const m = val.slice(2);
+    const y = parseInt(m.slice(0, 4), 10), mo = parseInt(m.slice(5, 7), 10);
+    const last = new Date(y, mo, 0);
+    const label = new Date(y, mo - 1, 1).toLocaleDateString("en-US", {month: "long", year: "numeric"});
+    return [m + "-01", ds(last), label];
+  }
+  return [back(30), todayStr, "last 30 days"];
+}
+
+// Revenue by hour (0-23), split into one array per weekday, summed across
+// every stored day in the range. Matches by each hourly entry's own .h
+// property rather than array position, since hours with zero activity may
+// not have a row at all.
+function dcWeekdayHourSeries(sid, from, to){
+  const sums = [];
+  for (let d = 0; d < 7; d++) sums.push(new Array(24).fill(0));
+  const h = hist[sid] || {};
+  for (const dt of Object.keys(h)){
+    if (dt < from || dt > to) continue;
+    const rec = h[dt];
+    if (!rec.hourly) continue;
+    const wd = dcDateFromKey(dt).getDay();
+    for (const hr of rec.hourly){
+      const hh = hr.h;
+      if (hh >= 0 && hh < 24) sums[wd][hh] += (hr.cash || 0) + (hr.credit || 0);
+    }
+  }
+  return sums;
+}
+
+// Reuses Cryptopay's multi-line chart renderer (cpDrawMultiLine) since both
+// scripts share one global scope on this page - no need for a second copy.
+function dcRenderWeekdayChart(sid, from, to){
+  const canvas = $("dcWkChart");
+  if (!canvas) return;
+  const sums = dcWeekdayHourSeries(sid, from, to);
+  const series = [];
+  for (let d = 0; d < 7; d++){
+    if (!dcWkVisible[d]) continue;
+    series.push({label: DC_WK_LABELS[d], color: DC_WK_COLORS[d], vals: sums[d]});
+  }
+  if (typeof cpDrawMultiLine === "function") cpDrawMultiLine(canvas, series);
+}
+
+function dcBreakdownHtml(sid, from, to, label){
+  const t = sumRange(sid, from, to);
+  const sp = paymentSplit(t);
+  function row(name, p){
+    return "<tr><td>" + name + "</td><td>" + p.count + "</td><td>" + fmtMoney(p.revenue) + "</td><td>" + fmtMoney(p.avg) + "</td><td>" + p.pct.toFixed(1) + "%</td></tr>";
+  }
+  const rowsHtml = row("Cash", sp.cash) + row("Credit Card", sp.credit);
+  return "<p class=\"cp-periodnote\">" + fmtMoney(sp.total) + " retail over " + (sp.cash.count + sp.credit.count) + " washes - " + label + "</p>" +
+    "<table class=\"via\"><thead><tr><th>Method</th><th>Washes</th><th>Revenue</th><th>Avg ticket</th><th>% of retail</th></tr></thead><tbody>" + rowsHtml + "</tbody></table>";
+}
+
+function dcRenderBreakdown(){
+  if (!dcDetailSite) return;
+  const sel = $("dcDetailPeriod");
+  const wrap = $("dcBreakdown");
+  if (!wrap) return;
+  const r = dcPeriodRange(sel ? sel.value : "30d", dcDetailSite.id);
+  wrap.innerHTML = dcBreakdownHtml(dcDetailSite.id, r[0], r[1], r[2]);
+  dcRenderWeekdayChart(dcDetailSite.id, r[0], r[1]);
+}
+
 function openDetail(site){
   const today = new Date();
   const todayStr = ds(today);
@@ -394,6 +511,11 @@ function openDetail(site){
     "<h2>" + site.name + " <span class=\"members\">(" + members + " members)</span></h2>" +
     "<h3>Period totals</h3>" +
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<h3>Breakdown by payment method <select id=\"dcDetailPeriod\">" + dcPeriodOptions(site.id) + "</select></h3>" +
+    "<div id=\"dcBreakdown\"></div>" +
+    "<h3>Activity by day of week &amp; time</h3>" +
+    "<div id=\"dcWkToggles\"></div>" +
+    "<canvas id=\"dcWkChart\"></canvas>" +
     "<h3>Today by hour</h3>" +
     "<table class=\"via\"><thead><tr><th>Hour</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
     "<h3>Membership changes by month</h3>" +
@@ -405,6 +527,25 @@ function openDetail(site){
     "<h3>Last 14 days</h3>" +
     "<table class=\"via\"><thead><tr><th>Date</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Member washes</th></tr></thead><tbody>" + dailyRows + "</tbody></table>";
   modal.style.display = "flex";
+  dcDetailSite = site;
+  const perSel = $("dcDetailPeriod");
+  if (perSel) perSel.addEventListener("change", dcRenderBreakdown);
+  const wkWrap = $("dcWkToggles");
+  if (wkWrap){
+    let wkHtml = "";
+    for (let d = 0; d < 7; d++){
+      wkHtml += "<label style=\"margin-right:12px;font-size:13px;color:" + DC_WK_COLORS[d] + "\"><input type=\"checkbox\" data-day=\"" + d + "\"" + (dcWkVisible[d] ? " checked" : "") + "> " + DC_WK_LABELS[d] + "</label>";
+    }
+    wkWrap.innerHTML = wkHtml;
+    Array.from(wkWrap.querySelectorAll("input[type=checkbox]")).forEach(function(cb){
+      cb.addEventListener("change", function(){
+        dcWkVisible[parseInt(cb.dataset.day, 10)] = cb.checked;
+        const r2 = dcPeriodRange(perSel ? perSel.value : "30d", site.id);
+        dcRenderWeekdayChart(site.id, r2[0], r2[1]);
+      });
+    });
+  }
+  dcRenderBreakdown();
   const chartDates = [], vals = [];
   for (let i = 29; i >= 0; i--){
     const d = new Date(today); d.setDate(d.getDate() - i);
