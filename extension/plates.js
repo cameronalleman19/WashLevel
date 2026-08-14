@@ -87,7 +87,7 @@ function pSiteIdx(siteId, sites){
   var aWords = aNorm.split(" ").filter(function(w){ return w.length > 0; });
   if (!aWords.length) return null;
   /* extract leading street number from address if present */
-  var aNum = /^(\d+)/.exec(aNorm);
+  var aNum = /^(\d+) /.exec(aNorm);
   var bestIdx = null, bestScore = 0;
   for (var m = 0; m < plateSiteMap.length; m++){
     var dp = plateSiteMap[m].trim();
@@ -96,7 +96,7 @@ function pSiteIdx(siteId, sites){
     var dWords = dNorm.split(" ").filter(function(w){ return w.length > 0; });
     if (!dWords.length) continue;
     /* extract leading number from device prefix */
-    var dNum = /^(\d+)/.exec(dNorm);
+    var dNum = /^(\d+) /.exec(dNorm);
     /* if both have leading numbers, they MUST match — strong discriminator */
     if (dNum && aNum && dNum[1] !== aNum[1]) continue;
     /* count word matches */
