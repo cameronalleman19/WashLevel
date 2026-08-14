@@ -57,14 +57,16 @@ function pSiteIdx(siteId, sites){
   }
   if (!site) return null;
   var sn = site.name.toLowerCase();
-  /* 1. name prefix match */
+  /* 1. name prefix match (skip junk prefixes < 3 chars) */
   for (var j = 0; j < plateSiteMap.length; j++){
-    if (plateSiteMap[j].toLowerCase().indexOf(sn) === 0 ||
-        sn.indexOf(plateSiteMap[j].toLowerCase()) === 0) return j;
+    var pj = plateSiteMap[j].toLowerCase().trim();
+    if (pj.length < 3) continue;
+    if (pj.indexOf(sn) === 0 || sn.indexOf(pj) === 0) return j;
   }
-  /* 2. name substring match */
+  /* 2. name substring match (skip junk prefixes < 3 chars) */
   for (var k = 0; k < plateSiteMap.length; k++){
-    var pk = plateSiteMap[k].toLowerCase();
+    var pk = plateSiteMap[k].toLowerCase().trim();
+    if (pk.length < 3) continue;
     if (pk.indexOf(sn) >= 0 || sn.indexOf(pk) >= 0) return k;
   }
   /* 3. address match: compare device prefix against site address */
