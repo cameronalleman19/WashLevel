@@ -57,14 +57,35 @@ function pSiteIdx(siteId, sites){
   }
   if (!site) return null;
   var sn = site.name.toLowerCase();
+  /* 1. name prefix match */
   for (var j = 0; j < plateSiteMap.length; j++){
     if (plateSiteMap[j].toLowerCase().indexOf(sn) === 0 ||
         sn.indexOf(plateSiteMap[j].toLowerCase()) === 0) return j;
   }
-  /* fallback: substring match either direction */
+  /* 2. name substring match */
   for (var k = 0; k < plateSiteMap.length; k++){
     var pk = plateSiteMap[k].toLowerCase();
     if (pk.indexOf(sn) >= 0 || sn.indexOf(pk) >= 0) return k;
+  }
+  /* 3. address match: compare device prefix against site address */
+  var addr = (site.address || "").toLowerCase().replace(/[^a-z0-9 ]/g, "");
+  if (addr){
+    /* normalize: strip directionals and common abbreviations for looser matching */
+    var aNorm = addr.replace(/\b(north|south|east|west|n|s|e|w)\b/g, "").replace(/\s+/g, " ").trim();
+    for (var m = 0; m < plateSiteMap.length; m++){
+      var dp = plateSiteMap[m].toLowerCase().replace(/[^a-z0-9 ]/g, "");
+      var dNorm = dp.replace(/\b(north|south|east|west|n|s|e|w)\b/g, "").replace(/\s+/g, " ").trim();
+      /* check if significant words from the device prefix appear in the address or vice versa */
+      var dpWords = dNorm.split(" ").filter(function(w){ return w.length > 1; });
+      var addrWords = aNorm.split(" ").filter(function(w){ return w.length > 1; });
+      var matchCount = 0;
+      for (var wi = 0; wi < dpWords.length; wi++){
+        for (var ai = 0; ai < addrWords.length; ai++){
+          if (dpWords[wi] === addrWords[ai] || addrWords[ai].indexOf(dpWords[wi]) === 0 || dpWords[wi].indexOf(addrWords[ai]) === 0) matchCount++;
+        }
+      }
+      if (dpWords.length > 0 && matchCount >= Math.max(1, Math.ceil(dpWords.length * 0.5))) return m;
+    }
   }
   return null;
 }

@@ -139,11 +139,33 @@ function parseReport(html, siteId, date){
   };
 }
 
+async function fetchSiteAddresses(siteList){
+  try {
+    const res = await fetch("https://admin.dencar.sancsoft.net/Sites", {credentials: "include"});
+    if (!res.ok) return;
+    const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+    for (const site of siteList){
+      const el = doc.getElementById("site-" + site.id);
+      if (!el) continue;
+      const strongs = el.querySelectorAll("strong");
+      for (const st of strongs){
+        if (st.textContent.trim() === "Address"){
+          const p = st.nextElementSibling;
+          if (p) site.address = p.textContent.trim();
+          break;
+        }
+      }
+    }
+  } catch(e){ console.warn("fetchSiteAddresses failed:", e); }
+}
+
 async function sync(){
   $("syncBtn").disabled = true;
   setStatus("Discovering sites...");
   const found = await discoverSites();
   if (found.length) sites = found;
+  setStatus("Fetching site addresses...");
+  await fetchSiteAddresses(sites);
   if (!sites.length){
     setStatus("Not logged in or site detection failed. Log into admin.dencar.sancsoft.net in this browser, then press Sync again.");
     $("syncBtn").disabled = false;
