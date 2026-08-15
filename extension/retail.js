@@ -6,6 +6,8 @@ function rDs(d){ return d.toLocaleDateString("en-CA"); }
 function rFmtDate(k){ const p = k.split("-"); return p[1] + "/" + p[2]; }
 
 let rHist = {}, rSites = [];
+let rSelectedSite = null;
+function rFilteredSites(){ return rSelectedSite ? rSites.filter(s => s.id === rSelectedSite) : rSites; }
 
 async function retLoad(){
   const st = await chrome.storage.local.get(["hist", "sites"]);
@@ -22,7 +24,7 @@ function rRetail(r){
 
 function rDayTotals(dateStr){
   const out = {washes: 0, revenue: 0, totalRev: 0, newPasses: 0};
-  for (const s of rSites){
+  for (const s of rFilteredSites()){
     const rec = (rHist[s.id] || {})[dateStr];
     if (!rec) continue;
     const rt = rRetail(rec);
@@ -133,7 +135,7 @@ function rRenderCapture(){
   const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
   const from = rDs(d30);
   let any = false;
-  for (const s of rSites){
+  for (const s of rFilteredSites()){
     let washes = 0, news = 0;
     for (const dt of Object.keys(rHist[s.id] || {})){
       if (dt < from || dt > todayStr) continue;
@@ -227,16 +229,32 @@ async function rRenderPlates(){
   const el = R$("retPlateInsights");
   if (!el) return;
   const r = rPlatePeriodRange();
-  const stats = plateStats(null, r.from, r.to);
+  const si = rSelectedSite ? pSiteIdx(rSelectedSite, rSites) : null;
+  const stats = plateStats(si, r.from, r.to);
   const crossOver = plateCrossOver(r.from, r.to);
-  const conv = plateConversions(r.from, r.to);
+  const conv = plateConversions(si, r.from, r.to);
   el.innerHTML = pRenderStatsHtml(stats, false) +
     pRenderCrossOverHtml(crossOver, r.from, r.to) +
     pRenderConversionsHtml(conv);
 }
 
+function rPopulateSiteFilter(){
+  const sel = R$("retSiteFilter");
+  if (!sel || !rSites.length) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Sites</option>' +
+    rSites.filter(s => !s.name.includes("COMING SOON")).map(s =>
+      '<option value="' + s.id + '"' + (s.id === cur ? ' selected' : '') + '>' + s.name + '</option>'
+    ).join("");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  retRender();
+  const rSiteFilter = R$("retSiteFilter");
+  if (rSiteFilter) rSiteFilter.addEventListener("change", () => {
+    rSelectedSite = rSiteFilter.value || null;
+    retRender();
+  });
+  retRender().then(rPopulateSiteFilter);
   const plateSel = R$("retPlatePeriod");
   if (plateSel) plateSel.addEventListener("change", () => rRenderPlates());
   const btn = document.querySelector('[data-page="retail"]');

@@ -8,6 +8,8 @@ function mAddMonths(d, n){ return new Date(d.getFullYear(), d.getMonth() + n, 1)
 function mMonthLabel(key){ const p = key.split("-"); return new Date(p[0], p[1] - 1, 1).toLocaleString("en-US", {month: "short", year: "numeric"}); }
 
 let mConsumers = {}, mHist = {}, mSites = [], mViaSeen = {}, mCohortBase = {};
+let mSelectedSite = null;
+function mFilteredSites(){ return mSelectedSite ? mSites.filter(s => s.id === mSelectedSite) : mSites; }
 
 async function memLoad(){
   const st = await chrome.storage.local.get(["consumers", "hist", "sites", "viaSeen", "memCohortBase"]);
@@ -173,7 +175,7 @@ function mDs(d){ return d.toLocaleDateString("en-CA"); }
 
 function mMemberDay(dateStr){
   const out = {rev: 0, passUse: 0};
-  for (const s of mSites){
+  for (const s of mFilteredSites()){
     const rec = (mHist[s.id] || {})[dateStr];
     if (!rec) continue;
     out.rev += (rec.newPassAmt || 0) + (rec.passRenewAmt || 0) + (rec.newPassOnlineAmt || 0) + (rec.onlineGiftAmt || 0) + (rec.viaAddAmt || 0);
@@ -232,7 +234,7 @@ function mRenderTiles(){
 
 function mLatestVehicles(){
   let tot = 0;
-  for (const s of mSites){
+  for (const s of mFilteredSites()){
     const days = Object.keys(mHist[s.id] || {}).sort();
     for (let i = days.length - 1; i >= 0; i--){
       const v = mHist[s.id][days[i]].consumerVehicles || 0;
@@ -244,7 +246,7 @@ function mLatestVehicles(){
 
 function mMonthAgg(){
   const out = {};
-  for (const s of mSites){
+  for (const s of mFilteredSites()){
     for (const dt of Object.keys(mHist[s.id] || {})){
       const mk = dt.slice(0, 7);
       const r = mHist[s.id][dt];
@@ -300,6 +302,15 @@ function mRenderNet(){
   }
 }
 
+async function mRenderConversions(){
+  await platesLoad();
+  const el = M$("memConversions");
+  if (!el) return;
+  const si = mSelectedSite ? pSiteIdx(mSelectedSite, mSites) : null;
+  const conv = plateConversions(si, null, null);
+  el.innerHTML = "<h2>New Pass Conversion \u2014 Prior Retail Visits</h2>" + pRenderConversionsHtml(conv);
+}
+
 async function memRender(){
   M$("memStatus").textContent = "Calculating...";
   await memLoad();
@@ -311,10 +322,26 @@ async function memRender(){
   mRenderEconomics();
   if (typeof wlTips === "function"){ wlTips("memLtv", WL_TIP_MEM_ECON); }
   mRenderNet();
+  await mRenderConversions();
   M$("memStatus").textContent = "";
+}
+
+function mPopulateSiteFilter(){
+  const sel = M$("memSiteFilter");
+  if (!sel || !mSites.length) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Sites</option>' +
+    mSites.filter(s => !s.name.includes("COMING SOON")).map(s =>
+      '<option value="' + s.id + '"' + (s.id === cur ? ' selected' : '') + '>' + s.name + '</option>'
+    ).join("");
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   M$("memRefreshBtn").addEventListener("click", memRender);
-  memRender();
+  const mSiteFilter = M$("memSiteFilter");
+  if (mSiteFilter) mSiteFilter.addEventListener("change", () => {
+    mSelectedSite = mSiteFilter.value || null;
+    memRender();
+  });
+  memRender().then(mPopulateSiteFilter);
 });
