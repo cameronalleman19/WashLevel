@@ -86,22 +86,24 @@ async function fetchPaymentsPage(page, startStr, endStr){
 
 async function fetchVehicleCount(id){
   try {
-    const res = await fetch(CBASE + "/consumerpass/" + id + "/", {credentials: "include"});
+    // Step 1: fetch consumer page to find their pass link
+    const cRes = await fetch(CBASE + "/consumer/" + id + "/", {credentials: "include"});
+    if (!cRes.ok) return 1;
+    const cDoc = new DOMParser().parseFromString(await cRes.text(), "text/html");
+    let passUrl = "";
+    cDoc.querySelectorAll('a[href*="/consumerpass/"]').forEach(a => {
+      const m = (a.getAttribute("href") || "").match(/\/consumerpass\/([0-9a-fA-F-]{36})\//);
+      if (m) passUrl = "/consumerpass/" + m[1] + "/";
+    });
+    if (!passUrl) return 1;
+    // Step 2: fetch pass page, read Vehicle Count <strong> + <p>
+    const res = await fetch(CBASE + passUrl, {credentials: "include"});
     if (!res.ok) return 1;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
-    while (walker.nextNode()){
-      const el = walker.currentNode;
-      const txt = el.textContent.trim();
-      if (!/^vehicle\s*count$/i.test(txt)) continue;
-      if (el.children.length > 2) continue;
-      let sib = el.nextSibling;
-      while (sib && sib.nodeType === 3 && !sib.textContent.trim()) sib = sib.nextSibling;
-      if (sib){ const n = parseInt(sib.textContent); if (n > 0) return n; }
-      if (el.nextElementSibling){ const n = parseInt(el.nextElementSibling.textContent); if (n > 0) return n; }
-      if (el.parentElement && el.parentElement.nextElementSibling){
-        const n = parseInt(el.parentElement.nextElementSibling.textContent);
-        if (n > 0) return n;
+    for (const s of doc.querySelectorAll("strong")){
+      if (/^vehicle\s*count$/i.test(s.textContent.trim())){
+        const p = s.nextElementSibling;
+        if (p){ const n = parseInt(p.textContent); if (n > 0) return n; }
       }
     }
     return 1;
