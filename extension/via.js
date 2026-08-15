@@ -594,18 +594,21 @@ async function viaCloseGroup(ids, btn){
 
 function bindZoom(){
   let z = document.getElementById("viaZoom");
-  if (!z){ z = document.createElement("img"); z.id = "viaZoom"; z.style.display = "none"; document.body.appendChild(z); }
+  if (!z){ z = document.createElement("img"); z.id = "viaZoom"; z.style.display = "none"; z.style.maxHeight = "85vh"; z.style.objectFit = "contain"; document.body.appendChild(z); }
   document.querySelectorAll(".via-photos img").forEach(img => {
     img.addEventListener("mouseenter", () => { z.src = img.src; z.style.display = "block"; });
     img.addEventListener("mousemove", (ev) => {
       z.style.left = Math.min(ev.pageX + 24, window.scrollX + window.innerWidth - 1220) + "px";
-      /* Flip upward if zoom would overflow bottom of viewport */
+      /* Keep zoom within viewport */
       const zh = z.offsetHeight || z.naturalHeight || 400;
+      let top = ev.pageY - 100;
       if (ev.clientY - 100 + zh > window.innerHeight){
-        z.style.top = (ev.pageY - zh + 50) + "px";
-      } else {
-        z.style.top = (ev.pageY - 100) + "px";
+        top = ev.pageY - zh + 50;
       }
+      /* Clamp so it never goes above viewport */
+      const minTop = window.scrollY + 10;
+      const maxTop = window.scrollY + window.innerHeight - zh - 10;
+      z.style.top = Math.max(minTop, Math.min(top, maxTop)) + "px";
     });
     img.addEventListener("mouseleave", () => { z.style.display = "none"; });
   });
