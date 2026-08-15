@@ -145,6 +145,18 @@ async function consSync(){
       lpd.setDate(lpd.getDate() + 1);
       startStr = lpd.toLocaleDateString("en-CA");
       if (startStr > endStr){
+        const vehCut2 = Date.now() - 45 * 86400000;
+        const vehIds2 = Object.keys(fresh).filter(id => {
+          const c = fresh[id];
+          return (c.veh || 1) === 1 && ((c.lastWash > vehCut2) || (c.lastRenew > vehCut2) || (c.lastNew > vehCut2));
+        });
+        if (vehIds2.length){
+          for (let vi = 0; vi < vehIds2.length; vi++){
+            C$("consStatus").textContent = "Fetching vehicle count " + (vi + 1) + "/" + vehIds2.length + "...";
+            fresh[vehIds2[vi]].veh = await fetchVehicleCount(vehIds2[vi]);
+            await new Promise(r => setTimeout(r, 60));
+          }
+        }
         consumers = fresh;
         await consSave();
         C$("consStatus").textContent = "Up to date. " + list.length + " consumers.";
@@ -241,7 +253,7 @@ function renderConsumers(){
   });
   for (const c of arr){
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td>" + cEsc(c.name) + "</td><td>" + cFmtDate(c.signup) + "</td><td>" + (c.veh || 1) + "</td><td>" + c.washes + "</td><td>" + consPerMonth(c).toFixed(1) + "/veh</td><td>" + c.others + "</td><td>" + cFmtDate(c.lastWash) + "</td><td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
+    tr.innerHTML = "<td>" + cEsc(c.name) + "</td><td>" + cFmtDate(c.signup) + "</td><td>" + (c.veh || 1) + "</td><td>" + c.washes + "</td><td>" + consPerMonth(c).toFixed(1) + "/car</td><td>" + c.others + "</td><td>" + cFmtDate(c.lastWash) + "</td><td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
     tb.appendChild(tr);
   }
 }
