@@ -311,6 +311,36 @@ async function mRenderConversions(){
   el.innerHTML = "<h2>New Pass Conversion \u2014 Prior Retail Visits</h2>" + pRenderConversionsHtml(conv);
 }
 
+function mRenderVehicles(){
+  const el = M$("memVehicles");
+  if (!el) return;
+  const active = Object.values(mConsumers).filter(c => {
+    if (mIsCancelled(c)) return false;
+    const lastBill = Math.max(c.lastNew || 0, c.lastRenew || 0);
+    return lastBill && Date.now() - lastBill <= 45 * 86400000;
+  });
+  const multi = active.filter(c => (c.veh || 1) >= 2);
+  const breakdown = {};
+  for (const c of multi){
+    const v = c.veh || 1;
+    const key = v >= 4 ? "4+" : String(v);
+    breakdown[key] = (breakdown[key] || 0) + 1;
+  }
+  let brkHtml = "";
+  for (const k of ["2", "3", "4+"]){
+    if (breakdown[k]) brkHtml += mTile(k + "-vehicle plans", breakdown[k]);
+  }
+  el.innerHTML =
+    mTile("Multi-vehicle plans", multi.length) +
+    mTile("% of active members", active.length
+      ? (multi.length / active.length * 100).toFixed(1) + "%"
+      : "--") +
+    mTile("Avg vehicles (multi)", multi.length
+      ? (multi.reduce((a, c) => a + (c.veh || 1), 0) / multi.length).toFixed(1)
+      : "--") +
+    brkHtml;
+}
+
 async function memRender(){
   M$("memStatus").textContent = "Calculating...";
   await memLoad();
@@ -320,6 +350,7 @@ async function memRender(){
   mRenderRisk();
   await mRenderCohorts();
   mRenderEconomics();
+  mRenderVehicles();
   if (typeof wlTips === "function"){ wlTips("memLtv", WL_TIP_MEM_ECON); }
   mRenderNet();
   await mRenderConversions();

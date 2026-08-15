@@ -84,6 +84,30 @@ async function fetchPaymentsPage(page, startStr, endStr){
   return out;
 }
 
+async function fetchVehicleCount(id){
+  try {
+    const res = await fetch(CBASE + "/consumerpass/" + id + "/", {credentials: "include"});
+    if (!res.ok) return 1;
+    const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
+    while (walker.nextNode()){
+      const el = walker.currentNode;
+      const txt = el.textContent.trim();
+      if (!/^vehicle\s*count$/i.test(txt)) continue;
+      if (el.children.length > 2) continue;
+      let sib = el.nextSibling;
+      while (sib && sib.nodeType === 3 && !sib.textContent.trim()) sib = sib.nextSibling;
+      if (sib){ const n = parseInt(sib.textContent); if (n > 0) return n; }
+      if (el.nextElementSibling){ const n = parseInt(el.nextElementSibling.textContent); if (n > 0) return n; }
+      if (el.parentElement && el.parentElement.nextElementSibling){
+        const n = parseInt(el.parentElement.nextElementSibling.textContent);
+        if (n > 0) return n;
+      }
+    }
+    return 1;
+  } catch(e){ return 1; }
+}
+
 async function consSync(){
   C$("consSyncBtn").disabled = true;
   C$("consStatus").textContent = "Loading consumer list...";
@@ -107,8 +131,8 @@ async function consSync(){
     for (const c of list){
       const ex = isIncr ? consumers[c.id] : null;
       fresh[c.id] = ex
-        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0}
-        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0};
+        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0, veh: ex.veh || 1}
+        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0, veh: 1};
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
@@ -177,6 +201,18 @@ async function consSync(){
       if (batch.length < 500) break;
       await new Promise(r => setTimeout(r, 80));
     }
+    const vehCut = Date.now() - 45 * 86400000;
+    const vehIds = Object.keys(fresh).filter(id => {
+      const c = fresh[id];
+      return (c.lastWash > vehCut) || (c.lastRenew > vehCut) || (c.lastNew > vehCut);
+    });
+    if (vehIds.length){
+      for (let vi = 0; vi < vehIds.length; vi++){
+        C$("consStatus").textContent = "Fetching vehicle count " + (vi + 1) + "/" + vehIds.length + "...";
+        fresh[vehIds[vi]].veh = await fetchVehicleCount(vehIds[vi]);
+        await new Promise(r => setTimeout(r, 60));
+      }
+    }
     consumers = fresh;
     await chrome.storage.local.set({washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: endStr});
     await consSave();
@@ -188,14 +224,14 @@ async function consSync(){
   C$("consSyncBtn").disabled = false;
 }
 
-function consPerMonth(c){ const mo = c.signup ? Math.min(12, Math.max((Date.now() - c.signup) / 2592000000, 1)) : 12; return c.washes / mo; }
+function consPerMonth(c){ const mo = c.signup ? Math.min(12, Math.max((Date.now() - c.signup) / 2592000000, 1)) : 12; return c.washes / (mo * (c.veh || 1)); }
 
 function renderConsumers(){
   const tb = C$("consBody");
   tb.innerHTML = "";
   const mode = C$("consSort").value;
   const arr = Object.values(consumers);
-  if (!arr.length){ tb.innerHTML = "<tr><td colspan=\"7\">No consumers loaded. Press Sync Consumers.</td></tr>"; return; }
+  if (!arr.length){ tb.innerHTML = "<tr><td colspan=\"8\">No consumers loaded. Press Sync Consumers.</td></tr>"; return; }
   arr.sort((a, b) => {
     if (mode === "recent") return (b.signup || 0) - (a.signup || 0);
     if (mode === "usageHigh") return consPerMonth(b) - consPerMonth(a);
@@ -203,7 +239,7 @@ function renderConsumers(){
   });
   for (const c of arr){
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td>" + cEsc(c.name) + "</td><td>" + cFmtDate(c.signup) + "</td><td>" + c.washes + "</td><td>" + consPerMonth(c).toFixed(1) + "</td><td>" + c.others + "</td><td>" + cFmtDate(c.lastWash) + "</td><td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
+    tr.innerHTML = "<td>" + cEsc(c.name) + "</td><td>" + cFmtDate(c.signup) + "</td><td>" + (c.veh || 1) + "</td><td>" + c.washes + "</td><td>" + consPerMonth(c).toFixed(1) + "/veh</td><td>" + c.others + "</td><td>" + cFmtDate(c.lastWash) + "</td><td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
     tb.appendChild(tr);
   }
 }
