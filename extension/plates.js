@@ -177,15 +177,19 @@ function plateStats(siteIdx, from, to){
 
 /* ── cross-site bleedover ────────────────────────────────── */
 
+function pIsJunkSite(idx){ var n = pSiteName(parseInt(idx)); return !n || n.length < 2 || n === "-"; }
+
 function plateCrossOver(from, to){
-  /* returns { siteIdx: { otherSiteIdx: plateCount, ... }, ... } */
+  /* returns { siteIdx: { otherSiteIdx: {count, plates[]}, ... }, ... } */
   var bySite = {};
   for (var plate in plateData){
     if (!plateData.hasOwnProperty(plate)) continue;
     var rec = plateData[plate];
     var filtered = from || to ? pFilterVisits(rec.v || [], null, from, to) : (rec.v || []);
     var siteSet = {};
-    for (var i = 0; i < filtered.length; i++) siteSet[filtered[i][1]] = 1;
+    for (var i = 0; i < filtered.length; i++){
+      if (!pIsJunkSite(filtered[i][1])) siteSet[filtered[i][1]] = 1;
+    }
     var siteKeys = Object.keys(siteSet);
     if (siteKeys.length < 2) continue;
     for (var a = 0; a < siteKeys.length; a++){
@@ -194,7 +198,9 @@ function plateCrossOver(from, to){
       for (var b = 0; b < siteKeys.length; b++){
         if (a === b) continue;
         var sb = siteKeys[b];
-        bySite[sa][sb] = (bySite[sa][sb] || 0) + 1;
+        var entry = bySite[sa][sb] = bySite[sa][sb] || {count: 0, plates: []};
+        entry.count++;
+        if (entry.plates.length < 50) entry.plates.push(plate);
       }
     }
   }
@@ -209,7 +215,9 @@ function plateCrossOverTotal(from, to){
     var rec = plateData[plate];
     var filtered = from || to ? pFilterVisits(rec.v || [], null, from, to) : (rec.v || []);
     var siteSet = {};
-    for (var i = 0; i < filtered.length; i++) siteSet[filtered[i][1]] = 1;
+    for (var i = 0; i < filtered.length; i++){
+      if (!pIsJunkSite(filtered[i][1])) siteSet[filtered[i][1]] = 1;
+    }
     if (Object.keys(siteSet).length >= 2) count++;
   }
   return count;
@@ -289,12 +297,18 @@ function pRenderCrossOverHtml(crossOver, from, to){
   if (!siteKeys.length) return h + "<p>No cross-site activity found in this period.</p>";
   for (var i = 0; i < siteKeys.length; i++){
     var si = siteKeys[i];
+    if (pIsJunkSite(si)) continue;
     var others = crossOver[si];
-    var otherKeys = Object.keys(others).sort(function(a, b){ return others[b] - others[a]; });
+    var otherKeys = Object.keys(others).filter(function(k){ return !pIsJunkSite(k); }).sort(function(a, b){ return others[b].count - others[a].count; });
+    if (!otherKeys.length) continue;
     h += "<details style=\"margin-bottom:6px;\"><summary style=\"cursor:pointer;font-weight:600;\">" + pSiteName(parseInt(si)) + "</summary>";
-    h += "<table class=\"via\" style=\"margin-top:4px;\"><thead><tr><th>Also seen at</th><th>Shared plates</th></tr></thead><tbody>";
+    h += "<table class=\"via\" style=\"margin-top:4px;\"><thead><tr><th>Also seen at</th><th>Shared plates</th><th></th></tr></thead><tbody>";
     for (var j = 0; j < otherKeys.length; j++){
-      h += "<tr><td>" + pSiteName(parseInt(otherKeys[j])) + "</td><td>" + others[otherKeys[j]].toLocaleString() + "</td></tr>";
+      var entry = others[otherKeys[j]];
+      var plateList = (entry.plates || []).join(", ");
+      h += "<tr><td>" + pSiteName(parseInt(otherKeys[j])) + "</td><td>" + entry.count.toLocaleString() + "</td>";
+      h += "<td><details style=\"display:inline;\"><summary style=\"cursor:pointer;font-size:.85em;\">view plates</summary>";
+      h += "<div style=\"font-size:.8em;max-height:200px;overflow-y:auto;padding:4px;\">" + plateList + (entry.plates.length >= 50 ? "\u2026" : "") + "</div></details></td></tr>";
     }
     h += "</tbody></table></details>";
   }
