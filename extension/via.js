@@ -3,6 +3,9 @@ const V$ = (id) => document.getElementById(id);
 let viaData = {};
 let viaNotes = {};
 let viaSeen = {};
+let viaAutoSettings = {};
+let viaAutoClosed = [];
+let viaActiveTab = "open"; // "open" or "auto"
 
 function vEsc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 function vDays(ts){ return (Date.now() - ts) / 86400000; }
@@ -70,12 +73,35 @@ function parseDetail(html, id){
 }
 
 function normPlate(p){ return (p||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/0/g,"O").replace(/8/g,"B").replace(/1/g,"I").replace(/5/g,"S").replace(/2/g,"Z"); }
-function editDist(a,b){ if(Math.abs(a.length-b.length)>1) return 9; const m=[]; for(let i=0;i<=a.length;i++){m[i]=[i];} for(let j=0;j<=b.length;j++){m[0][j]=j;} for(let i=1;i<=a.length;i++){for(let j=1;j<=b.length;j++){m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));}} return m[a.length][b.length]; }
+function editDist(a,b){ if(Math.abs(a.length-b.length)>2) return 9; const m=[]; for(let i=0;i<=a.length;i++){m[i]=[i];} for(let j=0;j<=b.length;j++){m[0][j]=j;} for(let i=1;i<=a.length;i++){for(let j=1;j<=b.length;j++){m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));}} return m[a.length][b.length]; }
+
+/* Raw edit distance (no OCR normalization) for plate closeness checks */
+function rawEditDist(a, b){ return editDist((a||"").toUpperCase().replace(/[^A-Z0-9]/g,""), (b||"").toUpperCase().replace(/[^A-Z0-9]/g,"")); }
 
 function calcPerMonth(e){ const h = (e.washHistory && e.washHistory.length) ? e.washHistory : e.history.filter(x => x.lp && x.lp !== "N/A"); if(!h.length) return 0; const spanMs = h.length > 1 ? (h[0].t - h[h.length - 1].t) : 0; return h.length / Math.max(spanMs / 2592000000, 1); }
 
+/* Plate matching helpers */
+function plateOnPlan(lp, plates){
+  return plates.some(p => lp && (lp === p || editDist(normPlate(lp), normPlate(p)) <= 1));
+}
+function plateNearPlan(lp, plates){
+  /* Near = within 2 chars (normalized) OR within 2 chars (raw) but NOT on-plan */
+  if (plateOnPlan(lp, plates)) return false;
+  return plates.some(p => lp && (editDist(normPlate(lp), normPlate(p)) <= 2 || rawEditDist(lp, p) <= 2));
+}
+function plateBestDist(lp, plates){
+  /* Returns the best edit distance (normalized) between lp and any plan plate */
+  let best = 99;
+  for (const p of plates){
+    const d = editDist(normPlate(lp), normPlate(p));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
 function recommend(e){
-  const onPlan = (lp) => e.plates.some(p => lp && (lp === p || editDist(normPlate(lp), normPlate(p)) <= 1));
+  const onPlan = (lp) => plateOnPlan(lp, e.plates);
+  const nearPlan = (lp) => plateNearPlan(lp, e.plates);
   const lastUse = e.history.length ? e.history[0].t : 0;
   const offPlan = e.history.filter(h => h.lp && !onPlan(h.lp));
   const onPlanUses = e.history.filter(h => h.lp && onPlan(h.lp));
@@ -88,17 +114,73 @@ function recommend(e){
     if (gap <= 1.5) return {verdict: "TRIGGER", cls: "rec-yes", why: "Single-vehicle plan; off-plan wash within a day of on-plan wash (likely sharing)"};
   }
   if (e.vehicleCount >= 2 && e.avgUsage < 4) return {verdict: "LET SLIDE", cls: "rec-mid", why: e.vehicleCount + " vehicles on plan, low usage - good repeat customer"};
+  /* Check for near-plan plates (1-2 chars off) before triggering */
+  if (offPlan.length){
+    const nearMisses = offPlan.filter(h => nearPlan(h.lp));
+    if (nearMisses.length > 0 && nearMisses.length === offPlan.length){
+      const bestD = plateBestDist(nearMisses[0].lp, e.plates);
+      return {verdict: "LET SLIDE", cls: "rec-mid", why: "Off-plan plate " + vEsc(nearMisses[0].lp) + " is only " + bestD + " char" + (bestD > 1 ? "s" : "") + " off from plan plate - likely OCR misread"};
+    }
+  }
   if (offPlan.length) return {verdict: "TRIGGER", cls: "rec-yes", why: "Active user washing off-plan vehicle (" + vEsc(offPlan[0].lp) + ")"};
   return {verdict: "REVIEW", cls: "rec-mid", why: "No off-plan plate detected in recent history"};
 }
 
+/* ===== Auto-dismiss rule evaluation ===== */
+function autoCloseReason(e){
+  /* Returns {reason, rule} if this exception should be auto-closed, or null */
+  if (!viaAutoSettings || !e.closeId) return null;
+  const onPlan = (lp) => plateOnPlan(lp, e.plates);
+  const offPlan = e.history.filter(h => h.lp && !onPlan(h.lp));
+  const perMonth = calcPerMonth(e);
+
+  /* Low usage rules */
+  if (viaAutoSettings.lowUsage2 && perMonth > 0 && perMonth < 2){
+    return {reason: "Auto: < 2 washes/month (" + perMonth.toFixed(1) + "/mo)", rule: "lowUsage2"};
+  }
+  if (viaAutoSettings.lowUsage3 && perMonth > 0 && perMonth < 3){
+    return {reason: "Auto: < 3 washes/month (" + perMonth.toFixed(1) + "/mo)", rule: "lowUsage3"};
+  }
+
+  /* Plate distance rules - check off-plan plates */
+  if (offPlan.length){
+    const allNear = offPlan.every(h => {
+      const d = plateBestDist(h.lp, e.plates);
+      if (viaAutoSettings.ocrOneChar && d <= 1) return true;
+      if (viaAutoSettings.ocrTwoChar && d <= 2) return true;
+      return false;
+    });
+    if (allNear){
+      const bestD = plateBestDist(offPlan[0].lp, e.plates);
+      if (bestD <= 1 && viaAutoSettings.ocrOneChar){
+        return {reason: "Auto: plate " + offPlan[0].lp + " is 1 char off plan plate", rule: "ocrOneChar"};
+      }
+      if (bestD <= 2 && viaAutoSettings.ocrTwoChar){
+        return {reason: "Auto: plate " + offPlan[0].lp + " is 2 chars off plan plate", rule: "ocrTwoChar"};
+      }
+    }
+  }
+
+  /* Dormant */
+  if (viaAutoSettings.dormant){
+    const lastUse = e.history.length ? e.history[0].t : 0;
+    if (lastUse && vDays(lastUse) > 21){
+      return {reason: "Auto: dormant (no use in 3+ weeks)", rule: "dormant"};
+    }
+  }
+
+  return null;
+}
+
 async function viaLoad(){
-  const st = await chrome.storage.local.get(["viaData", "viaNotes", "viaSeen"]);
+  const st = await chrome.storage.local.get(["viaData", "viaNotes", "viaSeen", "viaAutoSettings", "viaAutoClosed"]);
   viaData = st.viaData || {};
   viaNotes = st.viaNotes || {};
   viaSeen = st.viaSeen || {};
+  viaAutoSettings = st.viaAutoSettings || {};
+  viaAutoClosed = st.viaAutoClosed || [];
 }
-async function viaSave(){ await chrome.storage.local.set({viaData: viaData, viaNotes: viaNotes, viaSeen: viaSeen}); }
+async function viaSave(){ await chrome.storage.local.set({viaData, viaNotes, viaSeen, viaAutoSettings, viaAutoClosed}); }
 
 async function viaSync(){
   V$("viaSyncBtn").disabled = true;
@@ -126,7 +208,11 @@ async function viaSync(){
     }
     viaData = fresh;
     await viaSave();
-    V$("viaStatus").textContent = "Loaded " + ids.length + " open exceptions.";
+
+    /* Run auto-dismiss on freshly synced data */
+    const autoCt = await runAutoDismiss();
+    const remain = Object.keys(viaData).length;
+    V$("viaStatus").textContent = "Loaded " + ids.length + " exceptions." + (autoCt ? " Auto-closed " + autoCt + "." : "") + (remain ? " " + remain + " remaining." : "");
     renderViaList();
   } catch(e){
     V$("viaStatus").textContent = "VIA sync failed: " + e.message;
@@ -134,43 +220,145 @@ async function viaSync(){
   V$("viaSyncBtn").disabled = false;
 }
 
+/* ===== Auto-dismiss engine ===== */
+async function runAutoDismiss(){
+  const anyEnabled = viaAutoSettings.ocrOneChar || viaAutoSettings.ocrTwoChar ||
+    viaAutoSettings.lowUsage2 || viaAutoSettings.lowUsage3 || viaAutoSettings.dormant;
+  if (!anyEnabled) return 0;
+  let closed = 0;
+  const ids = Object.keys(viaData);
+  for (const id of ids){
+    const e = viaData[id];
+    const ar = autoCloseReason(e);
+    if (!ar || !e.closeId) continue;
+    try {
+      const res = await fetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
+      if (res.ok){
+        viaAutoClosed.push({
+          ts: Date.now(),
+          id: id,
+          name: (e.firstName + " " + e.lastName).trim(),
+          passName: e.passName || "",
+          plates: e.plates.join(", "),
+          reason: ar.reason,
+          rule: ar.rule,
+          perMonth: calcPerMonth(e).toFixed(1),
+          offPlate: (e.history.find(h => h.lp && !plateOnPlan(h.lp, e.plates)) || {}).lp || ""
+        });
+        try { await viaHistLog(e, "close", ar.reason); } catch(_){}
+        delete viaData[id];
+        closed++;
+        await new Promise(r => setTimeout(r, 200));
+      }
+    } catch(_){}
+  }
+  /* Cap auto-closed history at 2000 */
+  if (viaAutoClosed.length > 2000) viaAutoClosed.splice(0, viaAutoClosed.length - 2000);
+  if (closed) await viaSave();
+  return closed;
+}
+
+/* ===== Grouping logic ===== */
+function groupExceptions(){
+  const groups = {};
+  for (const id of Object.keys(viaData)){
+    const e = viaData[id];
+    const key = e.consumerPassId || id;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push({id, e});
+  }
+  return groups;
+}
+
+/* ===== Render ===== */
 function renderViaList(){
   const wrap = V$("viaCards");
   wrap.innerHTML = "";
-  const ids = Object.keys(viaData);
-  if (!ids.length){ wrap.innerHTML = "<div class=\"via-empty\">No open exceptions loaded. Press Sync VIA.</div>"; return; }
-  for (const id of ids){
-    const e = viaData[id];
-    const rec = recommend(e);
-    const seenCount = Object.keys(viaSeen[e.consumerPassId || id] || {}).length;
-    const lastUse = e.history.length ? e.history[0].ts : "unknown";
-    const driver = e.imgs.find(x => x.kind === "driver");
-    const plate = e.imgs.find(x => x.kind === "license");
+
+  /* Tab bar */
+  renderViaTabs();
+
+  if (viaActiveTab === "auto"){
+    renderAutoClosedList(wrap);
+    return;
+  }
+  if (viaActiveTab === "settings"){
+    renderAutoSettings(wrap);
+    return;
+  }
+
+  const groups = groupExceptions();
+  const gKeys = Object.keys(groups);
+  if (!gKeys.length){ wrap.innerHTML = "<div class=\"via-empty\">No open exceptions loaded. Press Sync VIA.</div>"; return; }
+
+  for (const gk of gKeys){
+    const entries = groups[gk];
+    const primary = entries[0].e;
+    const rec = recommend(primary);
+    const seenCount = Object.keys(viaSeen[primary.consumerPassId || entries[0].id] || {}).length;
+    const lastUse = primary.history.length ? primary.history[0].ts : "unknown";
+
+    /* Collect all images from all entries in this group */
+    const allImgs = [];
+    for (const {e} of entries){
+      for (const img of e.imgs){
+        if (!allImgs.some(x => x.url === img.url)) allImgs.push(img);
+      }
+    }
+    const drivers = allImgs.filter(x => x.kind === "driver");
+    const plateImgs = allImgs.filter(x => x.kind === "license");
+
     const div = document.createElement("div");
     div.className = "via-card";
-    div.innerHTML =
-      "<div class=\"via-photos\">" +
-        (driver ? "<img src=\"" + driver.url + "\" loading=\"lazy\">" : "<div class=\"noimg\">no photo</div>") +
-        (plate ? "<img src=\"" + plate.url + "\" loading=\"lazy\">" : "<div class=\"noimg\">no plate</div>") +
-      "</div>" +
-      "<div class=\"via-info\">" +
-        "<div class=\"via-name\">" + vEsc(e.firstName + " " + e.lastName) + " <span class=\"via-pass\">(" + vEsc(e.passName) + ")</span></div>" +
-        "<div class=\"via-row\">Plates on plan: <strong>" + vEsc(e.plates.join(", ") || "none parsed") + "</strong> | Vehicles: " + e.vehicleCount + "</div>" +
-        "<div class=\"via-row\">Last pass use: " + vEsc(lastUse) + " | Washes/month (computed): " + calcPerMonth(e).toFixed(1) + " | Vac/self-serve uses 12mo: " + (e.otherUses || 0) + " | Use count: " + vEsc(e.useCount) + "</div>" +
-        "<div class=\"via-row\">Exceptions seen for this member: " + seenCount + "</div>" +
-        "<div class=\"via-rec " + rec.cls + "\">" + rec.verdict + "</div>" +
-        "<div class=\"via-why\">" + rec.why + "</div>" +
-        "<div class=\"via-history\">" + e.history.slice(0, 5).map(h => vEsc(h.ts) + " - " + vEsc(h.lp || "?")).join("<br>") + "</div>" +
-        "<textarea class=\"via-note\" data-id=\"" + id + "\" placeholder=\"Notes for this exception...\">" + vEsc(viaNotes[id] || "") + "</textarea>" +
-        "<div class=\"via-actions\">" +
-          (e.triggerId ? "<button class=\"via-trigger\" data-id=\"" + id + "\">Trigger Exception</button>" : "") +
-          (e.closeId ? "<button class=\"via-close-ex\" data-id=\"" + id + "\">Close Exception</button>" : "") +
-          "<a class=\"via-open\" href=\"" + VBASE + "/consumerpassexceptions/" + id + "/\" target=\"_blank\">Open in Dencar</a>" +
-        "</div>" +
-      "</div>";
+
+    let photosHtml = "<div class=\"via-photos\">";
+    if (drivers.length) photosHtml += drivers.map(d => "<img src=\"" + d.url + "\" loading=\"lazy\">").join("");
+    else photosHtml += "<div class=\"noimg\">no photo</div>";
+    if (plateImgs.length) photosHtml += plateImgs.map(p => "<img src=\"" + p.url + "\" loading=\"lazy\">").join("");
+    else photosHtml += "<div class=\"noimg\">no plate</div>";
+    photosHtml += "</div>";
+
+    /* Instance count badge */
+    const instanceBadge = entries.length > 1
+      ? " <span class=\"via-instance-badge\">" + entries.length + " instances</span>"
+      : "";
+
+    let infoHtml = "<div class=\"via-info\">" +
+      "<div class=\"via-name\">" + vEsc(primary.firstName + " " + primary.lastName) + " <span class=\"via-pass\">(" + vEsc(primary.passName) + ")</span>" + instanceBadge + "</div>" +
+      "<div class=\"via-row\">Plates on plan: <strong>" + vEsc(primary.plates.join(", ") || "none parsed") + "</strong> | Vehicles: " + primary.vehicleCount + "</div>" +
+      "<div class=\"via-row\">Last pass use: " + vEsc(lastUse) + " | Washes/month (computed): " + calcPerMonth(primary).toFixed(1) + " | Vac/self-serve uses 12mo: " + (primary.otherUses || 0) + " | Use count: " + vEsc(primary.useCount) + "</div>" +
+      "<div class=\"via-row\">Exceptions seen for this member: " + seenCount + "</div>" +
+      "<div class=\"via-rec " + rec.cls + "\">" + rec.verdict + "</div>" +
+      "<div class=\"via-why\">" + rec.why + "</div>" +
+      "<div class=\"via-history\">" + primary.history.slice(0, 5).map(h => vEsc(h.ts) + " - " + vEsc(h.lp || "?")).join("<br>") + "</div>" +
+      "<textarea class=\"via-note\" data-id=\"" + entries[0].id + "\" placeholder=\"Notes for this exception...\">" + vEsc(viaNotes[entries[0].id] || "") + "</textarea>" +
+      "<div class=\"via-actions\">";
+
+    /* Trigger button — use first entry that has a triggerId */
+    const trigEntry = entries.find(x => x.e.triggerId);
+    if (trigEntry){
+      infoHtml += "<button class=\"via-trigger\" data-id=\"" + trigEntry.id + "\">Trigger Exception</button>";
+    }
+    /* Close button — if grouped, label says Close All */
+    const closeEntries = entries.filter(x => x.e.closeId);
+    if (closeEntries.length > 1){
+      infoHtml += "<button class=\"via-close-ex\" data-ids=\"" + closeEntries.map(x => x.id).join(",") + "\">Close All (" + closeEntries.length + ")</button>";
+    } else if (closeEntries.length === 1){
+      infoHtml += "<button class=\"via-close-ex\" data-ids=\"" + closeEntries[0].id + "\">Close Exception</button>";
+    }
+
+    /* Dencar links for each instance */
+    for (const {id: eid} of entries){
+      infoHtml += "<a class=\"via-open\" href=\"" + VBASE + "/consumerpassexceptions/" + eid + "/\" target=\"_blank\">Open in Dencar" + (entries.length > 1 ? " (" + eid.slice(0,6) + ")" : "") + "</a>";
+    }
+
+    infoHtml += "</div></div>";
+    div.innerHTML = photosHtml + infoHtml;
     wrap.appendChild(div);
   }
+
   bindZoom();
+
   wrap.querySelectorAll(".via-note").forEach(t => {
     t.addEventListener("change", async () => { viaNotes[t.dataset.id] = t.value; await viaSave(); });
   });
@@ -178,17 +366,156 @@ function renderViaList(){
     b.addEventListener("click", () => viaAction(b.dataset.id, "trigger", b));
   });
   wrap.querySelectorAll(".via-close-ex").forEach(b => {
-    b.addEventListener("click", () => viaAction(b.dataset.id, "close", b));
+    b.addEventListener("click", () => {
+      const ids = b.dataset.ids.split(",");
+      viaCloseGroup(ids, b);
+    });
   });
 }
 
+/* ===== Tab rendering ===== */
+function renderViaTabs(){
+  let bar = V$("viaTabBar");
+  if (!bar){
+    bar = document.createElement("div");
+    bar.id = "viaTabBar";
+    bar.className = "via-tab-bar";
+    const parent = V$("viaCards").parentNode;
+    parent.insertBefore(bar, V$("viaCards"));
+  }
+  const openCt = Object.keys(viaData).length;
+  const autoCt = viaAutoClosed.length;
+  bar.innerHTML =
+    "<button class=\"via-tab" + (viaActiveTab === "open" ? " active" : "") + "\" data-tab=\"open\">Open (" + openCt + ")</button>" +
+    "<button class=\"via-tab" + (viaActiveTab === "auto" ? " active" : "") + "\" data-tab=\"auto\">Auto-Closed (" + autoCt + ")</button>" +
+    "<button class=\"via-tab" + (viaActiveTab === "settings" ? " active" : "") + "\" data-tab=\"settings\">" + String.fromCharCode(9881) + " Auto Rules</button>";
+  bar.querySelectorAll(".via-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      viaActiveTab = btn.dataset.tab;
+      renderViaList();
+    });
+  });
+}
+
+/* ===== Auto-closed list ===== */
+function renderAutoClosedList(wrap){
+  if (!viaAutoClosed.length){
+    wrap.innerHTML = "<div class=\"via-empty\">No auto-closed exceptions yet. Enable auto rules and sync to get started.</div>";
+    return;
+  }
+  const sorted = viaAutoClosed.slice().reverse();
+  let html = "<table class=\"via-hist\"><tr><th>When</th><th>Member</th><th>Pass</th><th>Off Plate</th><th>Reason</th><th>Washes/mo</th></tr>";
+  sorted.slice(0, 200).forEach(r => {
+    html += "<tr>" +
+      "<td>" + new Date(r.ts).toLocaleString() + "</td>" +
+      "<td>" + vEsc(r.name) + "</td>" +
+      "<td>" + vEsc(r.passName) + "</td>" +
+      "<td>" + vEsc(r.offPlate) + "</td>" +
+      "<td>" + vEsc(r.reason) + "</td>" +
+      "<td>" + vEsc(r.perMonth) + "</td>" +
+      "</tr>";
+  });
+  html += "</table>";
+  wrap.innerHTML = html;
+}
+
+/* ===== Auto-dismiss settings ===== */
+function renderAutoSettings(wrap){
+  const s = viaAutoSettings;
+  let html = "<div class=\"via-auto-settings\">" +
+    "<h3>Auto-Close Rules</h3>" +
+    "<p class=\"via-auto-desc\">Exceptions matching enabled rules will be automatically closed during sync. Review the Auto-Closed tab to verify.</p>" +
+    "<label class=\"via-auto-rule\"><input type=\"checkbox\" data-rule=\"ocrOneChar\"" + (s.ocrOneChar ? " checked" : "") + "> Close if plate is <strong>1 character</strong> off from plan plate</label>" +
+    "<label class=\"via-auto-rule\"><input type=\"checkbox\" data-rule=\"ocrTwoChar\"" + (s.ocrTwoChar ? " checked" : "") + "> Close if plate is <strong>2 characters</strong> off from plan plate</label>" +
+    "<label class=\"via-auto-rule\"><input type=\"checkbox\" data-rule=\"lowUsage2\"" + (s.lowUsage2 ? " checked" : "") + "> Close if member washes <strong>less than 2x/month</strong></label>" +
+    "<label class=\"via-auto-rule\"><input type=\"checkbox\" data-rule=\"lowUsage3\"" + (s.lowUsage3 ? " checked" : "") + "> Close if member washes <strong>less than 3x/month</strong></label>" +
+    "<label class=\"via-auto-rule\"><input type=\"checkbox\" data-rule=\"dormant\"" + (s.dormant ? " checked" : "") + "> Close if member is <strong>dormant (3+ weeks inactive)</strong></label>" +
+    "<div style=\"margin-top:12px\"><button id=\"viaClearAuto\" class=\"via-sync\" style=\"background:#7f1d1d\">Clear Auto-Closed History</button></div>" +
+    "</div>";
+  wrap.innerHTML = html;
+  wrap.querySelectorAll("input[data-rule]").forEach(cb => {
+    cb.addEventListener("change", async () => {
+      viaAutoSettings[cb.dataset.rule] = cb.checked;
+      await viaSave();
+    });
+  });
+  const clearBtn = V$("viaClearAuto");
+  if (clearBtn){
+    clearBtn.addEventListener("click", async () => {
+      if (!confirm("Clear all auto-closed history?")) return;
+      viaAutoClosed = [];
+      await viaSave();
+      renderViaList();
+    });
+  }
+}
+
+/* ===== Override reason modal ===== */
+const VIA_OVERRIDE_REASONS = [
+  "OCR mismatch",
+  "Friend / Family",
+  "Employee",
+  "Customer called ahead",
+  "Low usage - not suspicious",
+  "Known abuser",
+  "Cancelled member",
+  "Stolen plate",
+  "Other"
+];
+
+function isOverride(e, actionKind){
+  const rec = recommend(e);
+  if (actionKind === "trigger" && (rec.verdict === "DO NOT TRIGGER" || rec.verdict === "LET SLIDE")) return true;
+  if (actionKind === "close" && rec.verdict === "TRIGGER") return true;
+  return false;
+}
+
+function showReasonModal(e, actionKind){
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "via-overlay";
+    const rec = recommend(e);
+    let html = "<div class=\"via-reason-modal\">" +
+      "<h3>Override: Sidecar said " + vEsc(rec.verdict) + "</h3>" +
+      "<p>You chose to <strong>" + (actionKind === "trigger" ? "Trigger" : "Close") + "</strong>. Why?</p>";
+    VIA_OVERRIDE_REASONS.forEach((r, i) => {
+      html += "<label class=\"via-reason-opt\"><input type=\"radio\" name=\"viaReason\" value=\"" + vEsc(r) + "\"" + (i === 0 ? " checked" : "") + "> " + vEsc(r) + "</label>";
+    });
+    html += "<div class=\"via-reason-actions\">" +
+      "<button class=\"via-trigger\" id=\"viaReasonOk\">Confirm</button>" +
+      "<button class=\"via-close-ex\" id=\"viaReasonCancel\" style=\"background:#334155\">Cancel</button>" +
+      "</div></div>";
+    overlay.innerHTML = html;
+    document.body.appendChild(overlay);
+    V$("viaReasonOk").addEventListener("click", () => {
+      const sel = overlay.querySelector("input[name='viaReason']:checked");
+      document.body.removeChild(overlay);
+      resolve(sel ? sel.value : "Other");
+    });
+    V$("viaReasonCancel").addEventListener("click", () => {
+      document.body.removeChild(overlay);
+      resolve(null);
+    });
+  });
+}
+
+/* ===== Actions ===== */
 async function viaAction(id, kind, btn){
   const e = viaData[id];
   if (!e) return;
   const actionId = kind === "trigger" ? e.triggerId : e.closeId;
   if (!actionId) return;
-  const label = kind === "trigger" ? "TRIGGER the exception" : "CLOSE the exception";
-  if (!confirm("Are you sure you want to " + label + " for " + e.firstName + " " + e.lastName + "? This happens on Dencar immediately.")) return;
+
+  /* Check for override — show reason modal instead of plain confirm */
+  let overrideReason = null;
+  if (isOverride(e, kind)){
+    overrideReason = await showReasonModal(e, kind);
+    if (overrideReason === null) return; /* cancelled */
+  } else {
+    const label = kind === "trigger" ? "TRIGGER the exception" : "CLOSE the exception";
+    if (!confirm("Are you sure you want to " + label + " for " + e.firstName + " " + e.lastName + "? This happens on Dencar immediately.")) return;
+  }
+
   btn.disabled = true;
   btn.textContent = "Working...";
   try {
@@ -196,12 +523,14 @@ async function viaAction(id, kind, btn){
     const method = kind === "trigger" ? "POST" : "DELETE";
     const res = await fetch(VBASE + "/consumerpassexceptions/" + path + "/" + actionId + "/", {method: method, credentials: "include"});
     if (res.ok){
-      viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] " + (kind === "trigger" ? "Triggered" : "Closed") + " via Sidecar").trim();
-      try { await viaHistLog(e, kind === "trigger" ? "trigger" : "close"); } catch(_){}
+      viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] " + (kind === "trigger" ? "Triggered" : "Closed") + " via Sidecar" + (overrideReason ? " (reason: " + overrideReason + ")" : "")).trim();
+      try { await viaHistLog(e, kind === "trigger" ? "trigger" : "close", overrideReason); } catch(_){}
       delete viaData[id];
       await viaSave();
       renderViaList();
       V$("viaStatus").textContent = (kind === "trigger" ? "Exception triggered." : "Exception closed.");
+      /* Re-sync to pick up any new exceptions */
+      setTimeout(() => viaSync(), 600);
     } else {
       btn.disabled = false;
       btn.textContent = kind === "trigger" ? "Trigger Exception" : "Close Exception";
@@ -214,12 +543,64 @@ async function viaAction(id, kind, btn){
   }
 }
 
+/* Close multiple grouped exceptions sequentially */
+async function viaCloseGroup(ids, btn){
+  if (!ids.length) return;
+  const first = viaData[ids[0]];
+  if (!first) return;
+
+  /* Check for override on the primary entry */
+  let overrideReason = null;
+  if (isOverride(first, "close")){
+    overrideReason = await showReasonModal(first, "close");
+    if (overrideReason === null) return;
+  } else {
+    const label = ids.length > 1
+      ? "CLOSE " + ids.length + " exceptions"
+      : "CLOSE the exception";
+    if (!confirm("Are you sure you want to " + label + " for " + first.firstName + " " + first.lastName + "? This happens on Dencar immediately.")) return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Closing...";
+  let ok = 0;
+  let fail = 0;
+  for (const id of ids){
+    const e = viaData[id];
+    if (!e || !e.closeId) continue;
+    try {
+      const res = await fetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
+      if (res.ok){
+        viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] Closed via Sidecar" + (overrideReason ? " (reason: " + overrideReason + ")" : "")).trim();
+        try { await viaHistLog(e, "close", overrideReason); } catch(_){}
+        delete viaData[id];
+        ok++;
+      } else { fail++; }
+    } catch(_){ fail++; }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  await viaSave();
+  renderViaList();
+  V$("viaStatus").textContent = "Closed " + ok + " exception" + (ok !== 1 ? "s" : "") + (fail ? ", " + fail + " failed" : "") + ".";
+  /* Re-sync */
+  setTimeout(() => viaSync(), 600);
+}
+
 function bindZoom(){
   let z = document.getElementById("viaZoom");
   if (!z){ z = document.createElement("img"); z.id = "viaZoom"; z.style.display = "none"; document.body.appendChild(z); }
   document.querySelectorAll(".via-photos img").forEach(img => {
     img.addEventListener("mouseenter", () => { z.src = img.src; z.style.display = "block"; });
-    img.addEventListener("mousemove", (ev) => { z.style.left = Math.min(ev.pageX + 24, window.scrollX + window.innerWidth - 1220) + "px"; z.style.top = (ev.pageY - 100) + "px"; });
+    img.addEventListener("mousemove", (ev) => {
+      z.style.left = Math.min(ev.pageX + 24, window.scrollX + window.innerWidth - 1220) + "px";
+      /* Flip upward if zoom would overflow bottom of viewport */
+      const zh = z.offsetHeight || z.naturalHeight || 400;
+      if (ev.clientY - 100 + zh > window.innerHeight){
+        z.style.top = (ev.pageY - zh + 50) + "px";
+      } else {
+        z.style.top = (ev.pageY - 100) + "px";
+      }
+    });
     img.addEventListener("mouseleave", () => { z.style.display = "none"; });
   });
 }
@@ -283,8 +664,9 @@ async function viaHistAll(){
   return o[VIA_HIST_KEY] || [];
 }
 
-async function viaHistLog(e, action){
+async function viaHistLog(e, action, overrideReason){
   const rec = { ts: Date.now(), action: action };
+  if (overrideReason) rec.overrideReason = overrideReason;
   for (const k in e){
     const v = e[k];
     if (v == null) continue;
@@ -321,7 +703,26 @@ async function renderViaHistory(){
       ".via-hist-trigger{color:#ff6b6b;font-weight:600}" +
       ".via-hist-close{color:#4ade80;font-weight:600}" +
       ".via-hist-summary{margin:6px 0;opacity:.75;font-size:13px}" +
-      ".via-hist-empty{opacity:.7;font-size:13px;margin:8px 0}";
+      ".via-hist-empty{opacity:.7;font-size:13px;margin:8px 0}" +
+      /* Tab bar styles */
+      ".via-tab-bar{display:flex;gap:4px;margin-bottom:12px}" +
+      ".via-tab{padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#1e293b;color:#8fa3c0;cursor:pointer;font-size:13px;font-weight:600}" +
+      ".via-tab.active{background:#182640;color:#fff}" +
+      ".via-instance-badge{background:#3b82f6;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700}" +
+      /* Auto settings styles */
+      ".via-auto-settings{background:#182640;border-radius:10px;padding:20px}" +
+      ".via-auto-settings h3{margin:0 0 8px;font-size:16px}" +
+      ".via-auto-desc{color:#8fa3c0;font-size:13px;margin-bottom:14px}" +
+      ".via-auto-rule{display:block;padding:8px 0;font-size:14px;cursor:pointer}" +
+      ".via-auto-rule input{margin-right:10px}" +
+      /* Override reason modal */
+      ".via-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center}" +
+      ".via-reason-modal{background:#1e293b;border-radius:12px;padding:24px;max-width:400px;width:90%}" +
+      ".via-reason-modal h3{margin:0 0 8px;font-size:16px}" +
+      ".via-reason-modal p{color:#8fa3c0;font-size:13px;margin-bottom:12px}" +
+      ".via-reason-opt{display:block;padding:6px 0;font-size:14px;cursor:pointer}" +
+      ".via-reason-opt input{margin-right:10px}" +
+      ".via-reason-actions{display:flex;gap:8px;margin-top:16px}";
     document.head.appendChild(st);
   }
   let box = document.getElementById("viaHistBox");
@@ -343,13 +744,14 @@ async function renderViaHistory(){
   if (!hist.length){
     html += "<div class='via-hist-empty'>No decisions logged yet. The next trigger or close will appear here.</div>";
   } else {
-    html += "<table class='via-hist'><tr><th>When</th><th>Member</th><th>Action</th><th>Sidecar said</th><th>Times seen</th></tr>";
+    html += "<table class='via-hist'><tr><th>When</th><th>Member</th><th>Action</th><th>Sidecar said</th><th>Override reason</th><th>Times seen</th></tr>";
     hist.slice(0, 150).forEach(h => {
       const n = ((h.firstName || "") + " " + (h.lastName || "")).trim() || "Unknown";
       html += "<tr><td>" + new Date(h.ts).toLocaleString() + "</td>" +
         "<td>" + viaHistEsc(n) + "</td>" +
         "<td class='via-hist-" + h.action + "'>" + (h.action === "trigger" ? "Triggered" : "Closed") + "</td>" +
         "<td>" + (h.rec ? viaHistEsc(h.rec) : "&ndash;") + "</td>" +
+        "<td>" + (h.overrideReason ? viaHistEsc(h.overrideReason) : "&ndash;") + "</td>" +
         "<td>" + byName[n] + "</td></tr>";
     });
     html += "</table>";
