@@ -4,7 +4,7 @@ let consumers = {};
 
 function cEsc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 function cNorm(s){ return (s || "").toLowerCase().replace(/[^a-z]/g, ""); }
-function cFmtDate(t){ if (!t) return "--"; const d = new Date(t); return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear(); }
+function cFmtDate(t){ if (!t) return "--"; try { const d = new Date(t); if (isNaN(d.getTime())) return "--"; return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear(); } catch(e){ return "--"; } }
 
 async function consLoad(){
   const st = await chrome.storage.local.get(["consumers"]);
@@ -269,8 +269,8 @@ function renderConsumers(){
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await consLoad();
-  renderConsumers();
   C$("consSyncBtn").addEventListener("click", consSync);
   C$("consSort").addEventListener("change", renderConsumers);
+  await consLoad();
+  try { renderConsumers(); } catch(e){ console.warn("renderConsumers failed:", e); }
 });
