@@ -19,43 +19,43 @@ const WASH_TIERS_MORE = [
   {name:'Other 2',        id:'98112523-6820-4528-a6be-89cb8fc195f9'}
 ];
 
-let codesCache = [];
-let codesLoaded = false;
+var codesCache = [];
+var codesInited = false;
 
 /* ── helpers ── */
 function cFmtDate(d){
-  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'),
-        dd=String(d.getDate()).padStart(2,'0');
+  var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'),
+      dd=String(d.getDate()).padStart(2,'0');
   return y+'-'+m+'-'+dd;
 }
 function cParseDate(s){
   if(!s || s==='N/A') return null;
   if(s.includes('/')){
-    const p=s.split('/'); return new Date(+p[2],+p[0]-1,+p[1]);
+    var p=s.split('/'); return new Date(+p[2],+p[0]-1,+p[1]);
   }
   return new Date(s);
 }
-function cAddMonths(d,n){ const r=new Date(d); r.setMonth(r.getMonth()+n); return r; }
+function cAddMonths(d,n){ var r=new Date(d); r.setMonth(r.getMonth()+n); return r; }
 
 /* ── fetch CSRF + CustomerId from Dencar page ── */
 async function cGetFormTokens(){
-  const resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true',
+  var resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true',
     {credentials:'include'});
-  const html = await resp.text();
-  const doc = new DOMParser().parseFromString(html,'text/html');
-  const createForm = doc.querySelector('form[action*="create"]');
-  const token = createForm ?
+  var html = await resp.text();
+  var doc = new DOMParser().parseFromString(html,'text/html');
+  var createForm = doc.querySelector('form[action*="create"]');
+  var token = createForm ?
     createForm.querySelector('input[name="__RequestVerificationToken"]')?.value : null;
-  const custId = doc.querySelector('input[name="CustomerId"]')?.value;
-  return {token, custId};
+  var custId = doc.querySelector('input[name="CustomerId"]')?.value;
+  return {token:token, custId:custId};
 }
 
 /* ── create a code on Dencar ── */
 async function cCreateCode(opts){
-  const {token, custId} = await cGetFormTokens();
-  if(!token||!custId) throw new Error('Could not get form tokens \u2014 are you logged in to Dencar?');
+  var tokens = await cGetFormTokens();
+  if(!tokens.token||!tokens.custId) throw new Error('Could not get form tokens \u2014 are you logged in to Dencar?');
 
-  let bottom, top;
+  var bottom, top;
   if(opts.code != null){
     bottom = String(opts.code);
     top = String(Number(opts.code)+1);
@@ -63,8 +63,8 @@ async function cCreateCode(opts){
     bottom = '1000000'; top = '99999999';
   }
 
-  const fd = new URLSearchParams();
-  fd.append('CustomerId', custId);
+  var fd = new URLSearchParams();
+  fd.append('CustomerId', tokens.custId);
   fd.append('BottomRange', bottom);
   fd.append('TopRange', top);
   fd.append('Count', '1');
@@ -75,17 +75,17 @@ async function cCreateCode(opts){
   fd.append('ProductTemplateId', opts.tierId);
   fd.append('UpgradePrompt', 'false');
   fd.append('UpgradeAmount', '0');
-  fd.append('__RequestVerificationToken', token);
+  fd.append('__RequestVerificationToken', tokens.token);
 
-  const resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/create/', {
+  var resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/create/', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body: fd.toString()
   });
 
-  const html = await resp.text();
-  const doc = new DOMParser().parseFromString(html,'text/html');
-  const codes = cParseCodesFromDoc(doc);
+  var html = await resp.text();
+  var doc = new DOMParser().parseFromString(html,'text/html');
+  var codes = cParseCodesFromDoc(doc);
 
   if(opts.code != null){
     return codes.find(function(c){return c.passCode === String(opts.code)}) || codes[0];
@@ -145,37 +145,19 @@ async function cFetchAllCodes(statusCb){
     page++;
   }
   codesCache = allCodes;
-  codesLoaded = true;
   return allCodes;
 }
 
-/* ── main render ── */
-async function codesRender(){
+/* ══════════════════════════════════════════════
+   INIT — runs once, builds static shell + events
+   ══════════════════════════════════════════════ */
+function codesInit(){
+  if(codesInited) return;
+  codesInited = true;
+
   var body = document.getElementById('codesBody');
   if(!body) return;
-  body.innerHTML = '<div id="codesStatus" style="color:#ffd166;min-height:18px;margin:10px 0">Loading codes...</div>';
 
-  try {
-    var codes = await cFetchAllCodes(function(msg){
-      var el = document.getElementById('codesStatus');
-      if(el) el.textContent = msg;
-    });
-
-    var h = '';
-    h += cRenderCreateForm();
-    h += cRenderMetrics(codes);
-    h += cRenderTimeToRedeem(codes);
-    h += cRenderTierBreakdown(codes);
-    h += cRenderList(codes);
-    body.innerHTML = h;
-    cBindEvents();
-  } catch(e){
-    body.innerHTML = '<div style="color:#f87171;margin:10px 0">Error loading codes: '+e.message+'</div>';
-  }
-}
-
-/* ── create form ── */
-function cRenderCreateForm(){
   var tierOpts = WASH_TIERS.map(function(t){
     return '<option value="'+t.id+'">'+t.name+'</option>';
   }).join('');
@@ -184,34 +166,30 @@ function cRenderCreateForm(){
   }).join('');
   var defExp = cFmtDate(cAddMonths(new Date(),3));
 
-  return '<h2>Generate Code</h2>'
+  body.innerHTML =
+  /* ── create form ── */
+  '<h2>Generate Code</h2>'
   +'<div class="card" style="margin-bottom:14px">'
   +'<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">'
-  /* code type */
   +'<div>'
   +'<label class="stat"><label>Code Type</label></label>'
   +'<div style="display:flex;gap:6px;margin-top:6px">'
   +'<button class="cTypeBtn active" data-type="random">Random</button>'
   +'<button class="cTypeBtn" data-type="custom" style="background:#182640">Custom</button>'
   +'</div></div>'
-  /* custom code input */
   +'<div id="cCustomWrap" style="display:none">'
   +'<label class="stat"><label>Code Number</label></label>'
   +'<input id="cCustomCode" type="number" min="1000000" max="99999998" placeholder="e.g. 5551234" class="c-input" style="margin-top:6px">'
   +'</div>'
-  /* label */
   +'<div>'
   +'<label class="stat"><label>Label</label></label>'
   +'<input id="cLabel" type="text" placeholder="e.g. John Smith" class="c-input" style="margin-top:6px;width:170px">'
   +'</div>'
-  /* tier */
   +'<div>'
   +'<label class="stat"><label>Wash Tier</label></label>'
   +'<select id="cTier" class="c-input" style="margin-top:6px">'
-  +tierOpts
-  +'<optgroup label="Other">'+moreOpts+'</optgroup>'
+  +tierOpts+'<optgroup label="Other">'+moreOpts+'</optgroup>'
   +'</select></div>'
-  /* expiration */
   +'<div>'
   +'<label class="stat"><label>Expiration</label></label>'
   +'<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'
@@ -223,14 +201,82 @@ function cRenderCreateForm(){
   +'</div>'
   +'<input id="cExpDate" type="date" value="'+defExp+'" class="c-input" style="margin-top:6px">'
   +'</div>'
-  /* generate button */
   +'<div><button id="cGenBtn" style="background:#16a34a;padding:10px 24px;font-size:15px;font-weight:600">Generate</button></div>'
   +'</div>'
   +'<div id="cResult" style="display:none;margin-top:12px;border-radius:8px;padding:10px 14px;font-size:14px"></div>'
-  +'</div>';
+  +'</div>'
+
+  /* ── data containers (updated without touching the form) ── */
+  +'<div id="cTilesWrap"></div>'
+  +'<div id="cRedeemWrap"></div>'
+  +'<div id="cTierWrap"></div>'
+
+  +'<h2>All Codes</h2>'
+  +'<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'
+  +'<button class="cFilterBtn active" data-filter="">All</button>'
+  +'<button class="cFilterBtn" data-filter="Active" style="background:#182640">Active</button>'
+  +'<button class="cFilterBtn" data-filter="Used" style="background:#182640">Redeemed</button>'
+  +'<button class="cFilterBtn" data-filter="Expired" style="background:#182640">Expired</button>'
+  +'<button id="cRefreshBtn" style="background:#182640;margin-left:auto">\u21BB Refresh</button>'
+  +'</div>'
+  +'<div id="cListWrap"></div>';
+
+  /* ── bind events once ── */
+  cBindEvents();
+
+  /* ── initial data load ── */
+  codesRefreshData();
 }
 
-/* ── metric tiles ── */
+/* ══════════════════════════════════════════════
+   REFRESH DATA — fetches codes, updates data containers only
+   ══════════════════════════════════════════════ */
+async function codesRefreshData(){
+  var status = document.getElementById('cListWrap');
+  if(status) status.innerHTML = '<div style="color:#ffd166;padding:8px">Loading codes...</div>';
+
+  try {
+    var codes = await cFetchAllCodes(function(msg){
+      if(status) status.innerHTML = '<div style="color:#ffd166;padding:8px">'+msg+'</div>';
+    });
+
+    /* update tiles */
+    var tw = document.getElementById('cTilesWrap');
+    if(tw) tw.innerHTML = cRenderMetrics(codes);
+
+    /* update time-to-redeem */
+    var rw = document.getElementById('cRedeemWrap');
+    if(rw) rw.innerHTML = cRenderTimeToRedeem(codes);
+
+    /* update tier breakdown */
+    var trw = document.getElementById('cTierWrap');
+    if(trw) trw.innerHTML = cRenderTierBreakdown(codes);
+
+    /* update filter button counts */
+    var ac = codes.filter(function(c){return c.state==='Active'}).length;
+    var uc = codes.filter(function(c){return c.state==='Used'}).length;
+    var ec = codes.filter(function(c){return c.state==='Expired'}).length;
+    document.querySelectorAll('.cFilterBtn').forEach(function(btn){
+      var f = btn.dataset.filter;
+      if(f==='') btn.textContent = 'All ('+codes.length+')';
+      else if(f==='Active') btn.textContent = 'Active ('+ac+')';
+      else if(f==='Used') btn.textContent = 'Redeemed ('+uc+')';
+      else if(f==='Expired') btn.textContent = 'Expired ('+ec+')';
+    });
+
+    /* update list with current filter */
+    var activeFilter = document.querySelector('.cFilterBtn.active');
+    var filter = activeFilter ? (activeFilter.dataset.filter || null) : null;
+    var lw = document.getElementById('cListWrap');
+    if(lw) lw.innerHTML = cBuildTable(codesCache, filter);
+
+  } catch(e){
+    if(status) status.innerHTML = '<div style="color:#f87171;padding:8px">Error: '+e.message+'</div>';
+  }
+}
+
+/* ── render helpers (return HTML strings) ── */
+
 function cRenderMetrics(codes){
   var total = codes.length;
   var active = codes.filter(function(c){return c.state==='Active'}).length;
@@ -261,7 +307,6 @@ function cRenderMetrics(codes){
     +'</div>';
 }
 
-/* ── time-to-redemption bars ── */
 function cRenderTimeToRedeem(codes){
   var buckets = [
     {label:'< 1 week', max:7, count:0},
@@ -296,11 +341,9 @@ function cRenderTimeToRedeem(codes){
       +b.count+' ('+pct+'%)</div></div></div>';
   });
 
-  return '<h2>Time to Redemption</h2>'
-    +'<div class="card">'+bars+'</div>';
+  return '<h2>Time to Redemption</h2><div class="card">'+bars+'</div>';
 }
 
-/* ── tier breakdown ── */
 function cRenderTierBreakdown(codes){
   var tierMap = {};
   codes.forEach(function(c){
@@ -318,40 +361,17 @@ function cRenderTierBreakdown(codes){
   keys.forEach(function(k){
     var d = tierMap[k];
     var rate = d.total>0 ? (d.redeemed/d.total*100).toFixed(0)+'%' : '0%';
-    rows += '<tr>'
-      +'<td>'+k+'</td>'
+    rows += '<tr><td>'+k+'</td>'
       +'<td style="text-align:center">'+d.total+'</td>'
       +'<td style="text-align:center">'+d.redeemed+'</td>'
-      +'<td style="text-align:center">'+rate+'</td>'
-      +'</tr>';
+      +'<td style="text-align:center">'+rate+'</td></tr>';
   });
 
   return '<h2>Codes by Wash Tier</h2>'
-    +'<table class="via">'
-    +'<thead><tr>'
-    +'<th>Tier</th>'
-    +'<th style="text-align:center">Total</th>'
-    +'<th style="text-align:center">Redeemed</th>'
-    +'<th style="text-align:center">Rate</th>'
+    +'<table class="via"><thead><tr>'
+    +'<th>Tier</th><th style="text-align:center">Total</th>'
+    +'<th style="text-align:center">Redeemed</th><th style="text-align:center">Rate</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>';
-}
-
-/* ── code list with filters ── */
-function cRenderList(codes){
-  var ac = codes.filter(function(c){return c.state==='Active'}).length;
-  var uc = codes.filter(function(c){return c.state==='Used'}).length;
-  var ec = codes.filter(function(c){return c.state==='Expired'}).length;
-
-  return '<h2>All Codes</h2>'
-    +'<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'
-    +'<button class="cFilterBtn active" data-filter="">All ('+codes.length+')</button>'
-    +'<button class="cFilterBtn" data-filter="Active" style="background:#182640">Active ('+ac+')</button>'
-    +'<button class="cFilterBtn" data-filter="Used" style="background:#182640">Redeemed ('+uc+')</button>'
-    +'<button class="cFilterBtn" data-filter="Expired" style="background:#182640">Expired ('+ec+')</button>'
-    +'<button id="cRefreshBtn" style="background:#182640;margin-left:auto">'
-    +'\u21BB Refresh</button>'
-    +'</div>'
-    +'<div id="cListWrap">'+cBuildTable(codesCache, null)+'</div>';
 }
 
 function cBuildTable(codes, filter){
@@ -365,13 +385,8 @@ function cBuildTable(codes, filter){
   });
 
   var t = '<table class="via"><thead><tr>'
-    +'<th>Code #</th>'
-    +'<th>Label</th>'
-    +'<th>Wash Tier</th>'
-    +'<th>Status</th>'
-    +'<th>Created</th>'
-    +'<th>Expires</th>'
-    +'<th>Redeemed</th>'
+    +'<th>Code #</th><th>Label</th><th>Wash Tier</th><th>Status</th>'
+    +'<th>Created</th><th>Expires</th><th>Redeemed</th>'
     +'</tr></thead><tbody>';
 
   list.forEach(function(c){
@@ -387,15 +402,13 @@ function cBuildTable(codes, filter){
       +'<td><span '+cls+'>'+lbl+'</span></td>'
       +'<td>'+(c.created||'')+'</td>'
       +'<td>'+(c.expDate||'')+'</td>'
-      +'<td>'+rd+'</td>'
-      +'</tr>';
+      +'<td>'+rd+'</td></tr>';
   });
 
-  t += '</tbody></table>';
-  return t;
+  return t+'</tbody></table>';
 }
 
-/* ── bind UI events ── */
+/* ── bind UI events (called once) ── */
 function cBindEvents(){
   /* code type toggle */
   document.querySelectorAll('.cTypeBtn').forEach(function(btn){
@@ -422,11 +435,11 @@ function cBindEvents(){
   });
 
   /* generate */
-  var genBtn = document.getElementById('cGenBtn');
-  if(genBtn) genBtn.addEventListener('click', async function(){
+  document.getElementById('cGenBtn').addEventListener('click', async function(){
+    var genBtn = document.getElementById('cGenBtn');
     var result = document.getElementById('cResult');
-    var isCustom = (document.querySelector('.cTypeBtn.active')||{}).dataset;
-    isCustom = isCustom && isCustom.type === 'custom';
+    var activeType = document.querySelector('.cTypeBtn.active');
+    var isCustom = activeType && activeType.dataset.type === 'custom';
     var label = document.getElementById('cLabel').value.trim();
     var tierId = document.getElementById('cTier').value;
     var expDate = document.getElementById('cExpDate').value;
@@ -459,11 +472,10 @@ function cBindEvents(){
           +(newCode.expDate||expDate);
       } else {
         result.style.background = '#14532d';
-        result.innerHTML = '\u2705 Code created. Refreshing list...';
+        result.innerHTML = '\u2705 Code created successfully.';
       }
       document.getElementById('cLabel').value = '';
-      codesLoaded = false;
-      setTimeout(codesRender, 800);
+      codesRefreshData();
     } catch(e){
       result.style.display = '';
       result.style.background = '#7f1d1d';
@@ -485,18 +497,17 @@ function cBindEvents(){
   });
 
   /* refresh */
-  var refBtn = document.getElementById('cRefreshBtn');
-  if(refBtn) refBtn.addEventListener('click', function(){
-    codesLoaded = false; codesRender();
+  document.getElementById('cRefreshBtn').addEventListener('click', function(){
+    codesRefreshData();
   });
 }
 
-/* ── auto-init when Codes page becomes visible ── */
+/* ── auto-init when Codes page first becomes visible ── */
 (function(){
   var pg = document.getElementById('page-codes');
   if(!pg) return;
   var obs = new MutationObserver(function(){
-    if(pg.classList.contains('active') && !codesLoaded) codesRender();
+    if(pg.classList.contains('active') && !codesInited) codesInit();
   });
   obs.observe(pg, {attributes:true, attributeFilter:['class']});
 })();
