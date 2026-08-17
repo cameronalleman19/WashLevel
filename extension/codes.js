@@ -46,7 +46,8 @@ async function cGetFormTokens(){
   var createForm = doc.querySelector('form[action*="create"]');
   var token = createForm ?
     createForm.querySelector('input[name="__RequestVerificationToken"]')?.value : null;
-  var custId = doc.querySelector('input[name="CustomerId"]')?.value;
+  var custId = '';
+  doc.querySelectorAll('input[name="CustomerId"]').forEach(function(el){ if(el.value) custId = el.value; });
   return {token:token, custId:custId};
 }
 
