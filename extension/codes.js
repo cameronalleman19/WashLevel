@@ -64,7 +64,7 @@ async function cCreateCode(opts){
     bottom = '1000000'; top = '99999999';
   }
 
-  var fd = new URLSearchParams();
+  var fd = new FormData();
   fd.append('CustomerId', tokens.custId);
   fd.append('BottomRange', bottom);
   fd.append('TopRange', top);
@@ -80,8 +80,7 @@ async function cCreateCode(opts){
 
   var resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/create/', {
     method:'POST', credentials:'include',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body: fd.toString()
+    body: fd
   });
 
   var html = await resp.text();
@@ -89,11 +88,16 @@ async function cCreateCode(opts){
   var codes = cParseCodesFromDoc(doc);
 
   if(opts.code != null){
-    return codes.find(function(c){return c.passCode === String(opts.code)}) || codes[0];
+    var found = codes.find(function(c){return c.passCode === String(opts.code)});
+    if(found) return found;
   }
   var gn = opts.groupName;
   var match = codes.filter(function(c){return c.groupName === gn});
-  return match[0] || codes[0];
+  if(match.length > 0) return match[0];
+  var oldIds = {};
+  codesCache.forEach(function(c){ oldIds[c.id] = true; });
+  var newCode = codes.find(function(c){ return !oldIds[c.id]; });
+  return newCode || null;
 }
 
 /* ── parse codes from a Dencar HTML document ── */
