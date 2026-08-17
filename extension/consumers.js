@@ -110,6 +110,18 @@ async function fetchVehicleCount(id){
   } catch(e){ return 1; }
 }
 
+async function fetchVehBatch(ids, fresh){
+  const B = 5;
+  for (let i = 0; i < ids.length; i += B){
+    const chunk = ids.slice(i, Math.min(i + B, ids.length));
+    const results = await Promise.all(chunk.map(id => fetchVehicleCount(id)));
+    chunk.forEach((id, j) => { fresh[id].veh = results[j]; });
+    const done = Math.min(i + B, ids.length);
+    C$("consStatus").textContent = "Fetching vehicle counts " + done + "/" + ids.length + "...";
+    if (done % 25 === 0){ consumers = fresh; await consSave(); }
+  }
+}
+
 async function consSync(){
   C$("consSyncBtn").disabled = true;
   C$("consStatus").textContent = "Loading consumer list...";
@@ -120,7 +132,7 @@ async function consSync(){
       const batch = await fetchConsumerPage(page);
       list.push.apply(list, batch);
       if (batch.length < 500) break;
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(r => setTimeout(r, 20));
     }
     if (!list.length){ C$("consStatus").textContent = "No consumers found - are you logged into Dencar?"; C$("consSyncBtn").disabled = false; return; }
     const stored = await chrome.storage.local.get(["washTiers", "plateVisits", "plateSiteMap", "lastPaymentSync"]);
@@ -151,11 +163,7 @@ async function consSync(){
           return (c.veh || 1) === 1 && ((c.lastWash > vehCut2) || (c.lastRenew > vehCut2) || (c.lastNew > vehCut2));
         });
         if (vehIds2.length){
-          for (let vi = 0; vi < vehIds2.length; vi++){
-            C$("consStatus").textContent = "Fetching vehicle count " + (vi + 1) + "/" + vehIds2.length + "...";
-            fresh[vehIds2[vi]].veh = await fetchVehicleCount(vehIds2[vi]);
-            await new Promise(r => setTimeout(r, 60));
-          }
+          await fetchVehBatch(vehIds2, fresh);
         }
         consumers = fresh;
         await consSave();
@@ -212,20 +220,22 @@ async function consSync(){
           c.others++;
         }
       }
+      /* Checkpoint every 25 pages to survive failures */
+      if (page % 25 === 0){
+        consumers = fresh;
+        await chrome.storage.local.set({consumers: consumers, washTiers: tiers, plateVisits: pv, plateSiteMap: psm});
+        C$("consStatus").textContent = "Checkpoint saved at page " + page + "...";
+      }
       if (batch.length < 500) break;
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(r => setTimeout(r, 20));
     }
     const vehCut = Date.now() - 45 * 86400000;
     const vehIds = Object.keys(fresh).filter(id => {
       const c = fresh[id];
-      return (c.lastWash > vehCut) || (c.lastRenew > vehCut) || (c.lastNew > vehCut);
+      return (c.veh || 1) === 1 && ((c.lastWash > vehCut) || (c.lastRenew > vehCut) || (c.lastNew > vehCut));
     });
     if (vehIds.length){
-      for (let vi = 0; vi < vehIds.length; vi++){
-        C$("consStatus").textContent = "Fetching vehicle count " + (vi + 1) + "/" + vehIds.length + "...";
-        fresh[vehIds[vi]].veh = await fetchVehicleCount(vehIds[vi]);
-        await new Promise(r => setTimeout(r, 60));
-      }
+      await fetchVehBatch(vehIds, fresh);
     }
     consumers = fresh;
     await chrome.storage.local.set({washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: endStr});
