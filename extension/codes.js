@@ -76,10 +76,19 @@ function cParseCodesFromDoc(doc){
 
 /* ── fetch a single page of codes ── */
 async function cFetchPage(page, extraParams){
-  var url = 'https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true'
-    +'&CurrentPage='+page+'&CustomerId='+encodeURIComponent(CUST_ID);
-  if(extraParams) url += extraParams;
-  var resp = await fetch(url, {credentials:'include'});
+  var filters = {
+    currentPage: page, itemsPerPage: '10',
+    CustomerId: CUST_ID, GroupName: '', WashCodeState: '',
+    PassCode: '', StartExpDate: '', EndExpDate: '',
+    StartRedeemDate: '', EndRedeemDate: '', ShowRedeemed: 'false'
+  };
+  if(extraParams && extraParams.GroupName) filters.GroupName = extraParams.GroupName;
+  if(extraParams && extraParams.PassCode) filters.PassCode = extraParams.PassCode;
+  var resp = await fetch('https://admin.dencar.sancsoft.net/BulkWashCodes/IndexFilterTable', {
+    method: 'POST', credentials: 'include',
+    headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: Object.keys(filters).map(function(k){return k+'='+encodeURIComponent(filters[k])}).join('&')
+  });
   var html = await resp.text();
   var doc = new DOMParser().parseFromString(html,'text/html');
   var codes = cParseCodesFromDoc(doc);
@@ -143,7 +152,7 @@ async function cCreateCode(opts){
     body: params
   });
   /* Quick lookup by GroupName to find new code */
-  var result = await cFetchPage(1, '&GroupName='+encodeURIComponent(opts.groupName));
+  var result = await cFetchPage(1, {GroupName: opts.groupName});
   var oldIds = {};
   codesCache.forEach(function(c){ oldIds[c.id] = true; });
   var newCode = null;
