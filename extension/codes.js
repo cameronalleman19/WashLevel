@@ -145,6 +145,14 @@ async function cFetchAllCodes(statusCb){
     });
     page++;
   }
+  /* deduplicate by UUID */
+  var seen = {};
+  allCodes = allCodes.filter(function(c){
+    var key = c.id || c.passCode;
+    if(seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
   codesCache = allCodes;
   return allCodes;
 }
