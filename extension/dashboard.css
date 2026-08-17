@@ -84,3 +84,6 @@ header h1{font-size:22px;margin:0;flex:1;}
 #consStatus{margin:10px 0;color:#ffd166;min-height:18px;}
 #consSort{background:#182640;color:#eaeef5;border:1px solid #2a3a58;border-radius:6px;padding:9px 12px;font-size:14px;margin-right:10px;}
 table.consumers td,table.consumers th{font-size:13px;}
+
+.c-input{background:#0d1524;color:#eaeef5;border:1px solid #2a3a58;border-radius:6px;padding:9px 12px;font-size:14px;font-family:system-ui,sans-serif;}
+.c-input:focus{outline:none;border-color:#1f4393;}

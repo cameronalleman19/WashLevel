@@ -53,7 +53,7 @@ async function cGetFormTokens(){
 /* ── create a code on Dencar ── */
 async function cCreateCode(opts){
   const {token, custId} = await cGetFormTokens();
-  if(!token||!custId) throw new Error('Could not get form tokens — are you logged in to Dencar?');
+  if(!token||!custId) throw new Error('Could not get form tokens \u2014 are you logged in to Dencar?');
 
   let bottom, top;
   if(opts.code != null){
@@ -88,20 +88,21 @@ async function cCreateCode(opts){
   const codes = cParseCodesFromDoc(doc);
 
   if(opts.code != null){
-    return codes.find(c => c.passCode === String(opts.code)) || codes[0];
+    return codes.find(function(c){return c.passCode === String(opts.code)}) || codes[0];
   }
-  const match = codes.filter(c => c.groupName === opts.groupName);
+  var gn = opts.groupName;
+  var match = codes.filter(function(c){return c.groupName === gn});
   return match[0] || codes[0];
 }
 
 /* ── parse codes from a Dencar HTML document ── */
 function cParseCodesFromDoc(doc){
-  const codes = [];
-  doc.querySelectorAll('[id^="BulkWashCodes-"]').forEach(panel => {
-    const code = {};
-    panel.querySelectorAll('strong').forEach(s => {
-      const lbl = s.textContent.trim();
-      const val = s.nextElementSibling ? s.nextElementSibling.textContent.trim() : '';
+  var codes = [];
+  doc.querySelectorAll('[id^="BulkWashCodes-"]').forEach(function(panel){
+    var code = {};
+    panel.querySelectorAll('strong').forEach(function(s){
+      var lbl = s.textContent.trim();
+      var val = s.nextElementSibling ? s.nextElementSibling.textContent.trim() : '';
       switch(lbl){
         case 'Id': code.id=val; break;
         case 'State': code.state=val; break;
@@ -112,10 +113,10 @@ function cParseCodesFromDoc(doc){
         case 'Product Template': code.template=val; break;
       }
     });
-    const uuid = panel.id.replace('BulkWashCodes-','');
-    const hdr = doc.querySelector('[data-bs-target="#BulkWashCodes-'+uuid+'"] span');
+    var uuid = panel.id.replace('BulkWashCodes-','');
+    var hdr = doc.querySelector('[data-bs-target="#BulkWashCodes-'+uuid+'"] span');
     if(hdr){
-      const parts = hdr.textContent.trim().split(' - ');
+      var parts = hdr.textContent.trim().split(' - ');
       code.groupName = parts[0] ? parts[0].trim() : '';
     }
     if(code.passCode) codes.push(code);
@@ -125,20 +126,20 @@ function cParseCodesFromDoc(doc){
 
 /* ── fetch ALL codes with pagination ── */
 async function cFetchAllCodes(statusCb){
-  const allCodes = [];
-  let page = 1, totalPages = 1;
+  var allCodes = [];
+  var page = 1, totalPages = 1;
 
   while(page <= totalPages){
     if(statusCb) statusCb('Loading page '+page+(totalPages>1?' of '+totalPages:'')+'...');
-    const url = 'https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true&CurrentPage='+page;
-    const resp = await fetch(url, {credentials:'include'});
-    const html = await resp.text();
-    const doc = new DOMParser().parseFromString(html,'text/html');
+    var url = 'https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true&CurrentPage='+page;
+    var resp = await fetch(url, {credentials:'include'});
+    var html = await resp.text();
+    var doc = new DOMParser().parseFromString(html,'text/html');
 
-    allCodes.push(...cParseCodesFromDoc(doc));
+    allCodes.push.apply(allCodes, cParseCodesFromDoc(doc));
 
-    doc.querySelectorAll('.pagination .pagination-page-btn').forEach(btn => {
-      const n = parseInt(btn.textContent.trim());
+    doc.querySelectorAll('.pagination .pagination-page-btn').forEach(function(btn){
+      var n = parseInt(btn.textContent.trim());
       if(!isNaN(n) && n > totalPages) totalPages = n;
     });
     page++;
@@ -150,17 +151,17 @@ async function cFetchAllCodes(statusCb){
 
 /* ── main render ── */
 async function codesRender(){
-  const body = document.getElementById('codesBody');
+  var body = document.getElementById('codesBody');
   if(!body) return;
-  body.innerHTML = '<p style="padding:12px">Loading codes...</p>';
+  body.innerHTML = '<div id="codesStatus" style="color:#ffd166;min-height:18px;margin:10px 0">Loading codes...</div>';
 
   try {
-    const codes = await cFetchAllCodes(function(msg){
-      const p = body.querySelector('p');
-      if(p) p.textContent = msg;
+    var codes = await cFetchAllCodes(function(msg){
+      var el = document.getElementById('codesStatus');
+      if(el) el.textContent = msg;
     });
 
-    let h = '';
+    var h = '';
     h += cRenderCreateForm();
     h += cRenderMetrics(codes);
     h += cRenderTimeToRedeem(codes);
@@ -169,73 +170,73 @@ async function codesRender(){
     body.innerHTML = h;
     cBindEvents();
   } catch(e){
-    body.innerHTML = '<p style="padding:12px;color:#f66">Error loading codes: '+e.message+'</p>';
+    body.innerHTML = '<div style="color:#f87171;margin:10px 0">Error loading codes: '+e.message+'</div>';
   }
 }
 
 /* ── create form ── */
 function cRenderCreateForm(){
-  const tierOpts = WASH_TIERS.map(function(t){
+  var tierOpts = WASH_TIERS.map(function(t){
     return '<option value="'+t.id+'">'+t.name+'</option>';
   }).join('');
-  const moreOpts = WASH_TIERS_MORE.map(function(t){
+  var moreOpts = WASH_TIERS_MORE.map(function(t){
     return '<option value="'+t.id+'">'+t.name+'</option>';
   }).join('');
-  const defExp = cFmtDate(cAddMonths(new Date(),3));
+  var defExp = cFmtDate(cAddMonths(new Date(),3));
 
-  return '<section class="summary" style="margin-bottom:16px">'
-  +'<h3>Generate Code</h3>'
+  return '<h2>Generate Code</h2>'
+  +'<div class="card" style="margin-bottom:14px">'
   +'<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">'
   /* code type */
   +'<div>'
-  +'<label style="display:block;font-size:.85em;margin-bottom:4px">Code Type</label>'
-  +'<div style="display:flex;gap:4px">'
-  +'<button class="cTypeBtn active" data-type="random" style="padding:6px 14px;border:1px solid #555;border-radius:4px;cursor:pointer;background:#335;color:#fff">Random</button>'
-  +'<button class="cTypeBtn" data-type="custom" style="padding:6px 14px;border:1px solid #555;border-radius:4px;cursor:pointer;background:transparent;color:#fff">Custom</button>'
+  +'<label class="stat"><label>Code Type</label></label>'
+  +'<div style="display:flex;gap:6px;margin-top:6px">'
+  +'<button class="cTypeBtn active" data-type="random">Random</button>'
+  +'<button class="cTypeBtn" data-type="custom" style="background:#182640">Custom</button>'
   +'</div></div>'
   /* custom code input */
   +'<div id="cCustomWrap" style="display:none">'
-  +'<label style="display:block;font-size:.85em;margin-bottom:4px">Code Number</label>'
-  +'<input id="cCustomCode" type="number" min="1000000" max="99999998" placeholder="e.g. 5551234" style="padding:6px;width:140px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#fff">'
+  +'<label class="stat"><label>Code Number</label></label>'
+  +'<input id="cCustomCode" type="number" min="1000000" max="99999998" placeholder="e.g. 5551234" class="c-input" style="margin-top:6px">'
   +'</div>'
   /* label */
   +'<div>'
-  +'<label style="display:block;font-size:.85em;margin-bottom:4px">Label</label>'
-  +'<input id="cLabel" type="text" placeholder="e.g. John Smith" style="padding:6px;width:160px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#fff">'
+  +'<label class="stat"><label>Label</label></label>'
+  +'<input id="cLabel" type="text" placeholder="e.g. John Smith" class="c-input" style="margin-top:6px;width:170px">'
   +'</div>'
   /* tier */
   +'<div>'
-  +'<label style="display:block;font-size:.85em;margin-bottom:4px">Wash Tier</label>'
-  +'<select id="cTier" style="padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#fff">'
+  +'<label class="stat"><label>Wash Tier</label></label>'
+  +'<select id="cTier" class="c-input" style="margin-top:6px">'
   +tierOpts
   +'<optgroup label="Other">'+moreOpts+'</optgroup>'
   +'</select></div>'
   /* expiration */
   +'<div>'
-  +'<label style="display:block;font-size:.85em;margin-bottom:4px">Expiration</label>'
-  +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
-  +'<button class="cExpBtn" data-months="1" style="padding:4px 10px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:transparent;color:#fff">1 mo</button>'
-  +'<button class="cExpBtn" data-months="2" style="padding:4px 10px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:transparent;color:#fff">2 mo</button>'
-  +'<button class="cExpBtn active" data-months="3" style="padding:4px 10px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:#335;color:#fff">3 mo</button>'
-  +'<button class="cExpBtn" data-months="12" style="padding:4px 10px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:transparent;color:#fff">1 yr</button>'
-  +'<button class="cExpBtn" data-months="120" style="padding:4px 10px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:transparent;color:#fff">No Exp</button>'
+  +'<label class="stat"><label>Expiration</label></label>'
+  +'<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'
+  +'<button class="cExpBtn" data-months="1" style="background:#182640;padding:6px 10px;font-size:13px">1 mo</button>'
+  +'<button class="cExpBtn" data-months="2" style="background:#182640;padding:6px 10px;font-size:13px">2 mo</button>'
+  +'<button class="cExpBtn active" data-months="3" style="padding:6px 10px;font-size:13px">3 mo</button>'
+  +'<button class="cExpBtn" data-months="12" style="background:#182640;padding:6px 10px;font-size:13px">1 yr</button>'
+  +'<button class="cExpBtn" data-months="120" style="background:#182640;padding:6px 10px;font-size:13px">No Exp</button>'
   +'</div>'
-  +'<input id="cExpDate" type="date" value="'+defExp+'" style="margin-top:4px;padding:4px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#fff">'
+  +'<input id="cExpDate" type="date" value="'+defExp+'" class="c-input" style="margin-top:6px">'
   +'</div>'
   /* generate button */
-  +'<button id="cGenBtn" style="padding:8px 20px;background:#4a6;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;align-self:flex-end">Generate</button>'
+  +'<div><button id="cGenBtn" style="background:#16a34a;padding:10px 24px;font-size:15px;font-weight:600">Generate</button></div>'
   +'</div>'
-  +'<div id="cResult" style="margin-top:8px;display:none;padding:8px 12px;border-radius:4px"></div>'
-  +'</section>';
+  +'<div id="cResult" style="display:none;margin-top:12px;border-radius:8px;padding:10px 14px;font-size:14px"></div>'
+  +'</div>';
 }
 
 /* ── metric tiles ── */
 function cRenderMetrics(codes){
-  const total = codes.length;
-  const active = codes.filter(function(c){return c.state==='Active'}).length;
-  const redeemed = codes.filter(function(c){return c.state==='Used'}).length;
-  const expired = codes.filter(function(c){return c.state==='Expired'}).length;
-  const rate = total>0 ? (redeemed/total*100).toFixed(1) : '0.0';
+  var total = codes.length;
+  var active = codes.filter(function(c){return c.state==='Active'}).length;
+  var redeemed = codes.filter(function(c){return c.state==='Used'}).length;
+  var expired = codes.filter(function(c){return c.state==='Expired'}).length;
+  var rate = total>0 ? (redeemed/total*100).toFixed(1) : '0.0';
 
   var redeemDays = [];
   codes.forEach(function(c){
@@ -248,25 +249,25 @@ function cRenderMetrics(codes){
     }
   });
   var avgDays = redeemDays.length>0 ?
-    (redeemDays.reduce(function(a,b){return a+b},0)/redeemDays.length).toFixed(0) : '--';
+    (redeemDays.reduce(function(a,b){return a+b},0)/redeemDays.length).toFixed(0) : '\u2014';
 
-  return '<section class="summary">'
-    +'<div class="tile"><strong>'+total+'</strong><span>Total Codes</span></div>'
-    +'<div class="tile"><strong>'+active+'</strong><span>Active</span></div>'
-    +'<div class="tile"><strong>'+redeemed+'</strong><span>Redeemed</span></div>'
-    +'<div class="tile"><strong>'+expired+'</strong><span>Expired</span></div>'
-    +'<div class="tile"><strong>'+rate+'%</strong><span>Redemption Rate</span></div>'
-    +'<div class="tile"><strong>'+avgDays+'</strong><span>Avg Days to Redeem</span></div>'
-    +'</section>';
+  return '<div class="summary">'
+    +'<div class="stat"><label>Total Codes</label><div>'+total+'</div></div>'
+    +'<div class="stat"><label>Active</label><div style="color:#4ade80">'+active+'</div></div>'
+    +'<div class="stat"><label>Redeemed</label><div style="color:#60a5fa">'+redeemed+'</div></div>'
+    +'<div class="stat"><label>Expired</label><div style="color:#f87171">'+expired+'</div></div>'
+    +'<div class="stat"><label>Redemption Rate</label><div>'+rate+'%</div></div>'
+    +'<div class="stat"><label>Avg Days to Redeem</label><div>'+avgDays+'</div></div>'
+    +'</div>';
 }
 
 /* ── time-to-redemption bars ── */
 function cRenderTimeToRedeem(codes){
   var buckets = [
     {label:'< 1 week', max:7, count:0},
-    {label:'1-2 weeks', max:14, count:0},
-    {label:'2-4 weeks', max:28, count:0},
-    {label:'1-3 months', max:90, count:0},
+    {label:'1\u20132 weeks', max:14, count:0},
+    {label:'2\u20134 weeks', max:28, count:0},
+    {label:'1\u20133 months', max:90, count:0},
     {label:'3+ months', max:Infinity, count:0}
   ];
   var total = 0;
@@ -285,18 +286,18 @@ function cRenderTimeToRedeem(codes){
 
   var bars = '';
   buckets.forEach(function(b){
-    var pct = (b.count/total*100).toFixed(0);
-    var w = Math.max(b.count/total*100, 2);
-    bars += '<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
-      +'<span style="width:90px;font-size:.85em;text-align:right">'+b.label+'</span>'
-      +'<div style="flex:1;background:#222;border-radius:3px;height:18px">'
-      +'<div style="width:'+w+'%;background:#4a8;border-radius:3px;height:100%;min-width:24px;'
-      +'display:flex;align-items:center;padding-left:6px;font-size:.75em;color:#fff">'
+    var pct = total>0 ? (b.count/total*100).toFixed(0) : '0';
+    var w = Math.max(b.count/total*100, 1);
+    bars += '<div style="display:flex;align-items:center;gap:10px;margin:6px 0">'
+      +'<span style="width:100px;font-size:13px;color:#8fa3c0;text-align:right">'+b.label+'</span>'
+      +'<div style="flex:1;background:#10192b;border-radius:6px;height:22px">'
+      +'<div style="width:'+w+'%;background:#1f4393;border-radius:6px;height:100%;min-width:30px;'
+      +'display:flex;align-items:center;padding-left:8px;font-size:12px;color:#eaeef5;font-weight:600">'
       +b.count+' ('+pct+'%)</div></div></div>';
   });
 
-  return '<section style="margin:12px 0">'
-    +'<h3>Time to Redemption</h3>'+bars+'</section>';
+  return '<h2>Time to Redemption</h2>'
+    +'<div class="card">'+bars+'</div>';
 }
 
 /* ── tier breakdown ── */
@@ -318,22 +319,21 @@ function cRenderTierBreakdown(codes){
     var d = tierMap[k];
     var rate = d.total>0 ? (d.redeemed/d.total*100).toFixed(0)+'%' : '0%';
     rows += '<tr>'
-      +'<td style="padding:4px 8px;border-bottom:1px solid #333">'+k+'</td>'
-      +'<td style="padding:4px 8px;border-bottom:1px solid #333;text-align:center">'+d.total+'</td>'
-      +'<td style="padding:4px 8px;border-bottom:1px solid #333;text-align:center">'+d.redeemed+'</td>'
-      +'<td style="padding:4px 8px;border-bottom:1px solid #333;text-align:center">'+rate+'</td>'
+      +'<td>'+k+'</td>'
+      +'<td style="text-align:center">'+d.total+'</td>'
+      +'<td style="text-align:center">'+d.redeemed+'</td>'
+      +'<td style="text-align:center">'+rate+'</td>'
       +'</tr>';
   });
 
-  return '<section style="margin:12px 0">'
-    +'<h3>Codes by Wash Tier</h3>'
-    +'<table style="border-collapse:collapse;font-size:.9em">'
+  return '<h2>Codes by Wash Tier</h2>'
+    +'<table class="via">'
     +'<thead><tr>'
-    +'<th style="padding:4px 8px;border-bottom:1px solid #555;text-align:left">Tier</th>'
-    +'<th style="padding:4px 8px;border-bottom:1px solid #555;text-align:center">Total</th>'
-    +'<th style="padding:4px 8px;border-bottom:1px solid #555;text-align:center">Redeemed</th>'
-    +'<th style="padding:4px 8px;border-bottom:1px solid #555;text-align:center">Rate</th>'
-    +'</tr></thead><tbody>'+rows+'</tbody></table></section>';
+    +'<th>Tier</th>'
+    +'<th style="text-align:center">Total</th>'
+    +'<th style="text-align:center">Redeemed</th>'
+    +'<th style="text-align:center">Rate</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 /* ── code list with filters ── */
@@ -342,23 +342,21 @@ function cRenderList(codes){
   var uc = codes.filter(function(c){return c.state==='Used'}).length;
   var ec = codes.filter(function(c){return c.state==='Expired'}).length;
 
-  return '<section style="margin:12px 0">'
-    +'<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">'
-    +'<h3 style="margin:0">All Codes</h3>'
-    +'<button class="cFilterBtn active" data-filter="" style="padding:4px 12px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:#335;color:#fff">All ('+codes.length+')</button>'
-    +'<button class="cFilterBtn" data-filter="Active" style="padding:4px 12px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:transparent;color:#fff">Active ('+ac+')</button>'
-    +'<button class="cFilterBtn" data-filter="Used" style="padding:4px 12px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:transparent;color:#fff">Redeemed ('+uc+')</button>'
-    +'<button class="cFilterBtn" data-filter="Expired" style="padding:4px 12px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;background:transparent;color:#fff">Expired ('+ec+')</button>'
-    +'<button id="cRefreshBtn" style="padding:4px 12px;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;margin-left:auto;background:transparent;color:#fff">'
-    +String.fromCharCode(8635)+' Refresh</button>'
+  return '<h2>All Codes</h2>'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'
+    +'<button class="cFilterBtn active" data-filter="">All ('+codes.length+')</button>'
+    +'<button class="cFilterBtn" data-filter="Active" style="background:#182640">Active ('+ac+')</button>'
+    +'<button class="cFilterBtn" data-filter="Used" style="background:#182640">Redeemed ('+uc+')</button>'
+    +'<button class="cFilterBtn" data-filter="Expired" style="background:#182640">Expired ('+ec+')</button>'
+    +'<button id="cRefreshBtn" style="background:#182640;margin-left:auto">'
+    +'\u21BB Refresh</button>'
     +'</div>'
-    +'<div id="cListWrap">'+cBuildTable(codesCache, null)+'</div>'
-    +'</section>';
+    +'<div id="cListWrap">'+cBuildTable(codesCache, null)+'</div>';
 }
 
 function cBuildTable(codes, filter){
   var list = filter ? codes.filter(function(c){return c.state===filter}) : codes.slice();
-  if(list.length===0) return '<p style="color:#888;padding:8px">No codes found.</p>';
+  if(list.length===0) return '<div class="card" style="color:#8fa3c0">No codes found.</div>';
 
   list.sort(function(a,b){
     var da=cParseDate(a.created), db=cParseDate(b.created);
@@ -366,28 +364,30 @@ function cBuildTable(codes, filter){
     return db-da;
   });
 
-  var t = '<table style="width:100%;border-collapse:collapse;font-size:.9em"><thead><tr>'
-    +'<th style="text-align:left;padding:6px;border-bottom:1px solid #444">Code #</th>'
-    +'<th style="text-align:left;padding:6px;border-bottom:1px solid #444">Label</th>'
-    +'<th style="text-align:left;padding:6px;border-bottom:1px solid #444">Wash Tier</th>'
-    +'<th style="text-align:left;padding:6px;border-bottom:1px solid #444">Status</th>'
-    +'<th style="text-align:left;padding:6px;border-bottom:1px solid #444">Created</th>'
-    +'<th style="text-align:left;padding:6px;border-bottom:1px solid #444">Expires</th>'
-    +'<th style="text-align:left;padding:6px;border-bottom:1px solid #444">Redeemed</th>'
+  var t = '<table class="via"><thead><tr>'
+    +'<th>Code #</th>'
+    +'<th>Label</th>'
+    +'<th>Wash Tier</th>'
+    +'<th>Status</th>'
+    +'<th>Created</th>'
+    +'<th>Expires</th>'
+    +'<th>Redeemed</th>'
     +'</tr></thead><tbody>';
 
   list.forEach(function(c){
-    var col = c.state==='Active'?'#4a8' : c.state==='Used'?'#48a' : '#a44';
-    var lbl = c.state==='Used'?'Redeemed':c.state;
+    var lbl = c.state==='Used' ? 'Redeemed' : c.state;
+    var cls = c.state==='Used' ? 'style="color:#60a5fa;font-weight:700"' :
+              c.state==='Active' ? 'style="color:#4ade80;font-weight:700"' :
+              'style="color:#f87171;font-weight:700"';
     var rd = (c.redeemDate && c.redeemDate!=='N/A') ? c.redeemDate : '';
     t += '<tr>'
-      +'<td style="padding:6px;border-bottom:1px solid #333;font-family:monospace">'+c.passCode+'</td>'
-      +'<td style="padding:6px;border-bottom:1px solid #333">'+(c.groupName||'')+'</td>'
-      +'<td style="padding:6px;border-bottom:1px solid #333">'+(c.template||'')+'</td>'
-      +'<td style="padding:6px;border-bottom:1px solid #333"><span style="color:'+col+';font-weight:bold">'+lbl+'</span></td>'
-      +'<td style="padding:6px;border-bottom:1px solid #333">'+(c.created||'')+'</td>'
-      +'<td style="padding:6px;border-bottom:1px solid #333">'+(c.expDate||'')+'</td>'
-      +'<td style="padding:6px;border-bottom:1px solid #333">'+rd+'</td>'
+      +'<td style="font-family:monospace;font-size:14px;letter-spacing:.5px">'+c.passCode+'</td>'
+      +'<td>'+(c.groupName||'')+'</td>'
+      +'<td>'+(c.template||'')+'</td>'
+      +'<td><span '+cls+'>'+lbl+'</span></td>'
+      +'<td>'+(c.created||'')+'</td>'
+      +'<td>'+(c.expDate||'')+'</td>'
+      +'<td>'+rd+'</td>'
       +'</tr>';
   });
 
@@ -401,9 +401,9 @@ function cBindEvents(){
   document.querySelectorAll('.cTypeBtn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('.cTypeBtn').forEach(function(b){
-        b.classList.remove('active'); b.style.background='transparent';
+        b.classList.remove('active'); b.style.background='#182640';
       });
-      btn.classList.add('active'); btn.style.background='#335';
+      btn.classList.add('active'); btn.style.background='';
       document.getElementById('cCustomWrap').style.display =
         btn.dataset.type==='custom' ? '' : 'none';
     });
@@ -413,9 +413,9 @@ function cBindEvents(){
   document.querySelectorAll('.cExpBtn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('.cExpBtn').forEach(function(b){
-        b.classList.remove('active'); b.style.background='transparent';
+        b.classList.remove('active'); b.style.background='#182640';
       });
-      btn.classList.add('active'); btn.style.background='#335';
+      btn.classList.add('active'); btn.style.background='';
       var months = parseInt(btn.dataset.months);
       document.getElementById('cExpDate').value = cFmtDate(cAddMonths(new Date(), months));
     });
@@ -451,23 +451,23 @@ function cBindEvents(){
       });
       result.style.display = '';
       if(newCode && newCode.passCode){
-        result.style.background = '#1a3a1a';
-        result.innerHTML = String.fromCharCode(9989)+' Code generated: '
-          +'<strong style="font-size:1.3em;font-family:monospace;letter-spacing:1px">'
-          +newCode.passCode+'</strong> '+String.fromCharCode(8212)+' '
-          +(newCode.template||'')+' '+String.fromCharCode(8212)+' Expires '
+        result.style.background = '#14532d';
+        result.innerHTML = '\u2705 Code generated: '
+          +'<strong style="font-size:20px;font-family:monospace;letter-spacing:1px">'
+          +newCode.passCode+'</strong> \u2014 '
+          +(newCode.template||'')+' \u2014 Expires '
           +(newCode.expDate||expDate);
       } else {
-        result.style.background = '#1a3a1a';
-        result.innerHTML = String.fromCharCode(9989)+' Code created. Refreshing list...';
+        result.style.background = '#14532d';
+        result.innerHTML = '\u2705 Code created. Refreshing list...';
       }
       document.getElementById('cLabel').value = '';
       codesLoaded = false;
       setTimeout(codesRender, 800);
     } catch(e){
       result.style.display = '';
-      result.style.background = '#3a1a1a';
-      result.innerHTML = String.fromCharCode(10060)+' Error: '+e.message;
+      result.style.background = '#7f1d1d';
+      result.innerHTML = '\u274C Error: '+e.message;
     }
     genBtn.disabled = false; genBtn.textContent = 'Generate';
   });
@@ -476,9 +476,9 @@ function cBindEvents(){
   document.querySelectorAll('.cFilterBtn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('.cFilterBtn').forEach(function(b){
-        b.classList.remove('active'); b.style.background='transparent';
+        b.classList.remove('active'); b.style.background='#182640';
       });
-      btn.classList.add('active'); btn.style.background='#335';
+      btn.classList.add('active'); btn.style.background='';
       document.getElementById('cListWrap').innerHTML =
         cBuildTable(codesCache, btn.dataset.filter || null);
     });
