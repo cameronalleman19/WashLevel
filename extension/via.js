@@ -753,6 +753,26 @@ async function renderViaHistory(){
       ".via-tab{padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#1e293b;color:#8fa3c0;cursor:pointer;font-size:13px;font-weight:600}" +
       ".via-tab.active{background:#182640;color:#fff}" +
       ".via-instance-badge{background:#3b82f6;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700}" +
+      /* Decision history styles */
+      ".dh-wrap{background:#0f172a;border-radius:10px;padding:16px;margin-top:8px}" +
+      ".dh-summary{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}" +
+      ".dh-stat{padding:4px 12px;border-radius:8px;font-size:13px;font-weight:600}" +
+      ".dh-stat-total{background:#1e293b;color:#fff}" +
+      ".dh-stat-trig{background:#7f1d1d;color:#fca5a5}" +
+      ".dh-stat-close{background:#14532d;color:#4ade80}" +
+      ".dh-stat-override{background:#78350f;color:#fbbf24}" +
+      ".dh-table{border-collapse:collapse;width:100%}" +
+      ".dh-table th{text-align:left;padding:6px 10px;font-size:12px;color:#64748b;border-bottom:1px solid #1e293b;font-weight:600;text-transform:uppercase;letter-spacing:.5px}" +
+      ".dh-table td{padding:8px 10px;font-size:13px;border-bottom:1px solid #1e293b;color:#cbd5e1}" +
+      ".dh-name{color:#fff;font-weight:600}" +
+      ".dh-act-trigger{color:#f87171;font-weight:600}" +
+      ".dh-act-close{color:#4ade80;font-weight:600}" +
+      ".dh-reason{color:#fbbf24;font-size:12px}" +
+      ".dh-rec{color:#94a3b8;font-size:12px;max-width:200px}" +
+      ".dh-seen{color:#64748b;text-align:center}" +
+      ".dh-empty{color:#475569;font-size:13px;padding:20px 0;text-align:center}" +
+      ".dh-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}" +
+      ".dh-title{font-size:16px;font-weight:700;color:#fff}" +
       /* Auto-closed list styles */
       ".ac-summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}" +
       ".ac-total{font-size:15px;font-weight:700;color:#fff}" +
@@ -795,28 +815,36 @@ async function renderViaHistory(){
   const hist = (await viaHistAll()).slice().reverse();
   const trig = hist.filter(h => h.action === "trigger").length;
   const closed = hist.length - trig;
+  const overrides = hist.filter(h => h.overrideReason).length;
   const byName = {};
   hist.forEach(h => {
     const n = ((h.firstName || "") + " " + (h.lastName || "")).trim() || "Unknown";
     byName[n] = (byName[n] || 0) + 1;
   });
-  let html = "<h2>VIA decision history</h2>";
-  html += "<div class='via-hist-summary'>" + hist.length + " decisions logged &mdash; " + trig + " triggered, " + closed + " closed</div>";
+  let html = "<div class=\"dh-wrap\">";
+  html += "<div class=\"dh-header\"><span class=\"dh-title\">Decision History</span></div>";
+  html += "<div class=\"dh-summary\">" +
+    "<span class=\"dh-stat dh-stat-total\">" + hist.length + " decisions</span>" +
+    "<span class=\"dh-stat dh-stat-trig\">" + trig + " triggered</span>" +
+    "<span class=\"dh-stat dh-stat-close\">" + closed + " closed</span>" +
+    (overrides ? "<span class=\"dh-stat dh-stat-override\">" + overrides + " overrides</span>" : "") +
+    "</div>";
   if (!hist.length){
-    html += "<div class='via-hist-empty'>No decisions logged yet. The next trigger or close will appear here.</div>";
+    html += "<div class=\"dh-empty\">No decisions logged yet. The next trigger or close will appear here.</div>";
   } else {
-    html += "<table class='via-hist'><tr><th>When</th><th>Member</th><th>Action</th><th>Sidecar said</th><th>Override reason</th><th>Times seen</th></tr>";
+    html += "<table class=\"dh-table\"><tr><th>When</th><th>Member</th><th>Action</th><th>Sidecar Said</th><th>Override Reason</th><th style=\"text-align:center\">Seen</th></tr>";
     hist.slice(0, 150).forEach(h => {
       const n = ((h.firstName || "") + " " + (h.lastName || "")).trim() || "Unknown";
-      html += "<tr><td>" + new Date(h.ts).toLocaleString() + "</td>" +
-        "<td>" + viaHistEsc(n) + "</td>" +
-        "<td class='via-hist-" + h.action + "'>" + (h.action === "trigger" ? "Triggered" : "Closed") + "</td>" +
-        "<td>" + (h.rec ? viaHistEsc(h.rec) : "&ndash;") + "</td>" +
-        "<td>" + (h.overrideReason ? viaHistEsc(h.overrideReason) : "&ndash;") + "</td>" +
-        "<td>" + byName[n] + "</td></tr>";
+      html += "<tr><td>" + new Date(h.ts).toLocaleDateString() + " " + new Date(h.ts).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + "</td>" +
+        "<td class=\"dh-name\">" + viaHistEsc(n) + "</td>" +
+        "<td class=\"dh-act-" + h.action + "\">" + (h.action === "trigger" ? "Triggered" : "Closed") + "</td>" +
+        "<td class=\"dh-rec\">" + (h.rec ? viaHistEsc(h.rec) : "&ndash;") + "</td>" +
+        "<td class=\"dh-reason\">" + (h.overrideReason ? viaHistEsc(h.overrideReason) : "&ndash;") + "</td>" +
+        "<td class=\"dh-seen\">" + byName[n] + "</td></tr>";
     });
     html += "</table>";
   }
+  html += "</div>";
   box.innerHTML = html;
 }
 
