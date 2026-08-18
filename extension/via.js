@@ -409,19 +409,54 @@ function renderAutoClosedList(wrap){
     wrap.innerHTML = "<div class=\"via-empty\">No auto-closed exceptions yet. Enable auto rules and sync to get started.</div>";
     return;
   }
-  const sorted = viaAutoClosed.slice().reverse();
-  let html = "<table class=\"via-hist\"><tr><th>When</th><th>Member</th><th>Pass</th><th>Off Plate</th><th>Reason</th><th>Washes/mo</th></tr>";
-  sorted.slice(0, 200).forEach(r => {
-    html += "<tr>" +
-      "<td>" + new Date(r.ts).toLocaleString() + "</td>" +
-      "<td>" + vEsc(r.name) + "</td>" +
-      "<td>" + vEsc(r.passName) + "</td>" +
-      "<td>" + vEsc(r.offPlate) + "</td>" +
-      "<td>" + vEsc(r.reason) + "</td>" +
-      "<td>" + vEsc(r.perMonth) + "</td>" +
-      "</tr>";
+  /* Group by rule */
+  const groups = {};
+  const ruleLabels = {
+    ocrOneChar: "Plate 1 character off",
+    ocrTwoChar: "Plate 2 characters off",
+    lowUsage2: "Less than 2 washes/month",
+    lowUsage3: "Less than 3 washes/month",
+    dormant: "Dormant (3+ weeks inactive)"
+  };
+  const ruleBadge = {
+    ocrOneChar: "ac-badge-ocr",
+    ocrTwoChar: "ac-badge-ocr",
+    lowUsage2: "ac-badge-low",
+    lowUsage3: "ac-badge-low",
+    dormant: "ac-badge-dormant"
+  };
+  viaAutoClosed.forEach(r => {
+    const k = r.rule || "other";
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(r);
   });
-  html += "</table>";
+  /* Summary bar */
+  let html = "<div class=\"ac-summary\">" +
+    "<span class=\"ac-total\">" + viaAutoClosed.length + " auto-closed</span>";
+  for (const k of Object.keys(groups)){
+    html += "<span class=\"ac-pill " + (ruleBadge[k] || "ac-badge-other") + "\">" + (ruleLabels[k] || k) + ": " + groups[k].length + "</span>";
+  }
+  html += "</div>";
+  /* Render each group */
+  const order = ["ocrOneChar", "ocrTwoChar", "lowUsage2", "lowUsage3", "dormant"];
+  const allKeys = order.filter(k => groups[k]).concat(Object.keys(groups).filter(k => order.indexOf(k) === -1));
+  for (const k of allKeys){
+    const items = groups[k].slice().reverse();
+    html += "<div class=\"ac-group\">" +
+      "<div class=\"ac-group-header\"><span class=\"ac-pill " + (ruleBadge[k] || "ac-badge-other") + "\">" + (ruleLabels[k] || k) + "</span> <span class=\"ac-group-ct\">" + items.length + " closed</span></div>" +
+      "<table class=\"ac-table\"><tr><th>When</th><th>Member</th><th>Pass</th><th>Plan Plate</th><th>Off Plate</th><th>Washes/mo</th></tr>";
+    items.slice(0, 100).forEach(r => {
+      html += "<tr>" +
+        "<td>" + new Date(r.ts).toLocaleDateString() + "</td>" +
+        "<td class=\"ac-name\">" + vEsc(r.name) + "</td>" +
+        "<td>" + vEsc(r.passName) + "</td>" +
+        "<td class=\"ac-plate\">" + vEsc(r.plates || "") + "</td>" +
+        "<td class=\"ac-plate ac-off\">" + vEsc(r.offPlate || "") + "</td>" +
+        "<td>" + vEsc(r.perMonth) + "</td>" +
+        "</tr>";
+    });
+    html += "</table></div>";
+  }
   wrap.innerHTML = html;
 }
 
@@ -718,6 +753,23 @@ async function renderViaHistory(){
       ".via-tab{padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#1e293b;color:#8fa3c0;cursor:pointer;font-size:13px;font-weight:600}" +
       ".via-tab.active{background:#182640;color:#fff}" +
       ".via-instance-badge{background:#3b82f6;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700}" +
+      /* Auto-closed list styles */
+      ".ac-summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}" +
+      ".ac-total{font-size:15px;font-weight:700;color:#fff}" +
+      ".ac-pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}" +
+      ".ac-badge-ocr{background:#1e3a5f;color:#60a5fa}" +
+      ".ac-badge-low{background:#14532d;color:#4ade80}" +
+      ".ac-badge-dormant{background:#3f3f00;color:#facc15}" +
+      ".ac-badge-other{background:#334155;color:#94a3b8}" +
+      ".ac-group{background:#0f172a;border-radius:10px;padding:14px;margin-bottom:12px}" +
+      ".ac-group-header{margin-bottom:10px;display:flex;align-items:center;gap:8px}" +
+      ".ac-group-ct{font-size:12px;color:#64748b}" +
+      ".ac-table{border-collapse:collapse;width:100%}" +
+      ".ac-table th{text-align:left;padding:6px 10px;font-size:12px;color:#64748b;border-bottom:1px solid #1e293b;font-weight:600;text-transform:uppercase;letter-spacing:.5px}" +
+      ".ac-table td{padding:8px 10px;font-size:13px;border-bottom:1px solid #1e293b;color:#cbd5e1}" +
+      ".ac-name{color:#fff;font-weight:600}" +
+      ".ac-plate{font-family:monospace;letter-spacing:1px;font-size:13px;color:#94a3b8}" +
+      ".ac-off{color:#fb923c}" +
       /* Auto settings styles */
       ".via-auto-settings{background:#182640;border-radius:10px;padding:20px}" +
       ".via-auto-settings h3{margin:0 0 8px;font-size:16px}" +
