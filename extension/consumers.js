@@ -4,7 +4,7 @@ let consumers = {};
 
 function cEsc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 function cNorm(s){ return (s || "").toLowerCase().replace(/[^a-z]/g, ""); }
-function cFmtDate(t){ if (!t) return "--"; try { const d = new Date(t); if (isNaN(d.getTime())) return "--"; return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear(); } catch(e){ return "--"; } }
+function consFmtDate(t){ if (!t) return "--"; try { const d = new Date(t); if (isNaN(d.getTime())) return "--"; return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear(); } catch(e){ return "--"; } }
 
 async function consLoad(){
   const st = await chrome.storage.local.get(["consumers"]);
@@ -87,8 +87,8 @@ async function fetchPaymentsPage(page, startStr, endStr){
 async function fetchVehicleCount(id){
   try {
     // Step 1: fetch consumer page to find their pass link
-    const cRes = await fetch(CBASE + "/consumer/" + id + "/", {credentials: "include"});
-    if (!cRes.ok) return 1;
+    const cRes = await fetch(CBASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
+    if (!cRes.ok || cRes.type === "opaqueredirect" || cRes.status === 0) return -1;
     const cDoc = new DOMParser().parseFromString(await cRes.text(), "text/html");
     let passUrl = "";
     cDoc.querySelectorAll('a[href*="/consumerpass/"]').forEach(a => {
@@ -97,8 +97,8 @@ async function fetchVehicleCount(id){
     });
     if (!passUrl) return 1;
     // Step 2: fetch pass page, read Vehicle Count <strong> + <p>
-    const res = await fetch(CBASE + passUrl, {credentials: "include"});
-    if (!res.ok) return 1;
+    const res = await fetch(CBASE + passUrl, {credentials: "include", redirect: "manual"});
+    if (!res.ok || res.type === "opaqueredirect" || res.status === 0) return -1;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     for (const s of doc.querySelectorAll("strong")){
       if (/^vehicle\s*count$/i.test(s.textContent.trim())){
@@ -111,14 +111,13 @@ async function fetchVehicleCount(id){
 }
 
 async function fetchVehBatch(ids, fresh){
-  const B = 5;
-  for (let i = 0; i < ids.length; i += B){
-    const chunk = ids.slice(i, Math.min(i + B, ids.length));
-    const results = await Promise.all(chunk.map(id => fetchVehicleCount(id)));
-    chunk.forEach((id, j) => { fresh[id].veh = results[j]; });
-    const done = Math.min(i + B, ids.length);
-    C$("consStatus").textContent = "Fetching vehicle counts " + done + "/" + ids.length + "...";
-    if (done % 25 === 0){ consumers = fresh; await consSave(); }
+  for (let i = 0; i < ids.length; i++){
+    C$("consStatus").textContent = "Fetching vehicle count " + (i + 1) + "/" + ids.length + "...";
+    const v = await fetchVehicleCount(ids[i]);
+    if (v === -1){ C$("consStatus").textContent = "Dencar session expired at " + (i + 1) + "/" + ids.length + ". Log in to Dencar and re-sync."; consumers = fresh; await consSave(); renderConsumers(); C$("consSyncBtn").disabled = false; throw new Error("SESSION_EXPIRED"); }
+    fresh[ids[i]].veh = v;
+    if (i % 10 === 9){ consumers = fresh; await consSave(); }
+    await new Promise(r => setTimeout(r, 200));
   }
 }
 
@@ -263,7 +262,7 @@ function renderConsumers(){
   });
   for (const c of arr){
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td>" + cEsc(c.name) + "</td><td>" + cFmtDate(c.signup) + "</td><td>" + (c.veh || 1) + "</td><td>" + c.washes + "</td><td>" + consPerMonth(c).toFixed(1) + "/car</td><td>" + c.others + "</td><td>" + cFmtDate(c.lastWash) + "</td><td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
+    tr.innerHTML = "<td>" + cEsc(c.name) + "</td><td>" + consFmtDate(c.signup) + "</td><td>" + (c.veh || 1) + "</td><td>" + c.washes + "</td><td>" + consPerMonth(c).toFixed(1) + "/car</td><td>" + c.others + "</td><td>" + consFmtDate(c.lastWash) + "</td><td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
     tb.appendChild(tr);
   }
 }
