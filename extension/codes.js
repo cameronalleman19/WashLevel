@@ -37,6 +37,7 @@ function cParseDate(s){
 }
 function cAddMonths(d,n){ var r=new Date(d); r.setMonth(r.getMonth()+n); return r; }
 function cDateSortVal(s){ var d=cParseDate(s); return d?d.getTime():0; }
+function cCopyCode(btn,code){ navigator.clipboard.writeText(code); btn.textContent='\u2713'; setTimeout(function(){btn.textContent='\u2398'},1000); }
 
 /* ── storage ── */
 async function cSave(){ await chrome.storage.local.set({washCodes:codesCache}); }
@@ -199,6 +200,9 @@ function codesInit(){
   +'<button class="cTypeBtn active" data-type="random">Random</button>'
   +'<button class="cTypeBtn" data-type="custom" style="background:#182640">Custom</button>'
   +'</div></div>'
+  +'<div id="cQtyWrap">'
+  +'<label class="stat"><label>Qty</label></label>'
+  +'<input id="cQty" type="number" min="1" value="1" class="c-input" style="margin-top:6px;width:60px"></div>'
   +'<div id="cCustomWrap" style="display:none">'
   +'<label class="stat"><label>Code Number</label></label>'
   +'<input id="cCustomCode" type="number" min="1000000" max="99999998" placeholder="e.g. 5551234" class="c-input" style="margin-top:6px"></div>'
@@ -402,7 +406,7 @@ function cBuildTable(filter, search){
     var lbl=c.state==='Used'?'Redeemed':c.state;
     var cls=c.state==='Used'?'color:#60a5fa':c.state==='Active'?'color:#4ade80':'color:#f87171';
     var rd=(c.redeemDate&&c.redeemDate!=='N/A')?c.redeemDate:'';
-    t+='<tr><td style="font-family:monospace;font-size:14px;letter-spacing:.5px">'+c.passCode+'</td>'
+    t+='<tr><td style="font-family:monospace;font-size:14px;letter-spacing:.5px">'+c.passCode+' <button onclick="cCopyCode(this,\''+c.passCode+'\')" style="background:#233453;border:none;color:#8fa3c0;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:12px">\u2398</button></td>'
       +'<td>'+(c.groupName||'')+'</td><td>'+(c.template||'')+'</td>'
       +'<td><span style="'+cls+';font-weight:700">'+lbl+'</span></td>'
       +'<td>'+(c.created||'')+'</td><td>'+(c.expDate||'')+'</td>'
@@ -418,6 +422,8 @@ function cBindEvents(){
       document.querySelectorAll('.cTypeBtn').forEach(function(b){b.classList.remove('active');b.style.background='#182640'});
       btn.classList.add('active'); btn.style.background='';
       document.getElementById('cCustomWrap').style.display=btn.dataset.type==='custom'?'':'none';
+      document.getElementById('cQtyWrap').style.display=btn.dataset.type==='custom'?'none':'';
+      if(btn.dataset.type==='custom') document.getElementById('cQty').value='1';
     });
   });
   document.querySelectorAll('.cExpBtn').forEach(function(btn){
@@ -445,17 +451,36 @@ function cBindEvents(){
         alert('Custom code must be between 1,000,000 and 99,999,998.');return;
       }
     }
-    genBtn.disabled=true; genBtn.textContent='Generating...'; result.style.display='none';
+    var qty = isCustom ? 1 : Math.max(1, parseInt(document.getElementById('cQty').value)||1);
+    genBtn.disabled=true; result.style.display='none';
     try {
-      var nc = await cCreateCode({code:customCode,groupName:label,tierId:tierId,expDate:expDate});
+      var created = [];
+      for(var i=0;i<qty;i++){
+        var batchLabel = qty>1 ? label+' ('+(i+1)+')' : label;
+        genBtn.textContent='Generating '+(i+1)+'/'+qty+'...';
+        var nc = await cCreateCode({code:customCode,groupName:batchLabel,tierId:tierId,expDate:expDate});
+        if(nc&&nc.passCode) created.push(nc);
+        if(i<qty-1) await new Promise(function(r){setTimeout(r,300)});
+      }
       result.style.display='';
-      if(nc&&nc.passCode){
+      if(created.length>0){
         result.style.background='#14532d';
-        result.innerHTML='\u2705 Code generated: <strong style="font-size:20px;font-family:monospace;letter-spacing:1px">'
-          +nc.passCode+'</strong> \u2014 '+(nc.template||'')+' \u2014 Expires '+(nc.expDate||expDate);
+        if(created.length<=10){
+          var codeHtml=created.map(function(c){
+            return '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px">'
+              +'<strong style="font-family:monospace;font-size:16px;letter-spacing:.5px">'+c.passCode+'</strong>'
+              +'<button onclick="cCopyCode(this,\''+c.passCode+'\')" '
+              +'style="background:#233453;border:none;color:#8fa3c0;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:13px">\u2398</button></span>';
+          }).join('');
+          result.innerHTML='\u2705 '+created.length+' code'+(created.length>1?'s':'')+' generated: '+codeHtml
+            +' \u2014 '+(created[0].template||'')+' \u2014 Expires '+(created[0].expDate||expDate);
+        } else {
+          result.innerHTML='\u2705 '+created.length+' codes generated ('+(created[0].template||'')+', expires '
+            +(created[0].expDate||expDate)+'). Find them in the table below.';
+        }
       } else {
         result.style.background='#14532d';
-        result.innerHTML='\u2705 Code created. Click Sync to see it.';
+        result.innerHTML='\u2705 Code'+(qty>1?'s':'')+' created. Click Sync to see.';
       }
       document.getElementById('cLabel').value='';
       cUpdateDisplay();
