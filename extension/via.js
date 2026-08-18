@@ -493,15 +493,13 @@ function renderAutoSettings(wrap){
 
 /* ===== Override reason modal ===== */
 const VIA_OVERRIDE_REASONS = [
-  "OCR mismatch",
+  "Bad plate read",
   "Friend / Family",
   "Employee",
   "Customer called ahead",
   "Low usage - not suspicious",
-  "Known abuser",
-  "Cancelled member",
-  "Stolen plate",
-  "Other"
+  "Let it slide",
+  "Cancelled member"
 ];
 
 function isOverride(e, actionKind){
