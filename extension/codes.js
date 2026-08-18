@@ -37,7 +37,13 @@ function cParseDate(s){
 }
 function cAddMonths(d,n){ var r=new Date(d); r.setMonth(r.getMonth()+n); return r; }
 function cDateSortVal(s){ var d=cParseDate(s); return d?d.getTime():0; }
-function cCopyCode(btn,code){ navigator.clipboard.writeText(code); btn.textContent='\u2713'; setTimeout(function(){btn.textContent='\u2398'},1000); }
+function cCopyCode(code,btn){
+  var ta=document.createElement('textarea');
+  ta.value=code; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+  document.body.removeChild(ta);
+  if(btn){btn.textContent='\u2713';setTimeout(function(){btn.textContent='\u2398'},1000);}
+}
 
 /* ── storage ── */
 async function cSave(){ await chrome.storage.local.set({washCodes:codesCache}); }
@@ -406,7 +412,7 @@ function cBuildTable(filter, search){
     var lbl=c.state==='Used'?'Redeemed':c.state;
     var cls=c.state==='Used'?'color:#60a5fa':c.state==='Active'?'color:#4ade80':'color:#f87171';
     var rd=(c.redeemDate&&c.redeemDate!=='N/A')?c.redeemDate:'';
-    t+='<tr><td style="font-family:monospace;font-size:14px;letter-spacing:.5px">'+c.passCode+' <button onclick="cCopyCode(this,\''+c.passCode+'\')" style="background:#233453;border:none;color:#8fa3c0;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:12px">\u2398</button></td>'
+    t+='<tr><td style="font-family:monospace;font-size:14px;letter-spacing:.5px">'+c.passCode+' <button class="cCopyBtn" data-code="'+c.passCode+'" style="background:#233453;border:none;color:#8fa3c0;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:12px">\u2398</button></td>'
       +'<td>'+(c.groupName||'')+'</td><td>'+(c.template||'')+'</td>'
       +'<td><span style="'+cls+';font-weight:700">'+lbl+'</span></td>'
       +'<td>'+(c.created||'')+'</td><td>'+(c.expDate||'')+'</td>'
@@ -469,7 +475,7 @@ function cBindEvents(){
           var codeHtml=created.map(function(c){
             return '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px">'
               +'<strong style="font-family:monospace;font-size:16px;letter-spacing:.5px">'+c.passCode+'</strong>'
-              +'<button onclick="cCopyCode(this,\''+c.passCode+'\')" '
+              +'<button class="cCopyBtn" data-code="'+c.passCode+'" '
               +'style="background:#233453;border:none;color:#8fa3c0;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:13px">\u2398</button></span>';
           }).join('');
           result.innerHTML='\u2705 '+created.length+' code'+(created.length>1?'s':'')+' generated: '+codeHtml
@@ -511,6 +517,13 @@ function cBindEvents(){
     if(codesSortCol===col) codesSortAsc=!codesSortAsc;
     else { codesSortCol=col; codesSortAsc=true; }
     cUpdateList();
+  });
+
+  /* copy buttons (delegated) */
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('.cCopyBtn');
+    if(!btn) return;
+    cCopyCode(btn.dataset.code, btn);
   });
 
   /* sync */
