@@ -721,7 +721,7 @@ async function viaHistLog(e, action, overrideReason){
   try {
     if (typeof recommend === "function"){
       var r = recommend(e);
-      rec.rec = (typeof r === "string") ? r : (r && (r.text || r.label || r.action || JSON.stringify(r)));
+      rec.rec = (typeof r === "string") ? r : (r && r.verdict ? r.verdict + " - " + (r.why || "") : (r ? JSON.stringify(r) : ""));
     }
   } catch(_){}
   const hist = await viaHistAll();
