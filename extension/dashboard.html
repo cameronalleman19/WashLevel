@@ -84,15 +84,10 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <div class="page" id="page-consumers">
 <header>
   <h1>Consumers</h1>
-  <select id="consSort">
-    <option value="recent">Newest sign-up</option>
-    <option value="usageHigh">Wash usage: high to low</option>
-    <option value="usageLow">Wash usage: low to high</option>
-  </select>
   <button id="consSyncBtn">Sync Payment History</button>
 </header>
 <div id="consStatus"></div>
-<table class="via consumers"><thead><tr><th>Name</th><th>Signed up</th><th>Cars</th><th>Washes 12mo</th><th>Washes/mo/car</th><th>Vac/self-serve</th><th>Last wash</th><th></th></tr></thead><tbody id="consBody"></tbody></table>
+<table class="via consumers"><thead><tr id="consHead"><th data-col="name" data-label="Name">Name</th><th data-col="signup" data-label="Signed up">Signed up</th><th data-col="cars" data-label="Cars">Cars</th><th data-col="washes" data-label="Washes 12mo">Washes 12mo</th><th data-col="perMonth" data-label="Washes/mo/car">Washes/mo/car</th><th data-col="others" data-label="Vac/self-serve">Vac/self-serve</th><th data-col="lastWash" data-label="Last wash">Last wash</th><th></th></tr></thead><tbody id="consBody"></tbody></table>
 </div>
 
 <div class="page" id="page-via">

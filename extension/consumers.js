@@ -1,6 +1,8 @@
 const CBASE = "https://admin.dencar.sancsoft.net";
 const C$ = (id) => document.getElementById(id);
 let consumers = {};
+let consSortCol = "signup";
+let consSortAsc = false;
 
 function cEsc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 function cNorm(s){ return (s || "").toLowerCase().replace(/[^a-z]/g, ""); }
@@ -252,13 +254,26 @@ function consPerMonth(c){ const mo = c.signup ? Math.min(12, Math.max((Date.now(
 function renderConsumers(){
   const tb = C$("consBody");
   tb.innerHTML = "";
-  const mode = C$("consSort").value;
   const arr = Object.values(consumers);
   if (!arr.length){ tb.innerHTML = "<tr><td colspan=\"8\">No consumers loaded. Press Sync Consumers.</td></tr>"; return; }
+  const colVal = (c, col) => {
+    if (col === "name") return (c.name || "").toLowerCase();
+    if (col === "signup") return c.signup || 0;
+    if (col === "cars") return c.veh || 1;
+    if (col === "washes") return c.washes || 0;
+    if (col === "perMonth") return consPerMonth(c);
+    if (col === "others") return c.others || 0;
+    if (col === "lastWash") return c.lastWash || 0;
+    return 0;
+  };
   arr.sort((a, b) => {
-    if (mode === "recent") return (b.signup || 0) - (a.signup || 0);
-    if (mode === "usageHigh") return consPerMonth(b) - consPerMonth(a);
-    return consPerMonth(a) - consPerMonth(b);
+    const av = colVal(a, consSortCol), bv = colVal(b, consSortCol);
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return consSortAsc ? cmp : -cmp;
+  });
+  document.querySelectorAll("#consHead th[data-col]").forEach(th => {
+    const arrow = th.dataset.col === consSortCol ? (consSortAsc ? " \u25B2" : " \u25BC") : "";
+    th.textContent = th.dataset.label + arrow;
   });
   for (const c of arr){
     const tr = document.createElement("tr");
@@ -269,7 +284,14 @@ function renderConsumers(){
 
 document.addEventListener("DOMContentLoaded", async () => {
   C$("consSyncBtn").addEventListener("click", consSync);
-  C$("consSort").addEventListener("change", renderConsumers);
+  document.querySelectorAll("#consHead th[data-col]").forEach(th => {
+    th.style.cursor = "pointer";
+    th.addEventListener("click", () => {
+      if (consSortCol === th.dataset.col) consSortAsc = !consSortAsc;
+      else { consSortCol = th.dataset.col; consSortAsc = th.dataset.col === "name"; }
+      renderConsumers();
+    });
+  });
   await consLoad();
   try { renderConsumers(); } catch(e){ console.warn("renderConsumers failed:", e); }
 });
