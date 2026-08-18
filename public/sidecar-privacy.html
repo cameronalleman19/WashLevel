@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — WashLevel Sidecar</title>
+<meta name="description" content="How WashLevel Sidecar collects, stores, and uses data.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b1a2b;--navy-2:#24466e;--foam:#f4f7fa;--aqua:#3ec6e0;--slate:#8ea3ba;
+    --line:rgba(255,255,255,.12);
+    --disp:"Barlow Condensed","Arial Narrow",sans-serif;
+    --body:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;
+    --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--foam);font-family:var(--body);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:720px;margin:0 auto;padding:0 24px 72px}
+  a{color:var(--aqua)}
+
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,26,43,.9);backdrop-filter:blur(10px);z-index:10}
+  .bar{display:flex;align-items:center;justify-content:space-between;height:62px;max-width:720px;margin:0 auto;padding:0 24px}
+  .brand{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:19px;color:#fff;text-decoration:none}
+  .brand span{color:var(--aqua)}
+  .tel{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--aqua);text-decoration:none;white-space:nowrap}
+  .back{font-size:14px;color:var(--slate);text-decoration:none;margin-left:18px}
+  .back:hover{color:#fff}
+
+  .eyebrow{font-family:var(--disp);text-transform:uppercase;letter-spacing:.22em;font-size:13px;font-weight:600;color:var(--aqua);margin:44px 0 10px}
+  h1{font-family:var(--disp);text-transform:uppercase;font-size:clamp(30px,6vw,44px);font-weight:700;line-height:1.05;margin:0 0 8px}
+  .eff{color:var(--slate);font-size:14px;margin:0 0 32px}
+  h2{font-family:var(--disp);text-transform:uppercase;font-size:19px;letter-spacing:.03em;font-weight:600;color:#fff;margin:38px 0 12px}
+  p{margin:0 0 14px;color:#c6d4e2;font-size:15px}
+  ul{margin:0 0 14px;padding-left:20px;color:#c6d4e2;font-size:15px}
+  li{margin-bottom:6px}
+  strong{color:#fff}
+
+  .callout{border:1px solid var(--navy-2);border-radius:12px;background:linear-gradient(180deg,#132a41,#0e2033);padding:20px 22px;margin:0 0 8px}
+  .callout p:last-child{margin-bottom:0}
+  .callout .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--aqua);margin-bottom:8px;display:block}
+
+  table{width:100%;border-collapse:collapse;margin:8px 0 18px;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:#fff;font-weight:600;font-size:13px}
+  td{color:#c6d4e2}
+
+  footer{padding:36px 0 8px;color:var(--slate);font-size:13px;border-top:1px solid var(--line);margin-top:48px}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <a class="brand" href="/sidecar">Wash<span>Level</span> Sidecar</a>
+    <div>
+      <a class="tel" href="tel:+17179661794">(717) 966-1794</a>
+      <a class="back" href="/sidecar">← Back to Sidecar</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <p class="eyebrow">Privacy</p>
+  <h1>Sidecar Privacy Policy</h1>
+  <p class="eff">Effective August 9, 2026</p>
+
+  <div class="callout">
+    <span class="lbl">In plain English</span>
+    <p>Sidecar reads your Dencar reports in your own browser and keeps the results there. Nothing about your wash — sales, members, consumers, VIA exceptions — is ever uploaded to WashLevel. The only things our servers ever see are your license key and, if you subscribe, the billing details you hand directly to Stripe.</p>
+  </div>
+
+  <h2>What Sidecar Is</h2>
+  <p>WashLevel Sidecar ("Sidecar") is a browser extension built by WashLevel that reads a car wash operator's own data from Dencar (admin.dencar.sancsoft.net) and displays it as dashboards — sales summaries, retail performance, membership health, and VIA Guard exception review — inside your browser. This policy covers the Sidecar extension and the washlevel.com/sidecar pages used to purchase and manage it. It does not cover Dencar or Sanc Soft, which are operated independently — see their own privacy policy for how they handle your data.</p>
+
+  <h2>Data That Stays On Your Device</h2>
+  <p>When you click Sync, Sidecar reads report pages, VIA exceptions, consumer records, and payment history from Dencar using your own already-open, already-authenticated Dencar session — the same session your browser already has from logging in normally. The results are stored using <strong>chrome.storage.local</strong>, a storage area built into your browser and tied to your device. This can include:</p>
+  <ul>
+    <li>Daily site reports, revenue figures, and wash counts</li>
+    <li>Consumer and member records visible in your own Dencar account, including names and vehicle/plate information</li>
+    <li>Payment history and membership billing events shown in Dencar's own reports</li>
+    <li>VIA Guard exceptions, your notes on them, and your past decisions</li>
+  </ul>
+  <p><strong>None of this is transmitted to WashLevel's servers.</strong> It never leaves your browser except when your browser itself talks to Dencar to fetch it. If you uninstall Sidecar or clear your browser's extension storage, this data is deleted with it.</p>
+
+  <h2>Data We Do Receive</h2>
+  <p>A small, separate set of data does reach WashLevel's servers, used only to run the license and billing side of Sidecar:</p>
+  <table>
+    <tr><th>Data</th><th>Where it comes from</th><th>What it's used for</th></tr>
+    <tr><td>License key</td><td>Sent by the extension each time it checks whether your subscription is active</td><td>Confirming your license is valid so syncing stays unlocked</td></tr>
+    <tr><td>Email address</td><td>Entered by you at checkout on washlevel.com/sidecar</td><td>Sending your license key and receipts; identifying your subscription</td></tr>
+    <tr><td>Payment details</td><td>Entered by you directly into Stripe's checkout form</td><td>Processing your subscription. WashLevel never sees or stores your full card number — Stripe handles that directly.</td></tr>
+  </table>
+
+  <h2>How Sidecar Accesses Dencar</h2>
+  <p>Sidecar requests browser permission to read pages on admin.dencar.sancsoft.net. This permission is used only to fetch the reports, exceptions, and records described above, using the Dencar session your browser already has open. <strong>Sidecar never asks for, reads, or stores your Dencar username or password</strong> — it rides on your existing login the same way any tab you already have open would.</p>
+
+  <h2>Service Providers</h2>
+  <p>WashLevel uses a small number of processors to run Sidecar's licensing and billing, each limited to what it needs to do its job:</p>
+  <ul>
+    <li><strong>Stripe</strong> — processes checkout, subscriptions, and the billing portal. Stripe handles your payment details directly; WashLevel never receives your full card number.</li>
+    <li><strong>Resend</strong> — delivers the transactional email containing your license key after purchase.</li>
+    <li><strong>Google Firebase / Google Cloud</strong> — hosts the license validation, checkout, and webhook functions, and stores license and subscription records (email, license key, subscription status). It does not store any wash, consumer, or member data — that never reaches our servers in the first place.</li>
+  </ul>
+  <p>None of these providers are permitted to use your data for their own purposes, and none of them receive your Dencar data, since that data never reaches WashLevel to begin with.</p>
+
+  <h2>How We Use Data, and What We Don't Do</h2>
+  <p>Data that does reach WashLevel (your license key, email, and subscription status) is used solely to operate Sidecar's licensing and billing — confirming an active subscription and sending you your key and receipts. We do not use it for advertising, we do not build ad-targeting profiles, we do not sell or rent it to third parties, and we do not run analytics or tracking scripts inside the extension. Sidecar's own service-worker code makes no outbound network requests beyond Dencar (to sync your data) and washlevel.com (to check your license and, if you ask, open the billing portal).</p>
+
+  <h2>Data Retention & Deletion</h2>
+  <p>Data stored locally in your browser (chrome.storage.local) stays until you uninstall Sidecar or clear it yourself. License and subscription records are kept for as long as your subscription is active plus a reasonable period for billing records, then may be deleted on request. To request deletion of your license/subscription record, or ask any question about your data, contact us using the details below.</p>
+
+  <h2>Your Choices</h2>
+  <ul>
+    <li>Uninstall Sidecar at any time from chrome://extensions — this removes all locally stored wash data immediately.</li>
+    <li>Cancel your subscription any time from the Manage Billing button in Sidecar's Settings tab, or by calling us — cancelling during your trial means you're never charged.</li>
+    <li>Ask us to delete your license/subscription record by contacting support.</li>
+  </ul>
+
+  <h2>Children's Privacy</h2>
+  <p>Sidecar is a business tool built for car wash operators and is not directed at, marketed to, or knowingly used by children. We do not knowingly collect data from anyone under 13.</p>
+
+  <h2>Changes to This Policy</h2>
+  <p>If we materially change what data Sidecar collects or how we use it, we'll update this page, update the effective date above, and note the change inside the extension (such as in the Settings tab or an update notice) rather than only relying on this page being re-read.</p>
+
+  <h2>Contact Us</h2>
+  <p><strong>Email:</strong> support@washlevel.com<br>
+  <strong>Phone:</strong> <a href="tel:+17179661794">(717) 966-1794</a><br>
+  <strong>Address:</strong> 90 Cumberland Parkway, Mechanicsburg, PA</p>
+
+  <footer>
+    <p>WashLevel Sidecar is an independent tool and isn't affiliated with or endorsed by Dencar or Sanc Soft. See also the <a href="/privacy">WashLevel platform Privacy Policy</a> for the main WashLevel product.</p>
+  </footer>
+</div>
+</body>
+</html>

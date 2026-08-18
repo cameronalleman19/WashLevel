@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WashLevel Sidecar — a Dencar upgrade experience</title>
+<meta name="description" content="Sidecar reads your Dencar data and turns it into the numbers you actually run on: retail per wash, net members, at-risk members, and VIA Guard calls made for you.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b1a2b;
+    --navy:#1a3352;
+    --navy-2:#24466e;
+    --foam:#f4f7fa;
+    --aqua:#3ec6e0;
+    --amber:#f5a524;
+    --slate:#8ea3ba;
+    --line:rgba(255,255,255,.12);
+    --disp:"Barlow Condensed","Oswald","Arial Narrow",sans-serif;
+    --body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--ink);color:var(--foam);
+    font-family:var(--body);font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+  a{color:var(--aqua)}
+
+  .eyebrow{
+    font-family:var(--disp);text-transform:uppercase;letter-spacing:.22em;
+    font-size:13px;font-weight:600;color:var(--aqua);margin:0 0 14px;
+  }
+  h1,h2,h3{font-family:var(--disp);text-transform:uppercase;line-height:1.02;margin:0}
+  h1{font-size:clamp(46px,8.5vw,88px);font-weight:700;letter-spacing:-.01em}
+  h2{font-size:clamp(28px,4.5vw,40px);font-weight:700;letter-spacing:.01em}
+  h3{font-size:20px;font-weight:600;letter-spacing:.04em}
+  p{margin:0 0 16px}
+  .lede{font-size:clamp(17px,2.2vw,20px);color:#c6d4e2;max-width:56ch}
+  .muted{color:var(--slate);font-size:14px}
+
+  /* header */
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,26,43,.86);backdrop-filter:blur(10px);z-index:20}
+  .bar{display:flex;align-items:center;justify-content:space-between;height:62px}
+  .brand{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:19px;color:#fff;text-decoration:none}
+  .brand span{color:var(--aqua)}
+  .bar a.back{font-size:14px;color:var(--slate);text-decoration:none}
+  .bar a.back:hover{color:#fff}
+  .barlinks{display:flex;align-items:center;gap:20px}
+  .tel{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--aqua);text-decoration:none;white-space:nowrap}
+  .tel:hover{filter:brightness(1.15)}
+  @media(max-width:560px){.bar a.back{display:none}}
+
+  /* hero */
+  .hero{padding:76px 0 64px;border-bottom:1px solid var(--line)}
+  .hero h1{margin-bottom:20px}
+  .hero h1 em{font-style:normal;color:var(--aqua)}
+
+  /* seats — the signature element */
+  .seats{margin:38px 0 8px}
+  .seats-label{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .seats-label strong{font-family:var(--disp);font-size:26px;font-weight:700;letter-spacing:.03em}
+  .tokens{display:flex;gap:7px;flex-wrap:wrap}
+  .tok{
+    width:38px;height:52px;border-radius:5px;
+    border:1.5px solid var(--navy-2);background:linear-gradient(180deg,#12293f,#0e2033);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:12px;font-weight:700;color:#42658c;
+    position:relative;overflow:hidden;
+  }
+  .tok::after{content:"";position:absolute;left:0;right:0;top:14px;height:1px;background:var(--navy-2)}
+  .tok.open{border-color:var(--aqua);color:var(--aqua);box-shadow:0 0 0 1px rgba(62,198,224,.25),0 6px 20px -8px rgba(62,198,224,.5)}
+  .tok.open::after{background:rgba(62,198,224,.35)}
+  .tok.taken{opacity:.45}
+  .tok.taken::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent 0 5px,rgba(142,163,186,.16) 5px 7px)}
+
+  /* checkout */
+  .buy{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0 12px;max-width:520px}
+  input[type=email]{
+    flex:1 1 250px;min-width:0;padding:15px 16px;border-radius:8px;
+    border:1px solid var(--navy-2);background:#0e2033;color:#fff;
+    font-family:var(--body);font-size:16px;
+  }
+  input[type=email]::placeholder{color:#5c789a}
+  input[type=email]:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--aqua);outline-offset:2px}
+  .btn{
+    padding:15px 26px;border-radius:8px;border:0;cursor:pointer;
+    background:var(--aqua);color:#06243b;
+    font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;
+    font-size:17px;font-weight:700;white-space:nowrap;
+    transition:transform .12s ease,filter .12s ease;
+  }
+  .btn:hover{filter:brightness(1.07);transform:translateY(-1px)}
+  .btn[disabled]{opacity:.55;cursor:not-allowed;transform:none}
+  .err{color:#ff9b9b;font-size:14px;min-height:20px;margin:0}
+
+  /* sections */
+  section{padding:64px 0;border-bottom:1px solid var(--line)}
+  .sec-head{margin-bottom:34px}
+
+  .grid{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  @media(min-width:760px){.grid{grid-template-columns:1fr 1fr}}
+  .cell{background:var(--ink);padding:28px}
+  .cell h3{color:#fff;margin-bottom:10px}
+  .cell p{color:#b3c4d5;font-size:15px;margin:0}
+  .cell .tag{font-family:var(--mono);font-size:11px;color:var(--aqua);letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:12px}
+
+  ol.steps{list-style:none;counter-reset:s;padding:0;margin:0;display:grid;gap:18px}
+  ol.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:16px;align-items:start}
+  ol.steps li::before{
+    content:counter(s,decimal-leading-zero);
+    font-family:var(--mono);font-size:13px;font-weight:700;color:var(--aqua);
+    border:1px solid var(--navy-2);border-radius:6px;padding:8px 0;text-align:center;
+  }
+  ol.steps p{margin:0;color:#b3c4d5;font-size:15px}
+  ol.steps b{color:#fff;font-weight:600;display:block;font-size:16px}
+
+  /* price */
+  .price-card{
+    border:1px solid var(--navy-2);border-radius:14px;padding:32px;
+    background:linear-gradient(180deg,#132a41,#0e2033);max-width:520px;
+  }
+  .amt{display:flex;align-items:flex-end;gap:8px;margin-bottom:6px}
+  .amt .n{font-family:var(--disp);font-size:66px;font-weight:700;line-height:.9;color:#fff}
+  .amt .per{color:var(--slate);font-size:15px;padding-bottom:8px}
+  .tierline{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-bottom:20px}
+  ul.incl{list-style:none;padding:0;margin:0 0 24px;display:grid;gap:9px}
+  ul.incl li{padding-left:24px;position:relative;font-size:15px;color:#c6d4e2}
+  ul.incl li::before{content:"";position:absolute;left:0;top:9px;width:9px;height:9px;border-radius:2px;background:var(--aqua)}
+
+  details{border-top:1px solid var(--line);padding:16px 0}
+  details summary{cursor:pointer;font-weight:600;color:#fff;list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"+";color:var(--aqua);font-family:var(--mono);margin-right:10px}
+  details[open] summary::before{content:"–"}
+  details p{margin:12px 0 0;color:#b3c4d5;font-size:15px}
+
+  footer{padding:36px 0;color:var(--slate);font-size:14px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="/">Wash<span>Level</span></a>
+    <div class="barlinks">
+      <a class="tel" href="tel:+17179661794">(717) 966-1794</a>
+      <a class="back" href="/">Main platform →</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <p class="eyebrow">A Dencar upgrade experience</p>
+    <h1>Your wash data,<br><em>finally readable.</em></h1>
+    <p class="lede">Sidecar is a Chrome extension that sits on top of Dencar. It pulls every site you already have access to and answers the questions the daily report can't: what's retail really doing, who's about to cancel, and which VIA exceptions are worth chasing.</p>
+
+    <div class="seats">
+      <div class="seats-label">
+        <strong id="seatsHead">Founding seats</strong>
+        <span class="muted" id="seatsSub">Checking availability…</span>
+      </div>
+      <div class="tokens" id="tokens" aria-label="Founding member seats remaining"></div>
+    </div>
+
+    <div class="buy">
+      <input type="email" id="email" placeholder="you@yourwash.com" autocomplete="email" aria-label="Email address">
+      <button class="btn" id="go">Start free trial</button>
+    </div>
+    <p class="err" id="err"></p>
+    <p class="muted">7 days free, then <span id="priceInline">$19</span>/month. Cancel anytime from your billing portal. Have a code from Cameron? Enter it at checkout.</p>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">What you get</p>
+      <h2>Five screens Dencar doesn't have</h2>
+    </div>
+    <div class="grid">
+      <div class="cell">
+        <span class="tag">Overview</span>
+        <h3>Every site, one page</h3>
+        <p>Today, yesterday, week and month to date, plus a month-end projection that updates as the month fills in. Hourly wash counts show you when your tunnel actually earns.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">Retail</span>
+        <h3>Retail dollars per wash</h3>
+        <p>Membership billing is stripped out — no pass renewals, no VIA charges — so the number you see is what retail customers actually paid. Day-of-week baselines flag the days that quietly underperform.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">Members</span>
+        <h3>Who's about to cancel</h3>
+        <p>Members get a risk score from their own usage history: gone dormant, washing less than they used to, new signups who never came back. Cohort curves show how each month's signups are holding up.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">VIA Guard</span>
+        <h3>A call on every exception</h3>
+        <p>Each exception arrives with a recommendation — trigger or let it slide — based on how much that member actually washes, whether the plate is a near match, and whether they've done it before. Trigger or close without leaving the page.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">Consumers</span>
+        <h3>Real washes per month</h3>
+        <p>Usage counted from payment history and adjusted for how long someone's been a member, so a two-week-old signup isn't compared against a two-year veteran.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">Anomalies</span>
+        <h3>Days that don't look right</h3>
+        <p>Sidecar compares each day against that site's own pattern and surfaces the outliers — before you find them in a month-end review.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Getting started</p>
+      <h2>Running in about five minutes</h2>
+    </div>
+    <ol class="steps">
+      <li><p><b>Subscribe and get your key</b>Checkout emails you a license key right away. Your 7 free days start now.</p></li>
+      <li><p><b>Add Sidecar to your browser</b>Install from the Chrome Web Store in one click. Safari is coming next.</p></li>
+      <li><p><b>Log into Dencar as usual</b>Sidecar uses your existing session. There's no second password, and your Dencar credentials are never sent anywhere.</p></li>
+      <li><p><b>Paste your key and sync</b>The first sync backfills the year so your charts have history. After that it's a few seconds a day.</p></li>
+    </ol>
+    <p class="muted" style="margin-top:26px">Sidecar only sees the sites your own Dencar login already has access to. Your wash data stays in your browser — it's never uploaded to WashLevel. Want a walkthrough before you buy? Call or text <a class="tel" href="tel:+17179661794">(717) 966-1794</a>.</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Pricing</p>
+      <h2 id="priceHeading">One flat price per operator</h2>
+    </div>
+    <div class="price-card">
+      <div class="amt"><span class="n" id="priceBig">$19</span><span class="per">per month, all your sites</span></div>
+      <p class="tierline" id="tierLine">Founding operator rate</p>
+      <ul class="incl">
+        <li>Every site on your Dencar login — no per-location fee</li>
+        <li>All five screens, plus new ones as they ship</li>
+        <li>7-day free trial, cancel anytime</li>
+        <li id="lockLine">Founding rate locked for as long as you stay subscribed</li>
+      </ul>
+      <button class="btn" id="go2" style="width:100%">Start free trial</button>
+    </div>
+  </section>
+
+  <section style="border-bottom:0">
+    <div class="sec-head">
+      <p class="eyebrow">Questions</p>
+      <h2>Before you sign up</h2>
+    </div>
+    <details><summary>Do I need anything from Dencar to use this?</summary><p>No. Sidecar works with the access you already have. There's nothing to enable on Dencar's side and nothing to ask them for.</p></details>
+    <details><summary>Where does my data go?</summary><p>Into your own browser's storage, and nowhere else. Sidecar reads your Dencar reports the same way your browser does and keeps the results locally. WashLevel only ever sees your license key.</p></details>
+    <details><summary>What happens after the 10 founding seats?</summary><p>The price goes to $29/month for new subscribers. If you're one of the first 10, you keep $19 for as long as your subscription stays active.</p></details>
+    <details><summary>Which browsers does it work in?</summary><p>Chrome on Windows and Mac today, installed from the Chrome Web Store. A Safari version is in the works — your subscription covers both, so there's nothing extra to buy when it lands.</p></details>
+    <details><summary>Can I use it on more than one computer?</summary><p>Yes. The same key works on any browser you install it in. Each one keeps its own synced history.</p></details>
+    <details><summary>How do I cancel?</summary><p>Cancel from the Stripe receipt link in your confirmation email, or call us at (717) 966-1794 and we'll take care of it. Cancel during the trial and you're never charged.</p></details>
+  </section>
+
+  <footer>
+    <p>Questions before you sign up? Call or text <a class="tel" href="tel:+17179661794">(717) 966-1794</a>.</p>
+    <p>WashLevel Sidecar is an independent tool and isn't affiliated with or endorsed by Dencar or Sanc Soft. <a href="/terms.html">Terms</a></p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var SLOTS = 10, price = 19, left = null;
+  var tokens = document.getElementById('tokens');
+
+  function paint(){
+    tokens.innerHTML = '';
+    for (var i = 1; i <= SLOTS; i++){
+      var d = document.createElement('div');
+      var open = (left === null) ? false : (i > SLOTS - left);
+      d.className = 'tok ' + (left === null ? '' : (open ? 'open' : 'taken'));
+      d.textContent = (i < 10 ? '0' : '') + i;
+      tokens.appendChild(d);
+    }
+  }
+  paint();
+
+  fetch('/api/sidecar/pricing').then(function(r){ return r.json(); }).then(function(d){
+    left = typeof d.foundingLeft === 'number' ? d.foundingLeft : 0;
+    price = d.price || (left > 0 ? 19 : 29);
+    SLOTS = d.slots || 10;
+    paint();
+
+    var head = document.getElementById('seatsHead');
+    var sub  = document.getElementById('seatsSub');
+    if (left > 0){
+      head.textContent = left + ' of ' + SLOTS + ' founding seats left';
+      sub.textContent  = '$19/month, locked in for good';
+    } else {
+      head.textContent = 'Founding seats are gone';
+      sub.textContent  = 'Now $29/month — same product, same trial';
+      document.getElementById('tierLine').textContent = 'Standard rate';
+      document.getElementById('lockLine').textContent = 'No setup fee and no per-site charges';
+    }
+    document.getElementById('priceBig').textContent = '$' + price;
+    document.getElementById('priceInline').textContent = '$' + price;
+  }).catch(function(){
+    document.getElementById('seatsHead').textContent = 'Founding seats';
+    document.getElementById('seatsSub').textContent = 'First 10 operators pay $19/month';
+  });
+
+  function checkout(btn){
+    var email = document.getElementById('email').value.trim();
+    var err = document.getElementById('err');
+    err.textContent = '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+      err.textContent = 'Enter the email address you want the license key sent to.';
+      document.getElementById('email').focus();
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Opening checkout…';
+    fetch('/api/sidecar/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if (d.url) { window.location = d.url; }
+      else { throw new Error(d.error || 'no url'); }
+    }).catch(function(){
+      btn.disabled = false; btn.textContent = 'Start free trial';
+      err.textContent = "Checkout didn't open. Try again, or call us at (717) 966-1794 and we'll set you up.";
+    });
+  }
+
+  document.getElementById('go').addEventListener('click', function(){ checkout(this); });
+  document.getElementById('go2').addEventListener('click', function(){
+    document.getElementById('email').scrollIntoView({block:'center'});
+    document.getElementById('email').focus();
+  });
+  document.getElementById('email').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') checkout(document.getElementById('go'));
+  });
+})();
+</script>
+</body>
+</html>

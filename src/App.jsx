@@ -330,6 +330,11 @@ function LandingPage() {
           <LandingLink href="#features">Features</LandingLink>
           <LandingLink href="#sms">Text Alerts</LandingLink>
           <LandingLink href="#contact">Contact</LandingLink>
+          <div style={{ width: 1, height: 16, background: "#e2e8f0" }} />
+          <a href="/sidecar" style={{ display: "flex", alignItems: "center", gap: 6, color: "#0f1f35", fontSize: 13, textDecoration: "none", fontWeight: 700 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3ec6e0", display: "inline-block" }} />
+            Sidecar
+          </a>
           <a href="/?login=1" style={{ background: "#0f1f35", color: "#fff", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Log In / Sign Up</a>
         </div>
       </div>
@@ -375,6 +380,15 @@ function LandingPage() {
             <div><b style={{ color: "#0f1f35" }}>Phone:</b> (717) 966-1794</div>
             <div><b style={{ color: "#0f1f35" }}>Address:</b> 90 Cumberland Parkway, Mechanicsburg, PA</div>
           </div>
+        </div>
+      </div>
+
+      <div style={{ background: "#0b1a2b", padding: "56px 24px", textAlign: "center" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <div style={{ display: "inline-block", background: "rgba(62,198,224,0.15)", color: "#3ec6e0", fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "4px 12px", borderRadius: 999, marginBottom: 16 }}>For Dencar Operators</div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: "#fff", marginBottom: 14 }}>Run Dencar? Meet Sidecar.</h2>
+          <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.7, marginBottom: 24 }}>A Chrome extension that turns your Dencar reports into real business intelligence — retail per wash, member churn risk, VIA Guard recommendations, and more, across every site you run.</p>
+          <a href="/sidecar" style={{ background: "#3ec6e0", color: "#06243b", borderRadius: 10, padding: "14px 32px", fontSize: 16, fontWeight: 700, textDecoration: "none", display: "inline-block" }}>Explore Sidecar</a>
         </div>
       </div>
 

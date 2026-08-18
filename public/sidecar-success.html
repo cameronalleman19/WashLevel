@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>You're in — WashLevel Sidecar</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b1a2b;--navy-2:#24466e;--foam:#f4f7fa;--aqua:#3ec6e0;--slate:#8ea3ba;
+    --line:rgba(255,255,255,.12);
+    --disp:"Barlow Condensed","Arial Narrow",sans-serif;
+    --body:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;
+    --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--foam);font-family:var(--body);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:640px;margin:0 auto;padding:56px 24px 72px}
+  .brand{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:19px;color:#fff;text-decoration:none;display:inline-block;margin-bottom:44px}
+  .brand span{color:var(--aqua)}
+  .eyebrow{font-family:var(--disp);text-transform:uppercase;letter-spacing:.22em;font-size:13px;font-weight:600;color:var(--aqua);margin:0 0 12px}
+  h1{font-family:var(--disp);text-transform:uppercase;font-size:clamp(36px,7vw,56px);font-weight:700;line-height:1;margin:0 0 16px}
+  h2{font-family:var(--disp);text-transform:uppercase;font-size:20px;letter-spacing:.05em;font-weight:600;margin:40px 0 14px}
+  p{margin:0 0 16px;color:#c6d4e2}
+  .muted{color:var(--slate);font-size:14px}
+
+  .keybox{border:1px solid var(--navy-2);border-radius:12px;background:linear-gradient(180deg,#132a41,#0e2033);padding:26px;margin:28px 0}
+  .keylabel{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-bottom:12px}
+  .key{font-family:var(--mono);font-size:clamp(17px,4.6vw,24px);font-weight:700;color:var(--aqua);letter-spacing:.04em;word-break:break-all;margin-bottom:18px}
+  .key.pending{color:var(--slate);font-weight:500;font-size:16px;letter-spacing:0}
+  button{
+    padding:12px 22px;border-radius:8px;border:0;cursor:pointer;background:var(--aqua);color:#06243b;
+    font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;font-size:16px;font-weight:700;
+  }
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--aqua);outline-offset:2px}
+  a{color:var(--aqua)}
+
+  ol{padding-left:0;list-style:none;counter-reset:s;display:grid;gap:16px;margin:0}
+  ol li{counter-increment:s;display:grid;grid-template-columns:38px 1fr;gap:14px;align-items:start}
+  ol li::before{content:counter(s,decimal-leading-zero);font-family:var(--mono);font-size:12px;font-weight:700;color:var(--aqua);border:1px solid var(--navy-2);border-radius:6px;padding:7px 0;text-align:center}
+  ol p{margin:0;font-size:15px}
+  ol b{color:#fff;display:block;font-weight:600}
+  code{font-family:var(--mono);font-size:13px;background:#0e2033;border:1px solid var(--navy-2);border-radius:4px;padding:1px 6px;color:#c6d4e2}
+  .storelink{display:inline-block;padding:13px 24px;border-radius:8px;background:var(--aqua);color:#06243b;text-decoration:none;font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;font-size:16px;font-weight:700;margin-bottom:22px}
+  #storeBox{margin-bottom:8px}
+  .tel{font-family:var(--mono);font-weight:700;color:var(--aqua);text-decoration:none;white-space:nowrap}
+  hr{border:0;border-top:1px solid var(--line);margin:44px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="/">Wash<span>Level</span></a>
+
+  <p class="eyebrow">Subscription active</p>
+  <h1>You're in.</h1>
+  <p>Your 7-day trial has started and a copy of your license key is on its way to your inbox.</p>
+
+  <div class="keybox">
+    <div class="keylabel">Your license key</div>
+    <div class="key pending" id="key">Generating your key…</div>
+    <button id="copy" disabled>Copy key</button>
+  </div>
+
+  <h2>Set up Sidecar</h2>
+  <div id="storeBox">
+    <p id="storeNote" class="muted">Checking store availability…</p>
+    <a id="storeBtn" class="storelink" href="#" hidden>Install from the Chrome Web Store</a>
+  </div>
+  <ol>
+    <li><p><b>Add Sidecar to Chrome</b>Install it from the Chrome Web Store using the button above, then pin it to your toolbar so it's one click away.</p></li>
+    <li><p><b>Log into Dencar</b>Sign into admin.dencar.sancsoft.net in the same browser, the way you normally would.</p></li>
+    <li><p><b>Paste your key and sync</b>Click the Sidecar icon, drop your key into Settings, then hit Sync. The first run backfills the year, so give it a few minutes.</p></li>
+  </ol>
+
+  <hr>
+  <p class="muted" style="margin-top:24px">Stuck on any of it, call or text <a class="tel" href="tel:+17179661794">(717) 966-1794</a> or email support@washlevel.com and we'll get you running. Cancel any time before day 7 and you won't be charged.</p>
+</div>
+
+<script>
+// ── Set this once Sidecar is live on the Chrome Web Store ─────────────────────
+var STORE_URL = "https://chromewebstore.google.com/detail/giijncokdfljphhoimaamgccpgceanof";   // e.g. "https://chromewebstore.google.com/detail/<extension-id>"
+var SAFARI_URL = "";  // e.g. "https://apps.apple.com/app/id<app-id>"
+
+(function(){
+  var note = document.getElementById('storeNote');
+  var btn  = document.getElementById('storeBtn');
+  if (STORE_URL) {
+    btn.href = STORE_URL; btn.hidden = false;
+    note.textContent = SAFARI_URL
+      ? "Chrome on desktop. Safari is available too — call us and we'll send that link."
+      : "Chrome on desktop. Safari support is coming.";
+  } else {
+    note.innerHTML = "Sidecar is in review for the Chrome Web Store. Call or text <a class=\"tel\" href=\"tel:+17179661794\">(717) 966-1794</a> and we'll send you the install link today — your trial doesn't start counting until you're up and running.";
+  }
+})();
+
+(function(){
+  var params = new URLSearchParams(location.search);
+  var sid = params.get('session_id');
+  var keyEl = document.getElementById('key');
+  var copyBtn = document.getElementById('copy');
+  var tries = 0;
+
+  function fail(){
+    keyEl.className = 'key pending';
+    keyEl.innerHTML = "Your key is taking longer than usual. It's also in your confirmation email — or call us at <a class=\"tel\" href=\"tel:+17179661794\">(717) 966-1794</a> and we'll read it to you.";
+  }
+
+  function show(k){
+    keyEl.className = 'key';
+    keyEl.textContent = k;
+    copyBtn.disabled = false;
+    copyBtn.addEventListener('click', function(){
+      navigator.clipboard.writeText(k).then(function(){
+        copyBtn.textContent = 'Copied';
+        setTimeout(function(){ copyBtn.textContent = 'Copy key'; }, 1800);
+      });
+    });
+  }
+
+  function poll(){
+    tries++;
+    fetch('/api/sidecar/license?session_id=' + encodeURIComponent(sid))
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ready && d.key) return show(d.key);
+        if (tries > 15) return fail();
+        setTimeout(poll, 2000);
+      })
+      .catch(function(){
+        if (tries > 15) return fail();
+        setTimeout(poll, 2000);
+      });
+  }
+
+  if (!sid) fail(); else poll();
+})();
+</script>
+</body>
+</html>

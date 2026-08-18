@@ -1308,8 +1308,8 @@ exports.sendAlertSms = onCall({ secrets: [TELNYX_API_KEY] }, async (request) => 
 });
 
 // ── WashLevel Sidecar ─────────────────────────────────────────────────────────
-const SIDECAR_PRICE_FOUNDING = "REPLACE_PRICE_19";
-const SIDECAR_PRICE_STANDARD = "REPLACE_PRICE_29";
+const SIDECAR_PRICE_FOUNDING = "price_1U2brSERWU7SaCxDDvbIGlvn";
+const SIDECAR_PRICE_STANDARD = "price_1U2bsLERWU7SaCxDgq8N4tqs";
 const SIDECAR_FOUNDING_SLOTS = 10;
 const SIDECAR_TRIAL_DAYS = 7;
 const SIDECAR_SITE = "https://washlevel.com";
@@ -1511,5 +1511,29 @@ exports.sidecarLicenseBySession = onRequest(async (req, res) => {
   } catch (e) {
     console.error("sidecarLicenseBySession", e);
     res.json({ ready: false });
+  }
+});
+
+exports.createSidecarPortalSession = onRequest({ secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  sidecarCors(res);
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  try {
+    const raw = (req.body && req.body.key) || req.query.key || "";
+    const key = String(raw).trim().toUpperCase();
+    if (!key) return res.status(400).json({ error: "no-key" });
+    if (key === SIDECAR_OWNER_KEY) return res.status(400).json({ error: "owner-key-no-billing" });
+    const doc = await db.collection("sidecarLicenses").doc(key).get();
+    if (!doc.exists) return res.status(404).json({ error: "not-found" });
+    const d = doc.data();
+    if (!d.stripeCustomerId) return res.status(400).json({ error: "no-customer" });
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+    const session = await stripeClient.billingPortal.sessions.create({
+      customer: d.stripeCustomerId,
+      return_url: `${SIDECAR_SITE}/sidecar`,
+    });
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error("createSidecarPortalSession", e);
+    res.status(500).json({ error: e.message });
   }
 });

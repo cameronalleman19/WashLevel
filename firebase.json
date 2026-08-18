@@ -11,10 +11,46 @@
     ],
     "rewrites": [
       {
+        "source": "/api/sidecar/pricing",
+        "function": {
+          "functionId": "sidecarPricing",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/sidecar/checkout",
+        "function": {
+          "functionId": "createSidecarCheckout",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/sidecar/validate",
+        "function": {
+          "functionId": "validateSidecarLicense",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/sidecar/license",
+        "function": {
+          "functionId": "sidecarLicenseBySession",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/sidecar/portal",
+        "function": {
+          "functionId": "createSidecarPortalSession",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
-    ]
+    ],
+    "cleanUrls": true
   },
   "functions": [
     {
