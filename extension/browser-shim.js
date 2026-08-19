@@ -251,37 +251,38 @@
 
 // ── Safari-safe fetch via content script proxy ───────────────
 // On Chrome: regular fetch with credentials.
-// On Safari: routes through content script on the target domain's
-// tab so the page's session cookies are used.
-window.safeFetch = async function safeFetch(url, opts = {}) {
+// On Safari: uses scripting.executeScript to run fetch in the
+// target domain's tab context where session cookies exist.
+window.safeFetch = async function safeFetch(url, opts) {
+  opts = opts || {};
   if (!window.__sidecar || !window.__sidecar.isSafari) {
     if (!opts.credentials) opts.credentials = 'include';
     return fetch(url, opts);
   }
 
-  const domain = new URL(url).hostname;
-  const tabs = await browser.tabs.query({ url: 'https://' + domain + '/*' });
+  var domain = new URL(url).hostname;
+  var tabs = await browser.tabs.query({ url: 'https://' + domain + '/*' });
   if (!tabs || tabs.length === 0) {
     throw new Error('Open ' + domain + ' in Safari and log in, then try again.');
   }
 
-  const fetchOpts = {
+  var fetchOpts = {
     method: opts.method || 'GET',
     headers: opts.headers || null,
     body: opts.body || null
   };
 
-  const results = await browser.scripting.executeScript({
+  var results = await browser.scripting.executeScript({
     target: { tabId: tabs[0].id },
-    func: async (fetchUrl, fOpts) => {
+    func: async function(fetchUrl, fOpts) {
       try {
-        const r = await fetch(fetchUrl, {
+        var r = await fetch(fetchUrl, {
           method: fOpts.method || 'GET',
           credentials: 'include',
           headers: fOpts.headers || undefined,
           body: fOpts.body || undefined
         });
-        const text = await r.text();
+        var text = await r.text();
         return { ok: r.ok, status: r.status, url: r.url, text: text };
       } catch (e) {
         return { ok: false, status: 0, url: fetchUrl, text: '', error: e.message };
@@ -290,61 +291,15 @@ window.safeFetch = async function safeFetch(url, opts = {}) {
     args: [url, fetchOpts]
   });
 
-  const response = results[0].result;
-  if (!response) throw new Error('No response from ' + domain + ' tab. Reload it and try again.');
+  var response = results[0].result;
+  if (!response) throw new Error('No response from ' + domain + ' tab.');
   if (response.error) throw new Error(response.error);
 
   return {
     ok: response.ok,
     status: response.status,
     url: response.url,
-    text: () => Promise.resolve(response.text),
-    json: () => Promise.resolve(JSON.parse(response.text))
+    text: function() { return Promise.resolve(response.text); },
+    json: function() { return Promise.resolve(JSON.parse(response.text)); }
   };
-}) {
-  if (!window.__sidecar || !window.__sidecar.isSafari) {
-    if (!opts.credentials) opts.credentials = 'include';
-    return fetch(url, opts);
-  }
-
-  const domain = new URL(url).hostname;
-  let tabs;
-  try {
-    tabs = await chrome.tabs.query({ url: 'https://' + domain + '/*' });
-  } catch (e) {
-    tabs = [];
-  }
-  if (!tabs || tabs.length === 0) {
-    throw new Error('Open ' + domain + ' in Safari and log in, then try again.');
-  }
-
-  const msg = {
-    type: 'SIDECAR_FETCH',
-    url: url,
-    method: opts.method || 'GET',
-    headers: opts.headers || null,
-    body: opts.body || null
-  };
-
-  try {
-    const sendMsg = (typeof browser !== 'undefined' && browser.tabs)
-      ? browser.tabs.sendMessage(tabs[0].id, msg)
-      : new Promise((res, rej) => chrome.tabs.sendMessage(tabs[0].id, msg, r => chrome.runtime.lastError ? rej(chrome.runtime.lastError) : res(r)));
-    const response = await sendMsg;
-    if (!response) {
-      throw new Error('No response from ' + domain + ' tab. Reload it and try again.');
-    }
-    if (response.error) {
-      throw new Error(response.error);
-    }
-    return {
-      ok: response.ok,
-      status: response.status,
-      url: response.url,
-      text: () => Promise.resolve(response.text),
-      json: () => Promise.resolve(JSON.parse(response.text))
-    };
-  } catch (e) {
-    throw new Error('Proxy error: ' + e.message + '. Reload the ' + domain + ' tab and try again.');
-  }
-}
+};
