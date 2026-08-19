@@ -215,6 +215,7 @@ async function consSync(){
     } else {
       startStr = "2015-01-01";
     }
+    let latestPayDate = startStr;
     for (let page = 1; page <= 500; page++){
       C$("consStatus").textContent = "Loading payments page " + page + "...";
       const batch = await fetchPaymentsPage(page, startStr, endStr);
@@ -246,6 +247,8 @@ async function consSync(){
         }
         const c = byName[cNorm(row.name)];
         if (!c) continue;
+        const rowDate = new Date(row.t).toLocaleDateString("en-CA");
+        if (rowDate > latestPayDate) latestPayDate = rowDate;
         if (/pass cancelled/i.test(row.method)){ if (row.t > c.cancelled) c.cancelled = row.t; }
         if (/new pass/i.test(row.method)){ if (row.t > c.lastNew) c.lastNew = row.t; }
         if (/pass renew/i.test(row.method)){ if (row.t > c.lastRenew) c.lastRenew = row.t; }
@@ -262,7 +265,7 @@ async function consSync(){
       /* Checkpoint every 25 pages to survive failures */
       if (page % 25 === 0){
         consumers = fresh;
-        await chrome.storage.local.set({consumers: consumers, washTiers: tiers, plateVisits: pv, plateSiteMap: psm});
+        await chrome.storage.local.set({consumers: consumers, washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: latestPayDate});
         C$("consStatus").textContent = "Checkpoint saved at page " + page + "...";
       }
       if (batch.length < 500) break;
