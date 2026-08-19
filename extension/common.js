@@ -1,3 +1,4 @@
+const safeFetch = window.safeFetch || fetch;
 function wlMoney0(n){ return "$" + Math.round(n || 0).toLocaleString("en-US"); }
 
 function wlDrawChart(cv, hoverIdx){
