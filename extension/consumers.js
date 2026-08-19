@@ -293,7 +293,13 @@ function consPerMonth(c){ const mo = c.signup ? Math.min(12, Math.max((Date.now(
 function renderConsumers(){
   const tb = C$("consBody");
   tb.innerHTML = "";
-  const arr = Object.values(consumers);
+  const sq = (C$("consSearch") ? C$("consSearch").value : "").toLowerCase().replace(/[^a-z0-9+]/g, "");
+  const arr = Object.values(consumers).filter(c => {
+    if (!sq) return true;
+    const n = (c.name || "").toLowerCase();
+    const p = (c.phone || "").toLowerCase();
+    return n.indexOf(sq) >= 0 || p.indexOf(sq) >= 0;
+  });
   if (!arr.length){ tb.innerHTML = "<tr><td colspan=\"8\">No consumers loaded. Press Sync Consumers.</td></tr>"; return; }
   const colVal = (c, col) => {
     if (col === "name") return (c.name || "").toLowerCase();
@@ -323,6 +329,7 @@ function renderConsumers(){
 
 document.addEventListener("DOMContentLoaded", async () => {
   C$("consSyncBtn").addEventListener("click", consSync);
+  if (C$("consSearch")) C$("consSearch").addEventListener("input", renderConsumers);
   document.querySelectorAll("#consHead th[data-col]").forEach(th => {
     th.style.cursor = "pointer";
     th.addEventListener("click", () => {
