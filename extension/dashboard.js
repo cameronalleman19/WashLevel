@@ -764,4 +764,4 @@ async function init(){
   $("detailClose").addEventListener("click", () => { $("detailModal").style.display = "none"; });
   $("detailModal").addEventListener("click", (e) => { if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
 }
-// init called from dashboard.html
+setTimeout(function(){ init().catch(function(e){ console.error("init err:", e); }); }, 0);
