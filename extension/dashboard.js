@@ -765,7 +765,6 @@ async function init(){
   $("detailModal").addEventListener("click", (e) => { if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
 }
 if (document.readyState === "loading") {
-  if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {
   init();

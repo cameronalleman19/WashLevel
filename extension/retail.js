@@ -248,7 +248,7 @@ function rPopulateSiteFilter(){
     ).join("");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+onReady( () => {
   const rSiteFilter = R$("retSiteFilter");
   if (rSiteFilter) rSiteFilter.addEventListener("change", () => {
     rSelectedSite = rSiteFilter.value || null;
@@ -373,7 +373,7 @@ async function rRenderPackages(){
   rRenderPkgMix(rPkgAgg(rDs(d30), rDs(today)));
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+onReady( () => {
   const sel = document.getElementById("retPkgPeriod");
   if (sel) sel.addEventListener("change", () => rRenderPackages());
 });

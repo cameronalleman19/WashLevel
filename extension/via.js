@@ -647,7 +647,7 @@ function bindZoom(){
   });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+async function viaInit() {
   await viaLoad();
   renderViaList();
   V$("viaSyncBtn").addEventListener("click", viaSync);
@@ -846,4 +846,8 @@ async function renderViaHistory(){
   box.innerHTML = html;
 }
 
-document.addEventListener("DOMContentLoaded", () => { renderViaHistory(); });
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => { viaInit(); renderViaHistory(); });
+} else {
+  viaInit(); renderViaHistory();
+}

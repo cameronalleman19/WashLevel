@@ -340,7 +340,7 @@ function renderConsumers(){
   }
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+onReady( async () => {
   C$("consSyncBtn").addEventListener("click", consSync);
   if (C$("consSearch")) C$("consSearch").addEventListener("input", renderConsumers);
   document.querySelectorAll("#consHead th[data-col]").forEach(th => {

@@ -413,7 +413,7 @@ function mPopulateSiteFilter(){
     ).join("");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+onReady( () => {
   M$("memRefreshBtn").addEventListener("click", memRender);
   const mSiteFilter = M$("memSiteFilter");
   if (mSiteFilter) mSiteFilter.addEventListener("change", () => {

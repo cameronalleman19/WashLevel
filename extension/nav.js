@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+onReady( () => {
   document.querySelectorAll(".nav-group-toggle").forEach(g => {
     g.addEventListener("click", () => {
       g.closest(".nav-group").classList.toggle("open");
