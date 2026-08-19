@@ -1,0 +1,121 @@
+/* WashLevel Sidecar — iOS Responsive Overlay */
+/* Load AFTER dashboard.css                    */
+
+.sidecar-ipad .dashboard-container,
+.sidecar-ipad .tab-content {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 500px) {
+  .sidecar-iphone .nav-tabs,
+  .sidecar-iphone nav {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    gap: 2px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .sidecar-iphone .nav-tabs::-webkit-scrollbar { display: none; }
+  .sidecar-iphone .nav-tabs button,
+  .sidecar-iphone nav button {
+    flex-shrink: 0;
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+  .sidecar-iphone table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 12px;
+  }
+  .sidecar-iphone th,
+  .sidecar-iphone td {
+    padding: 4px 6px;
+    white-space: nowrap;
+  }
+  .sidecar-iphone .stat-row,
+  .sidecar-iphone .stats-grid,
+  .sidecar-iphone .card-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sidecar-iphone .stat-box,
+  .sidecar-iphone .stat-card {
+    width: 100%;
+    min-width: unset;
+  }
+  .sidecar-iphone .modal-content,
+  .sidecar-iphone .modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100vh;
+    max-height: 100vh;
+    margin: 0;
+    border-radius: 0;
+  }
+  .sidecar-iphone canvas {
+    max-width: 100%;
+    height: auto !important;
+  }
+  .sidecar-iphone input[type="text"],
+  .sidecar-iphone input[type="search"],
+  .sidecar-iphone select {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 16px;
+  }
+  .sidecar-iphone .header,
+  .sidecar-iphone header {
+    padding: 8px 12px;
+  }
+  .sidecar-iphone .header h1,
+  .sidecar-iphone header h1 {
+    font-size: 16px;
+  }
+  .sidecar-iphone .period-selector,
+  .sidecar-iphone .date-range {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .sidecar-iphone .period-selector button {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .sidecar-iphone .print-btn,
+  .sidecar-iphone [data-action="print"] {
+    display: none;
+  }
+  .sidecar-iphone button,
+  .sidecar-iphone a,
+  .sidecar-iphone .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  .sidecar-ios .app {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+.sidecar-ios {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+.sidecar-ios table,
+.sidecar-ios .scrollable {
+  -webkit-overflow-scrolling: touch;
+}
+.sidecar-ios button,
+.sidecar-ios select,
+.sidecar-ios input {
+  touch-action: manipulation;
+}
