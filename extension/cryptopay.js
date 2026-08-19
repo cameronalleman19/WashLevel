@@ -46,7 +46,7 @@ async function cpSave(){
 
 async function cpDiscoverSites(){
   try {
-    const res = await fetch(CP_BASE + "/login/index.php?page=sitestatus", {credentials: "include"});
+    const res = await safeFetch(CP_BASE + "/login/index.php?page=sitestatus", {credentials: "include"});
     const html = await res.text();
     if (/type="password"/i.test(html) || !/selection-entry/.test(html)) return {sites: [], loggedOut: true};
     const re = /id="siteselect_([A-Za-z0-9]+)"[^>]*>.*?<span class="site-name">([^<]+)<\/span>/gs;
@@ -103,7 +103,7 @@ function cpParseAddress(html){
 
 async function cpFetchStatus(siteId){
   try {
-    const res = await fetch(CP_BASE + "/login/api.php?page=sitestatus_inner&siteid=" + siteId, {credentials: "include"});
+    const res = await safeFetch(CP_BASE + "/login/api.php?page=sitestatus_inner&siteid=" + siteId, {credentials: "include"});
     const html = await res.text();
     if (/type="password"/i.test(html)) return {devices: [], loggedOut: true};
     return {devices: cpParseDevices(html), address: cpParseAddress(html), loggedOut: false};
@@ -187,7 +187,7 @@ async function cpActivate(siteId, deviceId, deviceName){
   if (!ok) return;
   cpSetStatus("Activating " + deviceName + "...");
   try {
-    const res = await fetch(CP_BASE + "/login/api.php?page=remotestart&siteid=" + siteId + "&deviceid=" + deviceId, {
+    const res = await safeFetch(CP_BASE + "/login/api.php?page=remotestart&siteid=" + siteId + "&deviceid=" + deviceId, {
       method: "POST",
       credentials: "include",
       headers: {"Content-Type": "application/x-www-form-urlencoded"}
@@ -248,7 +248,7 @@ function cpParseCsv(text){
 async function cpFetchCsvRange(startDate, endDate){
   try {
     const url = CP_BASE + "/login/index.php?page=report_data&siteid=all&startdate=" + encodeURIComponent(startDate) + "&enddate=" + encodeURIComponent(endDate);
-    const res = await fetch(url, {credentials: "include"});
+    const res = await safeFetch(url, {credentials: "include"});
     const text = await res.text();
     if (/type="password"/i.test(text) || !/TransactionID/.test(text)) return {rows: [], loggedOut: true};
     return {rows: cpParseCsv(text), loggedOut: false};

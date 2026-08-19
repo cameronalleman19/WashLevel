@@ -16,7 +16,7 @@ async function consSave(){ await chrome.storage.local.set({consumers: consumers}
 
 async function fetchConsumerPage(page){
   const body = "ConsumerFirstName=&ConsumerLastName=&MobileNumber=&Email=&RFIDCode=&ConsumerCode=0&CreditCardStatus=&HasMultiplePasses=false&CurrentPage=" + page + "&ItemsPerPage=500";
-  const res = await fetch(CBASE + "/consumer/indexfiltertable/", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
+  const res = await safeFetch(CBASE + "/consumer/indexfiltertable/", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
   if (!res.ok) return [];
   const doc = new DOMParser().parseFromString(await res.text(), "text/html");
   const out = [];
@@ -42,7 +42,7 @@ async function fetchConsumerPage(page){
 
 async function fetchPaymentsPage(page, startStr, endStr){
   const body = "currentPage=" + page + "&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=" + startStr + "&EndDate=" + endStr + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=";
-  const res = await fetch(CBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
+  const res = await safeFetch(CBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
   if (!res.ok) return null;
   const txt = await res.text();
   if (txt.indexOf("customerlogin") >= 0 || txt.indexOf("ReturnUrl") >= 0) return null;
@@ -91,7 +91,7 @@ async function fetchPaymentsPage(page, startStr, endStr){
 async function fetchVehicleCount(id){
   try {
     // Step 1: fetch consumer page to find their pass link
-    const cRes = await fetch(CBASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
+    const cRes = await safeFetch(CBASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
     if (!cRes.ok || cRes.type === "opaqueredirect" || cRes.status === 0) return -1;
     const cDoc = new DOMParser().parseFromString(await cRes.text(), "text/html");
     let passUrl = "";
@@ -101,7 +101,7 @@ async function fetchVehicleCount(id){
     });
     if (!passUrl) return 1;
     // Step 2: fetch pass page, read Vehicle Count <strong> + <p>
-    const res = await fetch(CBASE + passUrl, {credentials: "include", redirect: "manual"});
+    const res = await safeFetch(CBASE + passUrl, {credentials: "include", redirect: "manual"});
     if (!res.ok || res.type === "opaqueredirect" || res.status === 0) return -1;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     for (const s of doc.querySelectorAll("strong")){
@@ -116,7 +116,7 @@ async function fetchVehicleCount(id){
 
 async function fetchConsumerPhone(id){
   try {
-    const res = await fetch(CBASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
+    const res = await safeFetch(CBASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
     if (!res.ok || res.type === "opaqueredirect" || res.status === 0) return null;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     let phone = "", site = "";

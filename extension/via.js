@@ -192,7 +192,7 @@ async function viaSync(){
   V$("viaSyncBtn").disabled = true;
   V$("viaStatus").textContent = "Loading exception list...";
   try {
-    const res = await fetch(VBASE + "/consumerpassexceptions/", {credentials: "include"});
+    const res = await safeFetch(VBASE + "/consumerpassexceptions/", {credentials: "include"});
     const html = await res.text();
     if (/type="password"/i.test(html)){ V$("viaStatus").textContent = "Not logged into Dencar."; V$("viaSyncBtn").disabled = false; return; }
     const ids = [];
@@ -203,7 +203,7 @@ async function viaSync(){
     const fresh = {};
     for (let i = 0; i < ids.length; i++){
       V$("viaStatus").textContent = "Loading exception " + (i + 1) + " / " + ids.length;
-      const r2 = await fetch(VBASE + "/consumerpassexceptions/" + ids[i] + "/", {credentials: "include"});
+      const r2 = await safeFetch(VBASE + "/consumerpassexceptions/" + ids[i] + "/", {credentials: "include"});
       const d = parseDetail(await r2.text(), ids[i]);
       await enrichConsumer(d);
       fresh[ids[i]] = d;
@@ -238,7 +238,7 @@ async function runAutoDismiss(){
     const ar = autoCloseReason(e);
     if (!ar || !e.closeId) continue;
     try {
-      const res = await fetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
+      const res = await safeFetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
       if (res.ok){
         viaAutoClosed.push({
           ts: Date.now(),
@@ -560,7 +560,7 @@ async function viaAction(id, kind, btn){
   try {
     const path = kind === "trigger" ? "trigger" : "closeexception";
     const method = kind === "trigger" ? "POST" : "DELETE";
-    const res = await fetch(VBASE + "/consumerpassexceptions/" + path + "/" + actionId + "/", {method: method, credentials: "include"});
+    const res = await safeFetch(VBASE + "/consumerpassexceptions/" + path + "/" + actionId + "/", {method: method, credentials: "include"});
     if (res.ok){
       viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] " + (kind === "trigger" ? "Triggered" : "Closed") + " via Sidecar" + (overrideReason ? " (reason: " + overrideReason + ")" : "")).trim();
       try { await viaHistLog(e, kind === "trigger" ? "trigger" : "close", overrideReason); } catch(_){}
@@ -608,7 +608,7 @@ async function viaCloseGroup(ids, btn){
     const e = viaData[id];
     if (!e || !e.closeId) continue;
     try {
-      const res = await fetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
+      const res = await safeFetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
       if (res.ok){
         viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] Closed via Sidecar" + (overrideReason ? " (reason: " + overrideReason + ")" : "")).trim();
         try { await viaHistLog(e, "close", overrideReason); } catch(_){}
@@ -658,7 +658,7 @@ async function enrichConsumer(d){
   try {
     const end = new Date();
     const body = "currentPage=1&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=2015-01-01&EndDate=" + end.toLocaleDateString("en-CA") + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=" + d.consumerId;
-    const res = await fetch(VBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
+    const res = await safeFetch(VBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
     if (!res.ok) return;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     const rows = Array.from(doc.querySelectorAll("tr"));

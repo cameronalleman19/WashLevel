@@ -96,7 +96,7 @@ async function cFetchPage(page, extraParams){
   };
   if(extraParams && extraParams.GroupName) filters.GroupName = extraParams.GroupName;
   if(extraParams && extraParams.PassCode) filters.PassCode = extraParams.PassCode;
-  var resp = await fetch('https://admin.dencar.sancsoft.net/BulkWashCodes/IndexFilterTable', {
+  var resp = await safeFetch('https://admin.dencar.sancsoft.net/BulkWashCodes/IndexFilterTable', {
     method: 'POST', credentials: 'include',
     headers: {'Content-Type':'application/x-www-form-urlencoded'},
     body: Object.keys(filters).map(function(k){return k+'='+encodeURIComponent(filters[k])}).join('&')
@@ -133,7 +133,7 @@ async function cFullSync(statusCb){
 
 /* ── get CSRF token ── */
 async function cGetCsrf(){
-  var resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true', {credentials:'include'});
+  var resp = await safeFetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true', {credentials:'include'});
   var html = await resp.text();
   var doc = new DOMParser().parseFromString(html,'text/html');
   var createForm = doc.querySelector('form[action*="create"]');
@@ -158,7 +158,7 @@ async function cCreateCode(opts){
     +'&WashCodeState=0&ProductTemplateId='+encodeURIComponent(opts.tierId)
     +'&UpgradePrompt=false&UpgradeAmount=0'
     +'&__RequestVerificationToken='+encodeURIComponent(token);
-  await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/create/', {
+  await safeFetch('https://admin.dencar.sancsoft.net/bulkwashcodes/create/', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body: params

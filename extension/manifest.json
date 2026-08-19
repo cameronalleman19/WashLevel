@@ -5,7 +5,8 @@
   "description": "Aggregated Dencar sales, pass, and VIA analytics with projections",
   "permissions": [
     "storage",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "tabs"
   ],
   "host_permissions": [
     "https://admin.dencar.sancsoft.net/*",
@@ -34,5 +35,17 @@
     "128": "icons/icon-128.png",
     "256": "icons/icon-256.png",
     "512": "icons/icon-512.png"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://admin.dencar.sancsoft.net/*",
+        "https://www.mycryptopay.com/*"
+      ],
+      "js": [
+        "proxy.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

@@ -248,3 +248,57 @@
 
   console.log(`[Sidecar] Platform: ${window.__sidecar.platform}, iOS: ${isIOS}, Mobile: ${isMobileViewport}`);
 })();
+
+// ── Safari-safe fetch via content script proxy ───────────────
+// On Chrome: regular fetch with credentials.
+// On Safari: routes through content script on the target domain's
+// tab so the page's session cookies are used.
+async function safeFetch(url, opts = {}) {
+  if (!window.__sidecar || !window.__sidecar.isSafari) {
+    if (!opts.credentials) opts.credentials = 'include';
+    return fetch(url, opts);
+  }
+
+  const domain = new URL(url).hostname;
+  let tabs;
+  try {
+    tabs = await chrome.tabs.query({ url: 'https://' + domain + '/*' });
+  } catch (e) {
+    tabs = [];
+  }
+  if (!tabs || tabs.length === 0) {
+    throw new Error('Open ' + domain + ' in Safari and log in, then try again.');
+  }
+
+  const msg = {
+    type: 'SIDECAR_FETCH',
+    url: url,
+    method: opts.method || 'GET',
+    headers: opts.headers || null,
+    body: opts.body || null
+  };
+
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabs[0].id, msg, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error('Proxy error: ' + chrome.runtime.lastError.message + '. Reload the ' + domain + ' tab and try again.'));
+        return;
+      }
+      if (!response) {
+        reject(new Error('No response from ' + domain + ' tab. Reload it and try again.'));
+        return;
+      }
+      if (response.error) {
+        reject(new Error(response.error));
+        return;
+      }
+      resolve({
+        ok: response.ok,
+        status: response.status,
+        url: response.url,
+        text: () => Promise.resolve(response.text),
+        json: () => Promise.resolve(JSON.parse(response.text))
+      });
+    });
+  });
+}

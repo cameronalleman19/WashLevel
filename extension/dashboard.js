@@ -55,7 +55,7 @@ async function discoverSites(){
   const re = /<option[^>]*value="([0-9a-fA-F-]{36})"[^>]*>\s*([^<]+?)\s*<\/option>/g;
   for (const p of REPORT_PATHS){
     try {
-      const res = await fetch(BASE + p, {credentials: "include"});
+      const res = await safeFetch(BASE + p, {credentials: "include"});
       const html = await res.text();
       if (/login/i.test(res.url) || /type="password"/i.test(html)) continue;
       const found = [];
@@ -69,7 +69,7 @@ async function discoverSites(){
 
 async function fetchDay(siteId, date){
   try {
-    const res = await fetch(BASE + "/IndexFilterTableDaily", {
+    const res = await safeFetch(BASE + "/IndexFilterTableDaily", {
       method: "POST",
       credentials: "include",
       headers: {"Content-Type": "application/x-www-form-urlencoded"},
@@ -141,7 +141,7 @@ function parseReport(html, siteId, date){
 
 async function fetchSiteAddresses(siteList){
   try {
-    const res = await fetch("https://admin.dencar.sancsoft.net/Sites", {credentials: "include"});
+    const res = await safeFetch("https://admin.dencar.sancsoft.net/Sites", {credentials: "include"});
     if (!res.ok) return;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     for (const site of siteList){
