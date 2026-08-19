@@ -1049,4 +1049,8 @@ async function cpInit(){
   const ovNavBtn = document.querySelector('.nav-btn[data-page="cp-overview"]');
   if (ovNavBtn) ovNavBtn.addEventListener("click", function(){ setTimeout(cpOvRender, 0); });
 }
-document.addEventListener("DOMContentLoaded", cpInit);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", cpInit);
+} else {
+  cpInit();
+}

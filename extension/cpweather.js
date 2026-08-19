@@ -675,4 +675,8 @@ async function cpwInit(){
     });
   }
 }
-document.addEventListener("DOMContentLoaded", cpwInit);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", cpwInit);
+} else {
+  cpwInit();
+}

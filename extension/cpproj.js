@@ -342,4 +342,8 @@ async function cpjInit(){
   if (refresh) refresh.addEventListener("click", cpjRender);
   await cpjRender();
 }
-document.addEventListener("DOMContentLoaded", cpjInit);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", cpjInit);
+} else {
+  cpjInit();
+}
