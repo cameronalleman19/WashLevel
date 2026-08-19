@@ -43,8 +43,10 @@ async function fetchConsumerPage(page){
 async function fetchPaymentsPage(page, startStr, endStr){
   const body = "currentPage=" + page + "&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=" + startStr + "&EndDate=" + endStr + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=";
   const res = await fetch(CBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
-  if (!res.ok) return [];
-  const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+  if (!res.ok) return null;
+  const txt = await res.text();
+  if (txt.indexOf("customerlogin") >= 0 || txt.indexOf("ReturnUrl") >= 0) return null;
+  const doc = new DOMParser().parseFromString(txt, "text/html");
   const rows = Array.from(doc.querySelectorAll("tr"));
   let tsIdx = -1, lpIdx = -1, mIdx = -1, nIdx = -1;
   let aIdx = -1, taxIdx = -1, dIdx = -1;
@@ -219,6 +221,14 @@ async function consSync(){
     for (let page = 1; page <= 500; page++){
       C$("consStatus").textContent = "Loading payments page " + page + "...";
       const batch = await fetchPaymentsPage(page, startStr, endStr);
+      if (batch === null){
+        consumers = fresh;
+        await chrome.storage.local.set({consumers: consumers, washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: latestPayDate});
+        C$("consStatus").textContent = "Dencar session expired at page " + page + ". Saved progress through " + latestPayDate + ". Log in and re-sync.";
+        renderConsumers();
+        C$("consSyncBtn").disabled = false;
+        return;
+      }
       for (const row of batch){
         if (/^(credit card|cash)$/i.test(row.method) && row.amt > 0){
           const site = (row.device || "").split(" - ")[0].trim() || "Unknown";
@@ -263,7 +273,7 @@ async function consSync(){
         }
       }
       /* Checkpoint every 25 pages to survive failures */
-      if (page % 25 === 0){
+      if (page % 5 === 0){
         consumers = fresh;
         await chrome.storage.local.set({consumers: consumers, washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: latestPayDate});
         C$("consStatus").textContent = "Checkpoint saved at page " + page + "...";
