@@ -764,14 +764,6 @@ async function init(){
   $("detailClose").addEventListener("click", () => { $("detailModal").style.display = "none"; });
   $("detailModal").addEventListener("click", (e) => { if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
 }
-console.log("[dashboard] readyState:", document.readyState);
-if (document.readyState === "loading") {
-  console.log("[dashboard] waiting for DOMContentLoaded");
-  document.addEventListener("DOMContentLoaded", function() {
-    console.log("[dashboard] DOMContentLoaded fired, calling init");
-    init().catch(function(e){ console.error("dashboard init error:", e); });
-  });
-} else {
-  console.log("[dashboard] calling init immediately");
+setTimeout(function() {
   init().catch(function(e){ console.error("dashboard init error:", e); });
-}
+}, 0);
