@@ -18,7 +18,7 @@ var WASH_TIERS_MORE = [
   {name:'Other',          id:'f8fd63c6-c869-444f-bc91-b0e30e5ff29e'},
   {name:'Other 2',        id:'98112523-6820-4528-a6be-89cb8fc195f9'}
 ];
-var CUST_ID = 'c58646cc-c240-468f-87bf-db453a2a2910';
+var CUST_ID = null;
 var codesCache = [];
 var codesInited = false;
 var codesSortCol = 'created';
@@ -46,6 +46,17 @@ function cCopyCode(code,btn){
   document.body.appendChild(ta); ta.select(); document.execCommand('copy');
   document.body.removeChild(ta);
   if(btn){btn.textContent='\u2713';setTimeout(function(){btn.textContent='\u2398'},1000);}
+}
+
+/* ── resolve CustomerId from Dencar session ── */
+async function cEnsureCustId(){
+  if(CUST_ID) return CUST_ID;
+  var resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true',{credentials:'include'});
+  var html = await resp.text();
+  var doc = new DOMParser().parseFromString(html,'text/html');
+  doc.querySelectorAll('input[name="CustomerId"]').forEach(function(el){ if(el.value) CUST_ID = el.value; });
+  if(!CUST_ID) throw new Error('Could not resolve CustomerId — are you logged in to Dencar?');
+  return CUST_ID;
 }
 
 /* ── storage ── */
@@ -114,6 +125,7 @@ async function cFetchPage(page, extraParams){
 
 /* ── full sync: all pages ── */
 async function cFullSync(statusCb){
+  await cEnsureCustId();
   var all = [];
   var page = 1, totalPages = 1;
   while(page <= totalPages){
@@ -143,6 +155,7 @@ async function cGetCsrf(){
 
 /* ── create a code ── */
 async function cCreateCode(opts){
+  await cEnsureCustId();
   var token = await cGetCsrf();
   if(!token) throw new Error('Could not get CSRF token \u2014 are you logged in to Dencar?');
   var bottom, top;
