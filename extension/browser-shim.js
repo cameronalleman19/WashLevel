@@ -278,27 +278,25 @@ async function safeFetch(url, opts = {}) {
     body: opts.body || null
   };
 
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabs[0].id, msg, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error('Proxy error: ' + chrome.runtime.lastError.message + '. Reload the ' + domain + ' tab and try again.'));
-        return;
-      }
-      if (!response) {
-        reject(new Error('No response from ' + domain + ' tab. Reload it and try again.'));
-        return;
-      }
-      if (response.error) {
-        reject(new Error(response.error));
-        return;
-      }
-      resolve({
-        ok: response.ok,
-        status: response.status,
-        url: response.url,
-        text: () => Promise.resolve(response.text),
-        json: () => Promise.resolve(JSON.parse(response.text))
-      });
-    });
-  });
+  try {
+    const sendMsg = (typeof browser !== 'undefined' && browser.tabs)
+      ? browser.tabs.sendMessage(tabs[0].id, msg)
+      : new Promise((res, rej) => chrome.tabs.sendMessage(tabs[0].id, msg, r => chrome.runtime.lastError ? rej(chrome.runtime.lastError) : res(r)));
+    const response = await sendMsg;
+    if (!response) {
+      throw new Error('No response from ' + domain + ' tab. Reload it and try again.');
+    }
+    if (response.error) {
+      throw new Error(response.error);
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      url: response.url,
+      text: () => Promise.resolve(response.text),
+      json: () => Promise.resolve(JSON.parse(response.text))
+    };
+  } catch (e) {
+    throw new Error('Proxy error: ' + e.message + '. Reload the ' + domain + ' tab and try again.');
+  }
 }
