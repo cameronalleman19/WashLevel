@@ -112,6 +112,43 @@ async function fetchVehicleCount(id){
   } catch(e){ return 1; }
 }
 
+async function fetchConsumerPhone(id){
+  try {
+    const res = await fetch(CBASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
+    if (!res.ok || res.type === "opaqueredirect" || res.status === 0) return null;
+    const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+    let phone = "", site = "";
+    for (const s of doc.querySelectorAll("strong")){
+      const t = s.textContent.trim();
+      if (/^phone\s*#?$/i.test(t)){
+        const p = s.nextElementSibling;
+        if (p) phone = p.textContent.trim();
+      }
+      if (/^favorite\s*site$/i.test(t)){
+        const p = s.nextElementSibling;
+        if (p) site = p.textContent.trim().split("\n")[0].trim();
+      }
+    }
+    return {phone: phone, favSite: site};
+  } catch(e){ return null; }
+}
+
+async function fetchIncompletePhones(fresh){
+  const cut = Date.now() - 35 * 86400000;
+  const ids = Object.keys(fresh).filter(id => {
+    const c = fresh[id];
+    return c.name === "(no name)" && c.signup > cut && !c.phone;
+  });
+  for (let i = 0; i < ids.length; i++){
+    C$("consStatus").textContent = "Fetching incomplete signup " + (i + 1) + "/" + ids.length + "...";
+    const info = await fetchConsumerPhone(ids[i]);
+    if (info === null) break;
+    fresh[ids[i]].phone = info.phone;
+    fresh[ids[i]].favSite = info.favSite;
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
 async function fetchVehBatch(ids, fresh){
   for (let i = 0; i < ids.length; i++){
     C$("consStatus").textContent = "Fetching vehicle count " + (i + 1) + "/" + ids.length + "...";
@@ -146,8 +183,8 @@ async function consSync(){
     for (const c of list){
       const ex = isIncr ? consumers[c.id] : null;
       fresh[c.id] = ex
-        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0, veh: ex.veh || 1}
-        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0, veh: 1};
+        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0, veh: ex.veh || 1, phone: ex.phone || "", favSite: ex.favSite || ""}
+        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0, veh: 1, phone: "", favSite: ""};
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
@@ -166,6 +203,7 @@ async function consSync(){
         if (vehIds2.length){
           await fetchVehBatch(vehIds2, fresh);
         }
+        await fetchIncompletePhones(fresh);
         consumers = fresh;
         await consSave();
         C$("consStatus").textContent = "Up to date. " + list.length + " consumers.";
@@ -238,6 +276,7 @@ async function consSync(){
     if (vehIds.length){
       await fetchVehBatch(vehIds, fresh);
     }
+    await fetchIncompletePhones(fresh);
     consumers = fresh;
     await chrome.storage.local.set({washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: endStr});
     await consSave();

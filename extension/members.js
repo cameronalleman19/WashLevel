@@ -103,6 +103,51 @@ function mRenderChart(){
   wlLineChart(cv, labels, vals);
 }
 
+function mRenderIncomplete(){
+  const tb = M$("memIncBody");
+  if (!tb) return;
+  const now = Date.now();
+  const incomplete = Object.values(mConsumers).filter(c => {
+    if (c.name && c.name !== "(no name)") return false;
+    if (!c.signup) return false;
+    const renew = new Date(c.signup);
+    renew.setMonth(renew.getMonth() + 1);
+    return renew.getTime() > now;
+  });
+  if (!incomplete.length){
+    tb.innerHTML = "<tr><td colspan=\"5\">No incomplete signups " + String.fromCharCode(127881) + "</td></tr>";
+    return;
+  }
+  incomplete.sort((a, b) => {
+    const ra = new Date(a.signup); ra.setMonth(ra.getMonth() + 1);
+    const rb = new Date(b.signup); rb.setMonth(rb.getMonth() + 1);
+    return ra.getTime() - rb.getTime();
+  });
+  tb.innerHTML = "";
+  for (const c of incomplete){
+    const renew = new Date(c.signup);
+    renew.setMonth(renew.getMonth() + 1);
+    const daysLeft = Math.ceil((renew.getTime() - now) / 86400000);
+    const phone = c.phone || "--";
+    const phoneClean = phone.replace(/[^0-9+]/g, "");
+    const phoneLinks = phoneClean
+      ? "<a href=\"tel:" + phoneClean + "\" class=\"via-open\">" + mEsc(phone) + "</a> <a href=\"sms:" + phoneClean + "\" class=\"via-open\" title=\"Text\">SMS</a>"
+      : mEsc(phone);
+    const daysStyle = daysLeft <= 3
+      ? " style=\"color:#f87171;font-weight:600\""
+      : daysLeft <= 7
+        ? " style=\"color:#ffd166;font-weight:600\""
+        : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + phoneLinks + "</td>" +
+      "<td>" + mDate(c.signup) + "</td>" +
+      "<td" + daysStyle + ">" + daysLeft + "d</td>" +
+      "<td>" + mEsc(c.favSite || "--") + "</td>" +
+      "<td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
+    tb.appendChild(tr);
+  }
+}
+
 function mRenderRisk(){
   const tb = M$("memRiskBody");
   tb.innerHTML = "";
@@ -347,6 +392,7 @@ async function memRender(){
   mRenderTiles();
   mRenderChart();
   if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); }
+  mRenderIncomplete();
   mRenderRisk();
   await mRenderCohorts();
   mRenderEconomics();
