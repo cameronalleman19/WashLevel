@@ -253,7 +253,7 @@
 // On Chrome: regular fetch with credentials.
 // On Safari: routes through content script on the target domain's
 // tab so the page's session cookies are used.
-async function safeFetch(url, opts = {}) {
+window.safeFetch = async function safeFetch(url, opts = {}) {
   if (!window.__sidecar || !window.__sidecar.isSafari) {
     if (!opts.credentials) opts.credentials = 'include';
     return fetch(url, opts);
