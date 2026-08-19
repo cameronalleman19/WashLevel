@@ -56,7 +56,7 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <header>
   <h1>Overview</h1>
   <div id="lastSync"></div>
-  <button id="syncBtn" onclick="sync()">Sync</button>
+  <button id="syncBtn">Sync</button>
 </header>
 <div id="status"></div>
 <section class="summary" id="ovTiles">
@@ -96,7 +96,7 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <div class="page" id="page-via">
 <header>
   <h1>VIA Guard exceptions</h1>
-  <button id="viaSyncBtn" onclick="viaSync()">Sync VIA</button>
+  <button id="viaSyncBtn">Sync VIA</button>
   <span id="viaStatus" class="via-status"></span>
 </header>
 <div id="viaCards"></div>
@@ -278,5 +278,18 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <script src="cpproj.js"></script>
 <script src="cpweather.js"></script>
 <script src="codes.js"></script>
+<script>
+(function() {
+  function wireUp() {
+    if (typeof init === 'function') init().catch(function(e){ console.error('init err:', e); });
+    if (typeof viaInit === 'function') viaInit().then(function(){ if (typeof renderViaHistory === 'function') renderViaHistory(); }).catch(function(e){ console.error('via err:', e); });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireUp);
+  } else {
+    wireUp();
+  }
+})();
+</script>
 </body>
 </html>
