@@ -1,4 +1,3 @@
-function onReady(fn){if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",fn);}else{fn();}}
 const safeFetch = window.safeFetch || fetch;
 function wlMoney0(n){ return "$" + Math.round(n || 0).toLocaleString("en-US"); }
 

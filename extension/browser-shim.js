@@ -303,3 +303,5 @@ window.safeFetch = async function safeFetch(url, opts) {
     json: function() { return Promise.resolve(JSON.parse(response.text)); }
   };
 };
+
+function onReady(fn){if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",fn);}else{fn();}}

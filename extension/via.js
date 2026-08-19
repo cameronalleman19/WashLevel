@@ -651,7 +651,7 @@ async function viaInit() {
   await viaLoad();
   renderViaList();
   V$("viaSyncBtn").addEventListener("click", viaSync);
-});
+}
 
 async function enrichConsumer(d){
   if (!d.consumerId) return;
