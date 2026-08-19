@@ -767,5 +767,5 @@ async function init(){
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {
-  init();
+  init().catch(function(e){ console.error("dashboard init error:", e); });
 }
