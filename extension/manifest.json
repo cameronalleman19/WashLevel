@@ -6,7 +6,8 @@
   "permissions": [
     "storage",
     "unlimitedStorage",
-    "tabs"
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "https://admin.dencar.sancsoft.net/*",

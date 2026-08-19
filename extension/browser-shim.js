@@ -260,6 +260,54 @@ async function safeFetch(url, opts = {}) {
   }
 
   const domain = new URL(url).hostname;
+  const tabs = await browser.tabs.query({ url: 'https://' + domain + '/*' });
+  if (!tabs || tabs.length === 0) {
+    throw new Error('Open ' + domain + ' in Safari and log in, then try again.');
+  }
+
+  const fetchOpts = {
+    method: opts.method || 'GET',
+    headers: opts.headers || null,
+    body: opts.body || null
+  };
+
+  const results = await browser.scripting.executeScript({
+    target: { tabId: tabs[0].id },
+    func: async (fetchUrl, fOpts) => {
+      try {
+        const r = await fetch(fetchUrl, {
+          method: fOpts.method || 'GET',
+          credentials: 'include',
+          headers: fOpts.headers || undefined,
+          body: fOpts.body || undefined
+        });
+        const text = await r.text();
+        return { ok: r.ok, status: r.status, url: r.url, text: text };
+      } catch (e) {
+        return { ok: false, status: 0, url: fetchUrl, text: '', error: e.message };
+      }
+    },
+    args: [url, fetchOpts]
+  });
+
+  const response = results[0].result;
+  if (!response) throw new Error('No response from ' + domain + ' tab. Reload it and try again.');
+  if (response.error) throw new Error(response.error);
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    url: response.url,
+    text: () => Promise.resolve(response.text),
+    json: () => Promise.resolve(JSON.parse(response.text))
+  };
+}) {
+  if (!window.__sidecar || !window.__sidecar.isSafari) {
+    if (!opts.credentials) opts.credentials = 'include';
+    return fetch(url, opts);
+  }
+
+  const domain = new URL(url).hostname;
   let tabs;
   try {
     tabs = await chrome.tabs.query({ url: 'https://' + domain + '/*' });
