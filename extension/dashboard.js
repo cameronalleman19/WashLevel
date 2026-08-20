@@ -179,7 +179,7 @@ async function sync(){
   const tasks = [];
   for (const s of sites){
     hist[s.id] = hist[s.id] || {};
-    const origin = siteOrigins[s.id] ? new Date(siteOrigins[s.id]) : new Date(today.getFullYear(), 0, 1);
+    const origin = (typeof siteOrigins[s.id] === "string" && siteOrigins[s.id]) ? new Date(siteOrigins[s.id]) : new Date(today.getFullYear(), 0, 1);
     for (let d = new Date(origin); ds(d) <= todayStr; d.setDate(d.getDate() + 1)){
       const dt = ds(d);
       if (!hist[s.id][dt] || dt === todayStr || dt === yestStr) tasks.push([s.id, dt]);
@@ -197,7 +197,7 @@ async function sync(){
   await save();
   // ── Backward probe: discover each site's full history ──
   for (const s of sites){
-    if (siteOrigins[s.id]) continue;
+    if (typeof siteOrigins[s.id] === "string" && siteOrigins[s.id]) continue;
     const stored = Object.keys(hist[s.id] || {}).sort();
     if (!stored.length) continue;
     let probe = new Date(stored[0]);
