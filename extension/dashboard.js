@@ -760,8 +760,11 @@ function renderAnomalies(today){
 async function init(){
   await load();
   render();
-  $("syncBtn").addEventListener("click", sync);
-  $("detailClose").addEventListener("click", () => { $("detailModal").style.display = "none"; });
-  $("detailModal").addEventListener("click", (e) => { if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
 }
-setTimeout(function(){ init().catch(function(e){ console.error("init err:", e); }); }, 0);
+$("syncBtn").addEventListener("click", sync);
+$("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
+$("detailModal").addEventListener("click", function(e){ if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
+$("syncBtn").addEventListener("click", sync);
+$("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
+$("detailModal").addEventListener("click", function(e){ if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
+init().catch(function(e){ console.error("init err:", e); });

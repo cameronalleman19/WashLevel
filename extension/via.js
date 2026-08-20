@@ -846,8 +846,4 @@ async function renderViaHistory(){
   box.innerHTML = html;
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => { viaInit(); renderViaHistory(); });
-} else {
-  Promise.resolve().then(function(){ return viaInit(); }).then(function(){ renderViaHistory(); }).catch(function(e){ console.error("via init error:", e); });
-}
+viaInit().then(function(){ renderViaHistory(); }).catch(function(e){ console.error("via init error:", e); });
