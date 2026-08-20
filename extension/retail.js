@@ -10,7 +10,7 @@ let rSelectedSite = null;
 function rFilteredSites(){ return rSelectedSite ? rSites.filter(s => s.id === rSelectedSite) : rSites; }
 
 async function retLoad(){
-  const st = await chrome.storage.local.get(["hist", "sites"]);
+  const st = (await chrome.storage.local.get(["hist", "sites"])) || {};
   rHist = st.hist || {};
   rSites = st.sites || [];
 }
@@ -264,7 +264,7 @@ onReady( () => {
 let rTiers = {};
 
 async function rPkgLoad(){
-  const st = await chrome.storage.local.get(["washTiers"]);
+  const st = (await chrome.storage.local.get(["washTiers"])) || {};
   rTiers = st.washTiers || {};
 }
 

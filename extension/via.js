@@ -179,7 +179,7 @@ function autoCloseReason(e){
 }
 
 async function viaLoad(){
-  const st = await chrome.storage.local.get(["viaData", "viaNotes", "viaSeen", "viaAutoSettings", "viaAutoClosed"]);
+  const st = (await chrome.storage.local.get(["viaData", "viaNotes", "viaSeen", "viaAutoSettings", "viaAutoClosed"])) || {};
   viaData = st.viaData || {};
   viaNotes = st.viaNotes || {};
   viaSeen = st.viaSeen || {};
@@ -701,7 +701,7 @@ async function enrichConsumer(d){
 const VIA_HIST_KEY = "viaHistory";
 
 async function viaHistAll(){
-  const o = await chrome.storage.local.get(VIA_HIST_KEY);
+  const o = (await chrome.storage.local.get(VIA_HIST_KEY)) || {};
   return o[VIA_HIST_KEY] || [];
 }
 

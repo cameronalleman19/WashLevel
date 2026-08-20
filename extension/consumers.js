@@ -9,7 +9,7 @@ function cNorm(s){ return (s || "").toLowerCase().replace(/[^a-z]/g, ""); }
 function consFmtDate(t){ if (!t) return "--"; try { const d = new Date(t); if (isNaN(d.getTime())) return "--"; return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear(); } catch(e){ return "--"; } }
 
 async function consLoad(){
-  const st = await chrome.storage.local.get(["consumers"]);
+  const st = (await chrome.storage.local.get(["consumers"])) || {};
   consumers = st.consumers || {};
 }
 async function consSave(){ await chrome.storage.local.set({consumers: consumers}); }
@@ -175,7 +175,7 @@ async function consSync(){
       await new Promise(r => setTimeout(r, 20));
     }
     if (!list.length){ C$("consStatus").textContent = "No consumers found - are you logged into Dencar?"; C$("consSyncBtn").disabled = false; return; }
-    const stored = await chrome.storage.local.get(["washTiers", "plateVisits", "plateSiteMap", "lastPaymentSync"]);
+    const stored = (await chrome.storage.local.get(["washTiers", "plateVisits", "plateSiteMap", "lastPaymentSync"])) || {};
     const tiers = stored.washTiers || {};
     const pv = stored.plateVisits || {};
     const psm = stored.plateSiteMap || [];

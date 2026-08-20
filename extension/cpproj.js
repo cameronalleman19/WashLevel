@@ -254,7 +254,7 @@ function cpjLiveAccuracy(){
 }
 
 async function cpjLoad(){
-  const st = await chrome.storage.local.get(["cpHist", "cpSites", "cpStatus", "cpPredLog"]);
+  const st = (await chrome.storage.local.get(["cpHist", "cpSites", "cpStatus", "cpPredLog"])) || {};
   cpjHist = st.cpHist || {};
   cpjSites = st.cpSites || [];
   cpjStatus = st.cpStatus || {};

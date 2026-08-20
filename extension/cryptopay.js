@@ -29,7 +29,7 @@ function cpMoneyNum(s){ const m = String(s).replace(/[$,]/g, "").match(/-?\d+(\.
 function cpBackfillStart(){ const n = new Date(); return new Date(n.getFullYear(), 0, 1); }
 
 async function cpLoad(){
-  const st = await chrome.storage.local.get(["cpSites", "cpStatus", "cpLastSync", "cpSchema"]);
+  const st = (await chrome.storage.local.get(["cpSites", "cpStatus", "cpLastSync", "cpSchema"])) || {};
   if (st.cpSchema !== CP_SCHEMA){
     cpStatus = {};
     await chrome.storage.local.set({cpStatus: {}, cpSchema: CP_SCHEMA});
@@ -476,7 +476,7 @@ function cpPeriodRow(label, t){
 }
 
 async function cpOvLoad(){
-  const st = await chrome.storage.local.get(["cpHist", "cpHistLastSync", "cpHistSchema", "cpSyncedMonths"]);
+  const st = (await chrome.storage.local.get(["cpHist", "cpHistLastSync", "cpHistSchema", "cpSyncedMonths"])) || {};
   if (st.cpHistSchema !== CP_HIST_SCHEMA){
     cpHist = {};
     cpSyncedMonths = [];

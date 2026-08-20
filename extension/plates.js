@@ -12,7 +12,7 @@
 let plateData = {}, plateSiteMap = [];
 
 async function platesLoad(){
-  const st = await chrome.storage.local.get(["plateVisits", "plateSiteMap"]);
+  const st = (await chrome.storage.local.get(["plateVisits", "plateSiteMap"])) || {};
   plateData = st.plateVisits || {};
   plateSiteMap = st.plateSiteMap || [];
 }

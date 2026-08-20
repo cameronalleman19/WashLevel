@@ -12,7 +12,7 @@ let mSelectedSite = null;
 function mFilteredSites(){ return mSelectedSite ? mSites.filter(s => s.id === mSelectedSite) : mSites; }
 
 async function memLoad(){
-  const st = await chrome.storage.local.get(["consumers", "hist", "sites", "viaSeen", "memCohortBase"]);
+  const st = (await chrome.storage.local.get(["consumers", "hist", "sites", "viaSeen", "memCohortBase"])) || {};
   mConsumers = st.consumers || {};
   mHist = st.hist || {};
   mSites = st.sites || [];

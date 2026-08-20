@@ -37,7 +37,7 @@ function passUseRange(sid, from, to){
 }
 
 async function load(){
-  const st = await chrome.storage.local.get(["hist", "sites", "lastSync", "schema", "siteOrigins"]);
+  const st = (await chrome.storage.local.get(["hist", "sites", "lastSync", "schema", "siteOrigins"])) || {};
   if (st.schema !== SCHEMA){
     hist = {};
     await chrome.storage.local.set({hist: {}, schema: SCHEMA});

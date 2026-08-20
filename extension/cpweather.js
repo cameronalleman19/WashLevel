@@ -58,10 +58,10 @@ function cpwNextDay(k){
 }
 
 async function cpwLoad(){
-  const st = await chrome.storage.local.get([
+  const st = (await chrome.storage.local.get([
     "cpHist", "cpSites", "cpStatus",
     "cpWeather", "cpWeatherSchema", "cpWeatherSyncedThrough", "cpWeatherForecast"
-  ]);
+  ])) || {};
   cpwHist = st.cpHist || {};
   cpwSites = st.cpSites || [];
   cpwStatus = st.cpStatus || {};
@@ -122,7 +122,7 @@ async function cpwGeocode(address){
 // Reads-merges-writes cpStatus so this never clobbers the name/devices/address
 // fields that cryptopay.js's own Site Status sync owns.
 async function cpwSaveSiteCoords(siteId, lat, lon){
-  const st = await chrome.storage.local.get(["cpStatus"]);
+  const st = (await chrome.storage.local.get(["cpStatus"])) || {};
   const fresh = st.cpStatus || {};
   fresh[siteId] = Object.assign({}, fresh[siteId], {lat: lat, lon: lon});
   await chrome.storage.local.set({cpStatus: fresh});

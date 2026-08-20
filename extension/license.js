@@ -21,7 +21,7 @@ document.addEventListener("click", function (e) {
 }, true);
 
 async function licGetKey() {
-  const st = await chrome.storage.local.get(["sidecarLicenseKey"]);
+  const st = (await chrome.storage.local.get(["sidecarLicenseKey"])) || {};
   return (st.sidecarLicenseKey || "").trim().toUpperCase();
 }
 
@@ -32,7 +32,7 @@ async function licSetKey(key) {
 }
 
 async function licGetCachedState() {
-  const st = await chrome.storage.local.get(["sidecarLicenseState"]);
+  const st = (await chrome.storage.local.get(["sidecarLicenseState"])) || {};
   return st.sidecarLicenseState || null;
 }
 
