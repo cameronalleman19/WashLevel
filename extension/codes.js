@@ -51,7 +51,7 @@ function cCopyCode(code,btn){
 /* ── resolve CustomerId from Dencar session ── */
 async function cEnsureCustId(){
   if(CUST_ID) return CUST_ID;
-  var resp = await fetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true',{credentials:'include'});
+  var resp = await safeFetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true',{credentials:'include'});
   var html = await resp.text();
   var doc = new DOMParser().parseFromString(html,'text/html');
   doc.querySelectorAll('input[name="CustomerId"]').forEach(function(el){ if(el.value) CUST_ID = el.value; });
