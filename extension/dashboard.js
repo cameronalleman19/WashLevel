@@ -763,8 +763,10 @@ async function init(){
 }
 $("syncBtn").addEventListener("click", sync);
 $("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
-$("detailModal").addEventListener("click", function(e){ if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
-$("syncBtn").addEventListener("click", sync);
-$("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
-$("detailModal").addEventListener("click", function(e){ if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
+function wireButtons() {
+  var sb = $("syncBtn"); if (sb) sb.addEventListener("click", sync);
+  var dc = $("detailClose"); if (dc) dc.addEventListener("click", function(){ $("detailModal").style.display = "none"; });
+  var dm = $("detailModal"); if (dm) dm.addEventListener("click", function(e){ if (e.target === dm) dm.style.display = "none"; });
+}
+wireButtons();
 init().catch(function(e){ console.error("init err:", e); });
