@@ -100,7 +100,7 @@
     'cpSyncedMonths', 'viaAutoHistory'
   ]);
 
-  if (isIOS && chrome.storage && chrome.storage.local) {
+  if (false && isIOS && chrome.storage && chrome.storage.local) { // disabled for now
     const originalGet = chrome.storage.local.get.bind(chrome.storage.local);
     const originalSet = chrome.storage.local.set.bind(chrome.storage.local);
     const originalRemove = chrome.storage.local.remove.bind(chrome.storage.local);
