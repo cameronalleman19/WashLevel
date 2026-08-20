@@ -764,7 +764,9 @@ async function init(){
 $("syncBtn").addEventListener("click", sync);
 $("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
 $("detailModal").addEventListener("click", function(e){ if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
-$("syncBtn").addEventListener("click", sync);
-$("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
-$("detailModal").addEventListener("click", function(e){ if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
-init().catch(function(e){ console.error("init err:", e); });
+window.addEventListener("load", function() {
+  $("syncBtn").addEventListener("click", sync);
+  $("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
+  $("detailModal").addEventListener("click", function(e){ if (e.target === $("detailModal")) $("detailModal").style.display = "none"; });
+  init().catch(function(e){ console.error("init err:", e); });
+});
