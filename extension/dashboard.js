@@ -769,4 +769,5 @@ function wireButtons() {
   var dm = $("detailModal"); if (dm) dm.addEventListener("click", function(e){ if (e.target === dm) dm.style.display = "none"; });
 }
 wireButtons();
-init().catch(function(e){ console.error("init err:", e); });
+chrome.storage.local.set({_dashReached: Date.now()});
+init().then(function(){ chrome.storage.local.set({_dashInitOK: Date.now()}); }).catch(function(e){ chrome.storage.local.set({_dashInitErr: e.message}); });
