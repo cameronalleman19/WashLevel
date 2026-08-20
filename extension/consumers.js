@@ -179,7 +179,8 @@ async function consSync(){
     const tiers = stored.washTiers || {};
     const pv = stored.plateVisits || {};
     const psm = stored.plateSiteMap || [];
-    const isIncr = !!stored.lastPaymentSync;
+    const hasWashData = Object.values(fresh).some(function(c){ return c.washes > 0; });
+    const isIncr = !!stored.lastPaymentSync && hasWashData;
     const byName = {};
     const fresh = {};
     for (const c of list){
