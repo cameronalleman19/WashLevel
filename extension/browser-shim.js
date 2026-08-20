@@ -304,4 +304,4 @@ window.safeFetch = async function safeFetch(url, opts) {
   };
 };
 
-function onReady(fn){if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",fn);}else{fn();}}
+function onReady(fn){if(document.readyState==="complete"){fn();}else{window.addEventListener("load",fn);}}

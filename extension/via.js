@@ -845,5 +845,7 @@ async function renderViaHistory(){
   box.innerHTML = html;
 }
 
-V$("viaSyncBtn").addEventListener("click", viaSync);
-viaInit().then(function(){ renderViaHistory(); }).catch(function(e){ console.error("via init error:", e); });
+window.addEventListener("load", function() {
+  V$("viaSyncBtn").addEventListener("click", viaSync);
+  viaInit().then(function(){ renderViaHistory(); }).catch(function(e){ console.error("via init error:", e); });
+});
