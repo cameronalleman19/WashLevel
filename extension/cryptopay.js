@@ -123,6 +123,7 @@ async function cpFetchStatus(siteId){
     if (/type="password"/i.test(html)) return {devices: [], loggedOut: true};
     return {devices: cpParseDevices(html), address: cpParseAddress(html), loggedOut: false};
   } catch(e){
+    console.error("[CP DEBUG] cpFetchStatus THREW for", siteId, e.message || e);
     return {devices: [], loggedOut: false, error: true};
   }
 }
