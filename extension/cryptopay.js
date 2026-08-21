@@ -56,6 +56,7 @@ async function cpDiscoverSites(){
     while ((m = reDsk.exec(html))) found.push({id: m[1], name: m[2].trim()});
     /* Mobile format */
     if (found.length === 0) {
+      console.log("[CP DISC] mobile HTML:", html);
       const reMob = /siteid=(MPM\d+)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]+)/g;
       const seen = {};
       while ((m = reMob.exec(html))) {
