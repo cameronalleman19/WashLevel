@@ -274,7 +274,22 @@ window.safeFetch = async function safeFetch(url, opts) {
   }
   /* Shortest URL is most likely the main dashboard */
   validTabs.sort(function(a, b) { return a.url.length - b.url.length; });
-  var tabs = validTabs;
+  /* Try each tab until one accepts scripts (Safari suspends old tabs) */
+  var workingTab = null;
+  for (var i = 0; i < validTabs.length; i++) {
+    try {
+      await browser.scripting.executeScript({
+        target: { tabId: validTabs[i].id },
+        func: function() { return true; }
+      });
+      workingTab = validTabs[i];
+      break;
+    } catch (e) { /* tab suspended, try next */ }
+  }
+  if (!workingTab) {
+    throw new Error('All ' + domain + ' tabs are suspended. Open a fresh tab, log in, and try again.');
+  }
+  var tabs = [workingTab];
 
   var fetchOpts = {
     method: opts.method || 'GET',
