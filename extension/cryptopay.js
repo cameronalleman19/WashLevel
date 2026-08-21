@@ -67,7 +67,7 @@ async function cpDiscoverSites(){
       }
     }
     if (found.length === 0) return {sites: [], loggedOut: true};
-    return {sites: found, loggedOut: false};
+    return {sites: found.filter(s => !/copyright/i.test(s.name)), loggedOut: false};
   } catch(e){
     return {sites: [], loggedOut: false, error: true};
   }
@@ -119,6 +119,7 @@ async function cpFetchStatus(siteId){
   try {
     const res = await safeFetch(CP_BASE + "/login/api.php?page=sitestatus_inner&siteid=" + siteId, {credentials: "include"});
     const html = await res.text();
+    console.log("[CP DEBUG] siteId:", siteId, "len:", html.length, "snippet:", html.substring(0, 500));
     if (/type="password"/i.test(html)) return {devices: [], loggedOut: true};
     return {devices: cpParseDevices(html), address: cpParseAddress(html), loggedOut: false};
   } catch(e){
