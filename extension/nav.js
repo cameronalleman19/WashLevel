@@ -66,3 +66,35 @@ onReady( () => {
     cEl.addEventListener('change', onChange);
   });
 });
+
+
+/* ── Mobile hamburger menu ── */
+(function() {
+  var btn = document.getElementById('hamburgerBtn');
+  var nav = document.getElementById('sideNav');
+  var overlay = document.getElementById('navOverlay');
+  if (!btn || !nav || !overlay) return;
+
+  function openMenu() {
+    nav.classList.add('open');
+    overlay.classList.add('open');
+  }
+  function closeMenu() {
+    nav.classList.remove('open');
+    overlay.classList.remove('open');
+  }
+
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (nav.classList.contains('open')) closeMenu();
+    else openMenu();
+  });
+  overlay.addEventListener('click', closeMenu);
+
+  /* Close menu when a nav button is tapped */
+  nav.querySelectorAll('.nav-btn[data-page]').forEach(function(b) {
+    b.addEventListener('click', function() {
+      closeMenu();
+    });
+  });
+})();

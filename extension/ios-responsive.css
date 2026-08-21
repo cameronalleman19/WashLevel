@@ -1,6 +1,7 @@
 /* WashLevel Sidecar — iOS Responsive Overlay */
 /* Load AFTER dashboard.css                    */
 
+/* ── iPad adjustments ── */
 .sidecar-ipad .dashboard-container,
 .sidecar-ipad .tab-content {
   max-width: 100%;
@@ -8,24 +9,120 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* ── Hamburger button (hidden by default, shown on iPhone) ── */
+.hamburger-btn {
+  display: none;
+}
+.nav-overlay {
+  display: none;
+}
+
+/* ── iPhone layout ── */
 @media (max-width: 500px) {
-  .sidecar-iphone .nav-tabs,
-  .sidecar-iphone nav {
-    display: flex;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
-    gap: 2px;
-    padding-bottom: 4px;
-    scrollbar-width: none;
+
+  /* Hamburger icon */
+  .sidecar-iphone .hamburger-btn {
+    display: block;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 1001;
+    background: #182640;
+    border: 1px solid #2a3a58;
+    color: #eaeef5;
+    font-size: 22px;
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    padding: 0;
+    line-height: 44px;
+    text-align: center;
+    cursor: pointer;
   }
-  .sidecar-iphone .nav-tabs::-webkit-scrollbar { display: none; }
-  .sidecar-iphone .nav-tabs button,
-  .sidecar-iphone nav button {
-    flex-shrink: 0;
+  .sidecar-iphone .hamburger-btn:hover {
+    background: #1f3050;
+  }
+
+  /* Dark overlay behind nav */
+  .sidecar-iphone .nav-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 999;
+  }
+  .sidecar-iphone .nav-overlay.open {
+    display: block;
+  }
+
+  /* Slide-out nav */
+  .sidecar-iphone #sideNav {
+    position: fixed;
+    top: 0;
+    left: -260px;
+    width: 240px;
+    height: 100vh;
+    z-index: 1000;
+    background: #10192b;
+    border-right: 1px solid #2a3a58;
+    padding: 60px 12px 20px;
+    overflow-y: auto;
+    transition: left .25s ease;
+    box-sizing: border-box;
+  }
+  .sidecar-iphone #sideNav.open {
+    left: 0;
+  }
+
+  /* Body padding for hamburger */
+  .sidecar-iphone {
+    padding-top: 56px !important;
+  }
+
+  /* Main content full width */
+  .sidecar-iphone .app {
+    flex-direction: column;
+    gap: 0;
+    padding: 0 8px;
+  }
+  .sidecar-iphone main {
+    width: 100%;
+  }
+
+  /* Stat tiles: 2 columns */
+  .sidecar-iphone .summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin: 8px 0;
+  }
+  .sidecar-iphone .stat {
+    padding: 10px;
+  }
+  .sidecar-iphone .stat div {
+    font-size: 20px;
+  }
+  .sidecar-iphone .stat label {
     font-size: 11px;
-    padding: 6px 10px;
   }
+
+  /* Site cards: single column */
+  .sidecar-iphone .cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Headers */
+  .sidecar-iphone header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .sidecar-iphone header h1 {
+    font-size: 18px;
+    width: 100%;
+  }
+
+  /* Tables: horizontal scroll */
   .sidecar-iphone table {
     display: block;
     overflow-x: auto;
@@ -34,22 +131,28 @@
   }
   .sidecar-iphone th,
   .sidecar-iphone td {
-    padding: 4px 6px;
+    padding: 6px 8px;
     white-space: nowrap;
   }
-  .sidecar-iphone .stat-row,
-  .sidecar-iphone .stats-grid,
-  .sidecar-iphone .card-row {
+
+  /* VIA cards: stack vertically */
+  .sidecar-iphone .via-card {
     flex-direction: column;
-    gap: 8px;
   }
-  .sidecar-iphone .stat-box,
-  .sidecar-iphone .stat-card {
+  .sidecar-iphone .via-photos {
     width: 100%;
-    min-width: unset;
+    flex-direction: row;
+    overflow-x: auto;
   }
+  .sidecar-iphone .via-photos img {
+    width: 140px;
+    height: 100px;
+  }
+
+  /* Modals: full screen */
   .sidecar-iphone .modal-content,
-  .sidecar-iphone .modal {
+  .sidecar-iphone .modal,
+  .sidecar-iphone #detailPanel {
     width: 100% !important;
     max-width: 100% !important;
     height: 100vh;
@@ -57,25 +160,23 @@
     margin: 0;
     border-radius: 0;
   }
+
+  /* Charts */
   .sidecar-iphone canvas {
     max-width: 100%;
-    height: auto !important;
+    height: 150px !important;
   }
+
+  /* Inputs: prevent iOS zoom */
   .sidecar-iphone input[type="text"],
   .sidecar-iphone input[type="search"],
   .sidecar-iphone select {
+    font-size: 16px;
     width: 100%;
     box-sizing: border-box;
-    font-size: 16px;
   }
-  .sidecar-iphone .header,
-  .sidecar-iphone header {
-    padding: 8px 12px;
-  }
-  .sidecar-iphone .header h1,
-  .sidecar-iphone header h1 {
-    font-size: 16px;
-  }
+
+  /* Period selectors: wrap */
   .sidecar-iphone .period-selector,
   .sidecar-iphone .date-range {
     flex-wrap: wrap;
@@ -85,10 +186,14 @@
     font-size: 11px;
     padding: 4px 8px;
   }
+
+  /* Hide print on mobile */
   .sidecar-iphone .print-btn,
   .sidecar-iphone [data-action="print"] {
     display: none;
   }
+
+  /* Touch targets */
   .sidecar-iphone button,
   .sidecar-iphone a,
   .sidecar-iphone .clickable {
@@ -97,6 +202,7 @@
   }
 }
 
+/* ── Safe area (notch/Dynamic Island) ── */
 @supports (padding-top: env(safe-area-inset-top)) {
   .sidecar-ios .app {
     padding-top: env(safe-area-inset-top);
@@ -104,8 +210,15 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+  .sidecar-iphone .hamburger-btn {
+    top: calc(12px + env(safe-area-inset-top));
+  }
+  .sidecar-iphone #sideNav {
+    padding-top: calc(60px + env(safe-area-inset-top));
+  }
 }
 
+/* ── General iOS polish ── */
 .sidecar-ios {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
