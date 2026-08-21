@@ -156,7 +156,7 @@ async function fetchVehBatch(ids, fresh){
     C$("consStatus").textContent = "Fetching vehicle count " + (i + 1) + "/" + ids.length + "...";
     const v = await fetchVehicleCount(ids[i]);
     if (v === -1){ C$("consStatus").textContent = "Dencar session expired at " + (i + 1) + "/" + ids.length + ". Log in to Dencar and re-sync."; consumers = fresh; await consSave(); renderConsumers(); C$("consSyncBtn").disabled = false; throw new Error("SESSION_EXPIRED"); }
-    fresh[ids[i]].veh = v;
+    fresh[ids[i]].veh = v; fresh[ids[i]].vehChecked = true;
     if (i % 10 === 9){ consumers = fresh; await consSave(); }
     await new Promise(r => setTimeout(r, 200));
   }
@@ -186,8 +186,8 @@ async function consSync(){
     for (const c of list){
       const ex = isIncr ? consumers[c.id] : null;
       fresh[c.id] = ex
-        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0, veh: ex.veh || 1, phone: ex.phone || "", favSite: ex.favSite || ""}
-        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0, veh: 1, phone: "", favSite: ""};
+        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0, veh: ex.veh || 1, vehChecked: ex.vehChecked || false, phone: ex.phone || "", favSite: ex.favSite || ""}
+        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0, veh: 1, vehChecked: false, phone: "", favSite: ""};
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
@@ -201,7 +201,7 @@ async function consSync(){
         const vehCut2 = Date.now() - 45 * 86400000;
         const vehIds2 = Object.keys(fresh).filter(id => {
           const c = fresh[id];
-          return (c.veh || 1) === 1 && ((c.lastWash > vehCut2) || (c.lastRenew > vehCut2) || (c.lastNew > vehCut2));
+          return !c.vehChecked && ((c.lastWash > vehCut2) || (c.lastRenew > vehCut2) || (c.lastNew > vehCut2));
         });
         if (vehIds2.length){
           await fetchVehBatch(vehIds2, fresh);
@@ -285,7 +285,7 @@ async function consSync(){
     const vehCut = Date.now() - 45 * 86400000;
     const vehIds = Object.keys(fresh).filter(id => {
       const c = fresh[id];
-      return (c.veh || 1) === 1 && ((c.lastWash > vehCut) || (c.lastRenew > vehCut) || (c.lastNew > vehCut));
+      return !c.vehChecked && ((c.lastWash > vehCut) || (c.lastRenew > vehCut) || (c.lastNew > vehCut));
     });
     if (vehIds.length){
       await fetchVehBatch(vehIds, fresh);

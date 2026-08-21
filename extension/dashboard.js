@@ -197,7 +197,7 @@ async function sync(){
   await save();
   // ── Backward probe: discover each site's full history ──
   for (const s of sites){
-    if (typeof siteOrigins[s.id] === "string" && siteOrigins[s.id]) continue;
+    if (typeof siteOrigins[s.id] === "string" && siteOrigins[s.id]){ setStatus(s.name + " origin known (" + siteOrigins[s.id] + ") - skip probe"); await new Promise(r => setTimeout(r, 300)); continue; }
     const stored = Object.keys(hist[s.id] || {}).sort();
     if (!stored.length) continue;
     let probe = new Date(stored[0]);
