@@ -121,6 +121,14 @@
     font-size: 18px;
     width: 100%;
   }
+  /* Consumer search: full width row on iPhone */
+  .sidecar-iphone #consSearch {
+    order: 10;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+    box-sizing: border-box;
+  }
 
   /* Tables: horizontal scroll */
   .sidecar-iphone table {

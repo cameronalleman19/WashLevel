@@ -847,3 +847,42 @@ async function renderViaHistory(){
 
 V$("viaSyncBtn").addEventListener("click", viaSync);
 viaInit().then(function(){ renderViaHistory(); }).catch(function(e){ console.error("via init error:", e); });
+
+
+/* ── Mobile photo tap-to-zoom ── */
+(function() {
+  if (!window.__sidecar || !window.__sidecar.isMobile) return;
+
+  var zoomOverlay = null;
+
+  function showZoom(src) {
+    if (zoomOverlay) closeZoom();
+    zoomOverlay = document.createElement('div');
+    zoomOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;display:flex;align-items:center;justify-content:center;';
+    var img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = 'max-width:92vw;max-height:88vh;border-radius:10px;object-fit:contain;';
+    zoomOverlay.appendChild(img);
+    zoomOverlay.addEventListener('click', closeZoom);
+    document.body.appendChild(zoomOverlay);
+  }
+
+  function closeZoom() {
+    if (zoomOverlay) {
+      zoomOverlay.remove();
+      zoomOverlay = null;
+    }
+  }
+
+  var lastTap = 0;
+  document.addEventListener('click', function(e) {
+    var img = e.target.closest('.via-photos img');
+    if (!img) return;
+    var now = Date.now();
+    if (now - lastTap < 400) {
+      e.preventDefault();
+      showZoom(img.src);
+    }
+    lastTap = now;
+  });
+})();
