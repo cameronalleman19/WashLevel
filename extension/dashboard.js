@@ -226,6 +226,49 @@ async function sync(){
   render();
 }
 
+async function syncAll(){
+  var ab = $("syncAllBtn");
+  ab.disabled = true;
+  $("syncBtn").disabled = true;
+  var csb = document.getElementById("consSyncBtn");
+  var vsb = document.getElementById("viaSyncBtn");
+  var errors = [];
+
+  // 1 — Overview
+  setStatus("Sync All — 1/4 Overview…");
+  try { await sync(); } catch(e){ errors.push("Overview: "+e.message); }
+  $("syncBtn").disabled = true;
+
+  // 2 — Consumers
+  setStatus("Sync All — 2/4 Consumers…");
+  if(csb) csb.disabled = true;
+  try { await consSync(); } catch(e){ errors.push("Consumers: "+e.message); }
+
+  // 3 — VIA Guard
+  setStatus("Sync All — 3/4 VIA Guard…");
+  if(vsb) vsb.disabled = true;
+  try { await viaSync(); } catch(e){ errors.push("VIA: "+e.message); }
+
+  // 4 — Codes
+  setStatus("Sync All — 4/4 Codes…");
+  try {
+    if(typeof cLoad === "function") await cLoad();
+    await cFullSync(function(msg){ setStatus("Sync All — Codes: "+msg); });
+    if(typeof cUpdateDisplay === "function") cUpdateDisplay();
+  } catch(e){ errors.push("Codes: "+e.message); }
+
+  $("syncBtn").disabled = false;
+  if(csb) csb.disabled = false;
+  if(vsb) vsb.disabled = false;
+  ab.disabled = false;
+  if(errors.length){
+    setStatus("Sync All done with errors: "+errors.join("; "));
+  } else {
+    setStatus("Sync All complete ✔");
+  }
+}
+(function(){ var b=$("syncAllBtn"); if(b) b.addEventListener("click", syncAll); })();
+
 function totalsByDate(){
   const out = {};
   for (const sid of Object.keys(hist)){
