@@ -116,7 +116,7 @@ function cpParseDevices(html){
     const deviceId = idMatch ? idMatch[1] : "";
     const hasRed = !!titleCell.querySelector("img[src*='bullet_red']");
     const status = hasRed ? "Not Connected" : "Connected";
-    const activatable = !!row.querySelector("[onclick*='showRemoteStartConfirm']");
+    const activatable = true; /* Mobile HTML has no inline activate; API works with siteId+deviceId */
     if (deviceId) devices.push({name: name, id: deviceId, status: status, activatable: activatable});
   }
   return devices;
