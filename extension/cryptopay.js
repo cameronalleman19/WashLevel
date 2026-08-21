@@ -78,28 +78,44 @@ function cpParseDevices(html){
   const headers = Array.from(doc.querySelectorAll("h3"));
   const statusHeader = headers.find(h => /CryptoPay Device Status/i.test(h.textContent));
   if (!statusHeader) return [];
-  /* Table is now a direct sibling — no blockquote wrapper */
+  /* Desktop: table inside blockquote; Mobile: table as direct sibling */
+  let table = null;
   let el = statusHeader.nextElementSibling;
-  while (el && el.tagName !== "TABLE") el = el.nextElementSibling;
-  if (!el) return [];
-  const rows = Array.from(el.querySelectorAll("tr")).slice(1);
+  while (el && !table){
+    if (el.tagName === "TABLE") table = el;
+    else if (el.tagName === "BLOCKQUOTE") table = el.querySelector("table");
+    el = el.nextElementSibling;
+  }
+  if (!table) return [];
+  const rows = Array.from(table.querySelectorAll("tr")).slice(1);
   const devices = [];
   for (const row of rows){
-    /* Skip paired-device sub-rows (colspan) and header rows */
     if (row.querySelector("td[colspan]")) continue;
+    const cells = Array.from(row.children);
+    /* Desktop format: 4+ columns with text status and activate spans */
+    if (cells.length >= 4 && !row.querySelector(".home-menu-title")){
+      const name = cells[0].textContent.trim();
+      const idMatch = cells[1].textContent.match(/ID:\s*([A-Za-z0-9]+)/);
+      const deviceId = idMatch ? idMatch[1] : "";
+      const status = cells[3].textContent.trim() || "Unknown";
+      let activatable = false;
+      if (cells.length >= 5){
+        const span = cells[4].querySelector("span[onclick*='showRemoteStartConfirm']");
+        if (span) activatable = true;
+      }
+      if (deviceId) devices.push({name: name, id: deviceId, status: status, activatable: activatable});
+      continue;
+    }
+    /* Mobile format: home-menu-title cells */
     const titleCell = row.querySelector(".home-menu-title");
     if (!titleCell) continue;
-    /* Name is the text before the <br/> / <span> */
     const nameNode = titleCell.childNodes[0];
     const name = nameNode ? nameNode.textContent.replace(/\u00a0/g, "").trim() : "";
-    /* ID from the italic span */
     const idSpan = titleCell.querySelector("span");
     const idMatch = idSpan ? idSpan.textContent.match(/ID:\s*([A-Za-z0-9]+)/) : null;
     const deviceId = idMatch ? idMatch[1] : "";
-    /* Status: red bullet image = Not Connected, else Connected */
     const hasRed = !!titleCell.querySelector("img[src*='bullet_red']");
     const status = hasRed ? "Not Connected" : "Connected";
-    /* Activatable: check onclick in the row for remote start */
     const activatable = !!row.querySelector("[onclick*='showRemoteStartConfirm']");
     if (deviceId) devices.push({name: name, id: deviceId, status: status, activatable: activatable});
   }
@@ -123,12 +139,9 @@ async function cpFetchStatus(siteId){
   try {
     const res = await safeFetch(CP_BASE + "/login/api.php?page=sitestatus_inner&siteid=" + siteId, {credentials: "include"});
     const html = await res.text();
-    console.log("[CP DEBUG] siteId:", siteId, "len:", html.length);
-    console.log("[CP DEBUG] full HTML:", html);
     if (/type="password"/i.test(html)) return {devices: [], loggedOut: true};
     return {devices: cpParseDevices(html), address: cpParseAddress(html), loggedOut: false};
   } catch(e){
-    console.error("[CP DEBUG] cpFetchStatus THREW for", siteId, e.message || e);
     return {devices: [], loggedOut: false, error: true};
   }
 }
@@ -136,6 +149,8 @@ async function cpFetchStatus(siteId){
 async function cpSync(){
   $("cpSyncBtn").disabled = true;
   cpShowSessionBanner(false);
+  /* Purge stale copyright entries from cache */
+  for (const k of Object.keys(cpStatus)){ if (/copyright/i.test((cpStatus[k].name || ""))) delete cpStatus[k]; }
   cpSetStatus("Discovering sites...");
   const disc = await cpDiscoverSites();
   if (disc.loggedOut){
