@@ -119,7 +119,8 @@ async function cpFetchStatus(siteId){
   try {
     const res = await safeFetch(CP_BASE + "/login/api.php?page=sitestatus_inner&siteid=" + siteId, {credentials: "include"});
     const html = await res.text();
-    console.log("[CP DEBUG] siteId:", siteId, "len:", html.length, "snippet:", html.substring(0, 500));
+    console.log("[CP DEBUG] siteId:", siteId, "len:", html.length);
+    console.log("[CP DEBUG] full HTML:", html);
     if (/type="password"/i.test(html)) return {devices: [], loggedOut: true};
     return {devices: cpParseDevices(html), address: cpParseAddress(html), loggedOut: false};
   } catch(e){
