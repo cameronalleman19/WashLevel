@@ -267,7 +267,7 @@ window.safeFetch = async function safeFetch(url, opts) {
   }
   /* Prefer authenticated tabs — skip login redirects and pick shortest URL */
   var validTabs = allTabs.filter(function(t) {
-    return t.url && t.url.indexOf('/customerlogin/login') === -1 && t.url.indexOf('page=login') === -1;
+    return t.url && t.url.indexOf('/customerlogin/login') === -1;
   });
   if (validTabs.length === 0) {
     throw new Error('All ' + domain + ' tabs are logged out. Log in and try again.');
