@@ -48,11 +48,25 @@ async function cpDiscoverSites(){
   try {
     const res = await safeFetch(CP_BASE + "/login/index.php?page=sitestatus", {credentials: "include"});
     const html = await res.text();
-    if (/type="password"/i.test(html) || !/selection-entry/.test(html)) return {sites: [], loggedOut: true};
-    const re = /id="siteselect_([A-Za-z0-9]+)"[^>]*>.*?<span class="site-name">([^<]+)<\/span>/gs;
+    if (/type="password"/i.test(html)) return {sites: [], loggedOut: true};
     const found = [];
+    /* Desktop format */
+    const reDsk = /id="siteselect_([A-Za-z0-9]+)"[^>]*>.*?<span class="site-name">([^<]+)<\/span>/gs;
     let m;
-    while ((m = re.exec(html))) found.push({id: m[1], name: m[2].trim()});
+    while ((m = reDsk.exec(html))) found.push({id: m[1], name: m[2].trim()});
+    /* Mobile format */
+    if (found.length === 0) {
+      const reMob = /siteid=(MPM\d+)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]+)/g;
+      const seen = {};
+      while ((m = reMob.exec(html))) {
+        var name = m[2].trim();
+        if (!seen[m[1]] && name && !/^\s*$/.test(name)) {
+          found.push({id: m[1], name: name});
+          seen[m[1]] = true;
+        }
+      }
+    }
+    if (found.length === 0) return {sites: [], loggedOut: true};
     return {sites: found, loggedOut: false};
   } catch(e){
     return {sites: [], loggedOut: false, error: true};
