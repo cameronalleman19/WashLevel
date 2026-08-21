@@ -261,10 +261,20 @@ window.safeFetch = async function safeFetch(url, opts) {
   }
 
   var domain = new URL(url).hostname;
-  var tabs = await browser.tabs.query({ url: 'https://' + domain + '/*' });
-  if (!tabs || tabs.length === 0) {
+  var allTabs = await browser.tabs.query({ url: 'https://' + domain + '/*' });
+  if (!allTabs || allTabs.length === 0) {
     throw new Error('Open ' + domain + ' in Safari and log in, then try again.');
   }
+  /* Prefer authenticated tabs — skip login redirects and pick shortest URL */
+  var validTabs = allTabs.filter(function(t) {
+    return t.url && t.url.indexOf('/customerlogin/login') === -1;
+  });
+  if (validTabs.length === 0) {
+    throw new Error('All ' + domain + ' tabs are logged out. Log in and try again.');
+  }
+  /* Shortest URL is most likely the main dashboard */
+  validTabs.sort(function(a, b) { return a.url.length - b.url.length; });
+  var tabs = validTabs;
 
   var fetchOpts = {
     method: opts.method || 'GET',
