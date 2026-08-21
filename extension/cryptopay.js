@@ -2,7 +2,7 @@ const CP_BASE = "https://www.mycryptopay.com";
 const CP_SCHEMA = 1;
 const CP_HIST_SCHEMA = 4;
 const CP_MAX_BACKFILL_MONTHS = 240;
-const CP_EMPTY_MONTH_STOP = 3;
+const CP_EMPTY_MONTH_STOP = 999;
 
 let cpSites = [];
 let cpStatus = {};
