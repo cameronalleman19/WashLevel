@@ -54,16 +54,21 @@ async function cpDiscoverSites(){
     const reDsk = /id="siteselect_([A-Za-z0-9]+)"[^>]*>.*?<span class="site-name">([^<]+)<\/span>/gs;
     let m;
     while ((m = reDsk.exec(html))) found.push({id: m[1], name: m[2].trim()});
-    /* Mobile format */
+    /* Mobile format: DOM-based parsing */
     if (found.length === 0) {
-      console.log("[CP DISC] mobile HTML:", html);
-      const reMob = /siteid=(MPM\d+)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]+)/g;
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const titleCells = doc.querySelectorAll(".home-menu-title");
       const seen = {};
-      while ((m = reMob.exec(html))) {
-        var name = m[2].trim();
-        if (!seen[m[1]] && name && !/^\s*$/.test(name)) {
-          found.push({id: m[1], name: name});
-          seen[m[1]] = true;
+      for (const cell of titleCells) {
+        const onclick = cell.getAttribute("onclick") || "";
+        const idMatch = onclick.match(/siteid=(MPM\d+)/);
+        if (!idMatch) continue;
+        const id = idMatch[1];
+        if (seen[id]) continue;
+        const name = cell.textContent.trim();
+        if (name && !/copyright/i.test(name)) {
+          found.push({id: id, name: name});
+          seen[id] = true;
         }
       }
     }
