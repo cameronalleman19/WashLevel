@@ -78,25 +78,29 @@ function cpParseDevices(html){
   const headers = Array.from(doc.querySelectorAll("h3"));
   const statusHeader = headers.find(h => /CryptoPay Device Status/i.test(h.textContent));
   if (!statusHeader) return [];
+  /* Table is now a direct sibling — no blockquote wrapper */
   let el = statusHeader.nextElementSibling;
-  while (el && el.tagName !== "BLOCKQUOTE") el = el.nextElementSibling;
+  while (el && el.tagName !== "TABLE") el = el.nextElementSibling;
   if (!el) return [];
-  const table = el.querySelector("table");
-  if (!table) return [];
-  const rows = Array.from(table.querySelectorAll("tr")).slice(1);
+  const rows = Array.from(el.querySelectorAll("tr")).slice(1);
   const devices = [];
   for (const row of rows){
-    const cells = Array.from(row.children);
-    if (cells.length < 4) continue;
-    const name = cells[0].textContent.trim();
-    const idMatch = cells[1].textContent.match(/ID:\s*([A-Za-z0-9]+)/);
+    /* Skip paired-device sub-rows (colspan) and header rows */
+    if (row.querySelector("td[colspan]")) continue;
+    const titleCell = row.querySelector(".home-menu-title");
+    if (!titleCell) continue;
+    /* Name is the text before the <br/> / <span> */
+    const nameNode = titleCell.childNodes[0];
+    const name = nameNode ? nameNode.textContent.replace(/\u00a0/g, "").trim() : "";
+    /* ID from the italic span */
+    const idSpan = titleCell.querySelector("span");
+    const idMatch = idSpan ? idSpan.textContent.match(/ID:\s*([A-Za-z0-9]+)/) : null;
     const deviceId = idMatch ? idMatch[1] : "";
-    const status = cells[3].textContent.trim() || "Unknown";
-    let activatable = false;
-    if (cells.length >= 5){
-      const span = cells[4].querySelector('span[onclick*="showRemoteStartConfirm"]');
-      if (span) activatable = true;
-    }
+    /* Status: red bullet image = Not Connected, else Connected */
+    const hasRed = !!titleCell.querySelector("img[src*='bullet_red']");
+    const status = hasRed ? "Not Connected" : "Connected";
+    /* Activatable: check onclick in the row for remote start */
+    const activatable = !!row.querySelector("[onclick*='showRemoteStartConfirm']");
     if (deviceId) devices.push({name: name, id: deviceId, status: status, activatable: activatable});
   }
   return devices;
