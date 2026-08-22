@@ -144,10 +144,11 @@ async function fetchIncompletePhones(fresh){
   for (let i = 0; i < ids.length; i++){
     C$("consStatus").textContent = "Fetching incomplete signup " + (i + 1) + "/" + ids.length + "...";
     const info = await fetchConsumerPhone(ids[i]);
-    if (info === null) break;
+    if (info === null){ consumers = fresh; await consSave(); break; }
     fresh[ids[i]].phone = info.phone;
     fresh[ids[i]].favSite = info.favSite;
-    await new Promise(r => setTimeout(r, 200));
+    if (i % 5 === 4){ consumers = fresh; await consSave(); }
+    await new Promise(r => setTimeout(r, 100));
   }
 }
 
@@ -158,7 +159,7 @@ async function fetchVehBatch(ids, fresh){
     if (v === -1){ C$("consStatus").textContent = "Dencar session expired at " + (i + 1) + "/" + ids.length + ". Log in to Dencar and re-sync."; consumers = fresh; await consSave(); renderConsumers(); C$("consSyncBtn").disabled = false; throw new Error("SESSION_EXPIRED"); }
     fresh[ids[i]].veh = v; fresh[ids[i]].vehChecked = true;
     if (i % 10 === 9){ consumers = fresh; await consSave(); }
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 100));
   }
 }
 
