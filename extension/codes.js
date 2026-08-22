@@ -287,6 +287,7 @@ function codesInit(){
    UPDATE DISPLAY — refreshes all data sections
    ════════════════════════════════ */
 function cUpdateDisplay(){
+  if(!document.getElementById('cTilesWrap')) return;
   var codes = codesCache;
   document.getElementById('cTilesWrap').innerHTML = cRenderMetrics(codes);
   document.getElementById('cRedeemWrap').innerHTML = cRenderTimeToRedeem(codes);
