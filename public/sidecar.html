@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WashLevel Sidecar — a Dencar upgrade experience</title>
-<meta name="description" content="Sidecar reads your Dencar data and turns it into the numbers you actually run on: retail per wash, net members, at-risk members, and VIA Guard calls made for you.">
+<title>WashLevel Sidecar — business intelligence for car wash operators</title>
+<meta name="description" content="Bolt-on business intelligence for car wash operators. Connects Dencar and CryptoPay into one dashboard — revenue, members, churn, weather forecasting, license plates, and more.">
 <link rel="icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -42,7 +42,7 @@
   h2{font-size:clamp(28px,4.5vw,40px);font-weight:700;letter-spacing:.01em}
   h3{font-size:20px;font-weight:600;letter-spacing:.04em}
   p{margin:0 0 16px}
-  .lede{font-size:clamp(17px,2.2vw,20px);color:#c6d4e2;max-width:56ch}
+  .lede{font-size:clamp(17px,2.2vw,20px);color:#c6d4e2;max-width:60ch}
   .muted{color:var(--slate);font-size:14px}
 
   /* header */
@@ -57,28 +57,18 @@
   .tel:hover{filter:brightness(1.15)}
   @media(max-width:560px){.bar a.back{display:none}}
 
+  /* platforms badge */
+  .platforms{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0 8px}
+  .plat{
+    font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:7px 14px;border-radius:6px;border:1px solid var(--navy-2);color:var(--aqua);
+    background:linear-gradient(180deg,#12293f,#0e2033);
+  }
+
   /* hero */
   .hero{padding:76px 0 64px;border-bottom:1px solid var(--line)}
   .hero h1{margin-bottom:20px}
   .hero h1 em{font-style:normal;color:var(--aqua)}
-
-  /* seats — the signature element */
-  .seats{margin:38px 0 8px}
-  .seats-label{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-  .seats-label strong{font-family:var(--disp);font-size:26px;font-weight:700;letter-spacing:.03em}
-  .tokens{display:flex;gap:7px;flex-wrap:wrap}
-  .tok{
-    width:38px;height:52px;border-radius:5px;
-    border:1.5px solid var(--navy-2);background:linear-gradient(180deg,#12293f,#0e2033);
-    display:flex;align-items:center;justify-content:center;
-    font-family:var(--mono);font-size:12px;font-weight:700;color:#42658c;
-    position:relative;overflow:hidden;
-  }
-  .tok::after{content:"";position:absolute;left:0;right:0;top:14px;height:1px;background:var(--navy-2)}
-  .tok.open{border-color:var(--aqua);color:var(--aqua);box-shadow:0 0 0 1px rgba(62,198,224,.25),0 6px 20px -8px rgba(62,198,224,.5)}
-  .tok.open::after{background:rgba(62,198,224,.35)}
-  .tok.taken{opacity:.45}
-  .tok.taken::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent 0 5px,rgba(142,163,186,.16) 5px 7px)}
 
   /* checkout */
   .buy{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0 12px;max-width:520px}
@@ -110,6 +100,9 @@
   .cell h3{color:#fff;margin-bottom:10px}
   .cell p{color:#b3c4d5;font-size:15px;margin:0}
   .cell .tag{font-family:var(--mono);font-size:11px;color:var(--aqua);letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:12px}
+
+  /* full-width cell for odd count */
+  @media(min-width:760px){.cell.full{grid-column:1 / -1}}
 
   ol.steps{list-style:none;counter-reset:s;padding:0;margin:0;display:grid;gap:18px}
   ol.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:16px;align-items:start}
@@ -160,16 +153,14 @@
 <div class="wrap">
 
   <div class="hero">
-    <p class="eyebrow">A Dencar upgrade experience</p>
+    <p class="eyebrow">A bolt-on accessory for your wash business</p>
     <h1>Your wash data,<br><em>finally readable.</em></h1>
-    <p class="lede">Sidecar is a Chrome extension that sits on top of Dencar. It pulls every site you already have access to and answers the questions the daily report can't: what's retail really doing, who's about to cancel, and which VIA exceptions are worth chasing.</p>
+    <p class="lede">You check your sites every morning. Sidecar checks everything else. It bolts onto Dencar and CryptoPay — the platforms you already run — and turns raw data into the numbers you actually make decisions with. Revenue per wash. Members at risk. Weather impact on tomorrow's volume. No new system to learn, no data to export, no per-site fees.</p>
 
-    <div class="seats">
-      <div class="seats-label">
-        <strong id="seatsHead">Founding seats</strong>
-        <span class="muted" id="seatsSub">Checking availability…</span>
-      </div>
-      <div class="tokens" id="tokens" aria-label="Founding member seats remaining"></div>
+    <div class="platforms">
+      <span class="plat">Dencar</span>
+      <span class="plat">CryptoPay</span>
+      <span class="plat">Or both</span>
     </div>
 
     <div class="buy">
@@ -177,44 +168,44 @@
       <button class="btn" id="go">Start free trial</button>
     </div>
     <p class="err" id="err"></p>
-    <p class="muted">7 days free, then <span id="priceInline">$19</span>/month. Cancel anytime from your billing portal. Have a code from Cameron? Enter it at checkout.</p>
+    <p class="muted">7 days free, then $29/month. Cancel anytime from your billing portal. Have a code from Cameron? Enter it at checkout.</p>
   </div>
 
   <section>
     <div class="sec-head">
       <p class="eyebrow">What you get</p>
-      <h2>Five screens Dencar doesn't have</h2>
+      <h2>Everything your platforms don't show you</h2>
     </div>
     <div class="grid">
       <div class="cell">
-        <span class="tag">Overview</span>
-        <h3>Every site, one page</h3>
-        <p>Today, yesterday, week and month to date, plus a month-end projection that updates as the month fills in. Hourly wash counts show you when your tunnel actually earns.</p>
+        <span class="tag">Revenue & Retail</span>
+        <h3>See what your wash actually earns</h3>
+        <p>Every site on one screen — today through year-to-date, with live month-end projections. Retail revenue with membership billing stripped out, so the number you see is what customers actually paid. Wash tier mix, per-device breakdowns, capture rates, and day-of-week baselines that catch the days quietly underperforming.</p>
       </div>
       <div class="cell">
-        <span class="tag">Retail</span>
-        <h3>Retail dollars per wash</h3>
-        <p>Membership billing is stripped out — no pass renewals, no VIA charges — so the number you see is what retail customers actually paid. Day-of-week baselines flag the days that quietly underperform.</p>
+        <span class="tag">Members & Churn</span>
+        <h3>Know who's about to cancel before they do</h3>
+        <p>Every member gets a risk score from their own usage history — gone dormant, washing less, new signups who never came back. Cohort curves show how each month's signups hold up over time. Net gain/loss by month tells the real growth story, not just new signups.</p>
       </div>
       <div class="cell">
-        <span class="tag">Members</span>
-        <h3>Who's about to cancel</h3>
-        <p>Members get a risk score from their own usage history: gone dormant, washing less than they used to, new signups who never came back. Cohort curves show how each month's signups are holding up.</p>
+        <span class="tag">Customers & License Plates</span>
+        <h3>Understand the customers who aren't members yet</h3>
+        <p>Return visit frequency, cross-site plate overlap, and credit card-based repeat identification. See which single-wash regulars are worth converting — and track who eventually signs up with New Pass conversion lookback.</p>
       </div>
       <div class="cell">
         <span class="tag">VIA Guard</span>
         <h3>A call on every exception</h3>
-        <p>Each exception arrives with a recommendation — trigger or let it slide — based on how much that member actually washes, whether the plate is a near match, and whether they've done it before. Trigger or close without leaving the page.</p>
+        <p>Each exception arrives with a recommendation based on actual wash usage, plate match confidence, and past behavior. Trigger or close without leaving the page. Full decision history so you can see your pattern over time.</p>
       </div>
       <div class="cell">
-        <span class="tag">Consumers</span>
-        <h3>Real washes per month</h3>
-        <p>Usage counted from payment history and adjusted for how long someone's been a member, so a two-week-old signup isn't compared against a two-year veteran.</p>
+        <span class="tag">Weather & Forecasting</span>
+        <h3>Tomorrow's volume, today</h3>
+        <p>Weather-adjusted projections separate what the weather did from what your operation did. 10-day forecast overlay, seasonal modeling from your own data, post-rain and post-snow bounce tracking, and confidence scores that sharpen over time.</p>
       </div>
       <div class="cell">
-        <span class="tag">Anomalies</span>
-        <h3>Days that don't look right</h3>
-        <p>Sidecar compares each day against that site's own pattern and surfaces the outliers — before you find them in a month-end review.</p>
+        <span class="tag">Wash Codes</span>
+        <h3>Generate, track, and print</h3>
+        <p>Bulk code generation with tier selection and expiration dates. Full redemption tracking with time-to-redemption charts. Print cards in two sizes with your logo.</p>
       </div>
     </div>
   </section>
@@ -227,25 +218,26 @@
     <ol class="steps">
       <li><p><b>Subscribe and get your key</b>Checkout emails you a license key right away. Your 7 free days start now.</p></li>
       <li><p><b>Add Sidecar to your browser</b>Install from the Chrome Web Store in one click. Safari is coming next.</p></li>
-      <li><p><b>Log into Dencar as usual</b>Sidecar uses your existing session. There's no second password, and your Dencar credentials are never sent anywhere.</p></li>
-      <li><p><b>Paste your key and sync</b>The first sync backfills the year so your charts have history. After that it's a few seconds a day.</p></li>
+      <li><p><b>Log into Dencar and/or CryptoPay as usual</b>Sidecar uses your existing sessions. There's no second password, and your credentials are never sent anywhere.</p></li>
+      <li><p><b>Paste your key and sync</b>The first sync backfills your history so your charts have depth. After that it's a few seconds a day.</p></li>
     </ol>
-    <p class="muted" style="margin-top:26px">Sidecar only sees the sites your own Dencar login already has access to. Your wash data stays in your browser — it's never uploaded to WashLevel. Want a walkthrough before you buy? Call or text <a class="tel" href="tel:+17179661794">(717) 966-1794</a>.</p>
+    <p class="muted" style="margin-top:26px">Sidecar only sees the sites your own logins already have access to. Your wash data stays in your browser — it's never uploaded to WashLevel. Want a walkthrough before you buy? Call or text <a class="tel" href="tel:+17179661794">(717) 966-1794</a>.</p>
   </section>
 
   <section>
     <div class="sec-head">
       <p class="eyebrow">Pricing</p>
-      <h2 id="priceHeading">One flat price per operator</h2>
+      <h2>One flat price per operator</h2>
     </div>
     <div class="price-card">
-      <div class="amt"><span class="n" id="priceBig">$19</span><span class="per">per month, all your sites</span></div>
-      <p class="tierline" id="tierLine">Founding operator rate</p>
+      <div class="amt"><span class="n">$29</span><span class="per">per month, all your sites</span></div>
+      <p class="tierline">Subscribe in 2026 — locked in for life</p>
       <ul class="incl">
-        <li>Every site on your Dencar login — no per-location fee</li>
-        <li>All five screens, plus new ones as they ship</li>
+        <li>Every site on your Dencar login, every site on your CryptoPay login — no per-location fee</li>
+        <li>Works with one platform or both</li>
+        <li>All features, plus new ones as they ship</li>
         <li>7-day free trial, cancel anytime</li>
-        <li id="lockLine">Founding rate locked for as long as you stay subscribed</li>
+        <li>Price goes to $39/month for new subscribers in January — your $29 rate stays for as long as you stay subscribed</li>
       </ul>
       <button class="btn" id="go2" style="width:100%">Start free trial</button>
     </div>
@@ -256,9 +248,10 @@
       <p class="eyebrow">Questions</p>
       <h2>Before you sign up</h2>
     </div>
-    <details><summary>Do I need anything from Dencar to use this?</summary><p>No. Sidecar works with the access you already have. There's nothing to enable on Dencar's side and nothing to ask them for.</p></details>
-    <details><summary>Where does my data go?</summary><p>Into your own browser's storage, and nowhere else. Sidecar reads your Dencar reports the same way your browser does and keeps the results locally. WashLevel only ever sees your license key.</p></details>
-    <details><summary>What happens after the 10 founding seats?</summary><p>The price goes to $29/month for new subscribers. If you're one of the first 10, you keep $19 for as long as your subscription stays active.</p></details>
+    <details><summary>Do I need both Dencar and CryptoPay?</summary><p>No. Sidecar works with either platform on its own or both together. If you only use Dencar, you get the Dencar features. If you only use CryptoPay, you get the CryptoPay features. If you use both, everything connects into one dashboard.</p></details>
+    <details><summary>Do I need anything from Dencar or CryptoPay to use this?</summary><p>No. Sidecar works with the access you already have. There's nothing to enable on either platform's side and nothing to ask them for.</p></details>
+    <details><summary>Where does my data go?</summary><p>Into your own browser's storage, and nowhere else. Sidecar reads your Dencar and CryptoPay data the same way your browser does and keeps the results locally. WashLevel only ever sees your license key.</p></details>
+    <details><summary>What happens to my price in 2027?</summary><p>Nothing — if you subscribe before the end of 2026, you keep $29/month for as long as your subscription stays active. The $39 price only applies to new subscribers starting in January.</p></details>
     <details><summary>Which browsers does it work in?</summary><p>Chrome on Windows and Mac today, installed from the Chrome Web Store. A Safari version is in the works — your subscription covers both, so there's nothing extra to buy when it lands.</p></details>
     <details><summary>Can I use it on more than one computer?</summary><p>Yes. The same key works on any browser you install it in. Each one keeps its own synced history.</p></details>
     <details><summary>How do I cancel?</summary><p>Cancel from the Stripe receipt link in your confirmation email, or call us at (717) 966-1794 and we'll take care of it. Cancel during the trial and you're never charged.</p></details>
@@ -266,51 +259,12 @@
 
   <footer>
     <p>Questions before you sign up? Call or text <a class="tel" href="tel:+17179661794">(717) 966-1794</a>.</p>
-    <p>WashLevel Sidecar is an independent tool and isn't affiliated with or endorsed by Dencar or Sanc Soft. <a href="/terms.html">Terms</a></p>
+    <p>WashLevel Sidecar is an independent tool and isn't affiliated with or endorsed by Dencar, Sanc Soft, or CryptoPay. <a href="/terms.html">Terms</a></p>
   </footer>
 </div>
 
 <script>
 (function(){
-  var SLOTS = 10, price = 19, left = null;
-  var tokens = document.getElementById('tokens');
-
-  function paint(){
-    tokens.innerHTML = '';
-    for (var i = 1; i <= SLOTS; i++){
-      var d = document.createElement('div');
-      var open = (left === null) ? false : (i > SLOTS - left);
-      d.className = 'tok ' + (left === null ? '' : (open ? 'open' : 'taken'));
-      d.textContent = (i < 10 ? '0' : '') + i;
-      tokens.appendChild(d);
-    }
-  }
-  paint();
-
-  fetch('/api/sidecar/pricing').then(function(r){ return r.json(); }).then(function(d){
-    left = typeof d.foundingLeft === 'number' ? d.foundingLeft : 0;
-    price = d.price || (left > 0 ? 19 : 29);
-    SLOTS = d.slots || 10;
-    paint();
-
-    var head = document.getElementById('seatsHead');
-    var sub  = document.getElementById('seatsSub');
-    if (left > 0){
-      head.textContent = left + ' of ' + SLOTS + ' founding seats left';
-      sub.textContent  = '$19/month, locked in for good';
-    } else {
-      head.textContent = 'Founding seats are gone';
-      sub.textContent  = 'Now $29/month — same product, same trial';
-      document.getElementById('tierLine').textContent = 'Standard rate';
-      document.getElementById('lockLine').textContent = 'No setup fee and no per-site charges';
-    }
-    document.getElementById('priceBig').textContent = '$' + price;
-    document.getElementById('priceInline').textContent = '$' + price;
-  }).catch(function(){
-    document.getElementById('seatsHead').textContent = 'Founding seats';
-    document.getElementById('seatsSub').textContent = 'First 10 operators pay $19/month';
-  });
-
   function checkout(btn){
     var email = document.getElementById('email').value.trim();
     var err = document.getElementById('err');
@@ -330,7 +284,7 @@
       else { throw new Error(d.error || 'no url'); }
     }).catch(function(){
       btn.disabled = false; btn.textContent = 'Start free trial';
-      err.textContent = "Checkout didn't open. Try again, or call us at (717) 966-1794 and we'll set you up.";
+      err.textContent = "Checkout didn't open. Try again, or call (717) 966-1794 and we'll set you up.";
     });
   }
 

@@ -1201,6 +1201,12 @@ const stripe = require("stripe");
 const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
 const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 const STRIPE_PRICE_ID = "price_1TZEzsERWU7SaCxDl4sHacyY";
+const WL_PLANS = {
+  "price_1U7G4lERWU7SaCxDlw09PgzF": { name: "Single Site", limit: 1, price: 39 },
+  "price_1U7G7MERWU7SaCxDT5a6OAwj": { name: "Operator", limit: 3, price: 49 },
+  "price_1U7G7oERWU7SaCxDJxmerjlr": { name: "Regional", limit: 5, price: 100 },
+  "price_1U7G9PERWU7SaCxDpc9Ff2Wi": { name: "Enterprise", limit: 10, price: 200 },
+};
 
 exports.createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
@@ -1226,14 +1232,35 @@ exports.createPortalSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (re
   const uid = request.auth.uid;
   const stripeClient = stripe(STRIPE_SECRET_KEY.value());
   const subSnap = await db.collection("subscriptions").doc(uid).get();
-  if (!subSnap.exists || !subSnap.data().stripeCustomerId) throw new HttpsError("not-found", "No subscription found");
+  if (!subSnap.exists) throw new HttpsError("not-found", "No subscription found");
+  const data = subSnap.data();
+  const customerId = data.planStripeCustomerId || data.stripeCustomerId;
+  if (!customerId) throw new HttpsError("not-found", "No billing account found");
   const session = await stripeClient.billingPortal.sessions.create({
-    customer: subSnap.data().stripeCustomerId,
+    customer: customerId,
     return_url: "https://washlevel.com/",
   });
   return { url: session.url };
 });
 
+exports.createWashLevelCheckout = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
+  const uid = request.auth.uid;
+  const { email, priceId } = request.data;
+  if (!WL_PLANS[priceId]) throw new HttpsError("invalid-argument", "Invalid plan");
+  const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+  const session = await stripeClient.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "subscription",
+    customer_email: email,
+    line_items: [{ price: priceId, quantity: 1 }],
+    subscription_data: { metadata: { firebaseUid: uid, type: "washlevel_plan", priceId: priceId } },
+    metadata: { firebaseUid: uid, type: "washlevel_plan", priceId: priceId },
+    success_url: "https://washlevel.com/?plan_success=1",
+    cancel_url: "https://washlevel.com/?plan_cancel=1",
+  });
+  return { url: session.url };
+});
 exports.stripeWebhook = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET] }, async (req, res) => {
   const stripeClient = stripe(STRIPE_SECRET_KEY.value());
   let event;
@@ -1262,15 +1289,27 @@ exports.stripeWebhook = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_
   if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
     const active = sub.status === "active" || sub.status === "trialing";
     const until = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    await subRef.set({
-      smsEnabled: active,
-      smsEnabledUntil: until,
-      stripeCustomerId: sub.customer,
-      stripeSubscriptionId: sub.id,
-      stripeStatus: sub.status,
-    }, { merge: true });
+    if (sub.metadata?.type === "washlevel_plan") {
+      const planInfo = WL_PLANS[sub.metadata.priceId] || { name: "Unknown", limit: 1 };
+      await subRef.set({
+        planActive: active, planName: planInfo.name, locationLimit: planInfo.limit,
+        planPriceId: sub.metadata.priceId, planUntil: until,
+        planStripeCustomerId: sub.customer, planStripeSubscriptionId: sub.id, planStripeStatus: sub.status,
+      }, { merge: true });
+    } else {
+      await subRef.set({
+        smsEnabled: active, smsEnabledUntil: until,
+        stripeCustomerId: sub.customer, stripeSubscriptionId: sub.id, stripeStatus: sub.status,
+      }, { merge: true });
+    }
   } else if (event.type === "customer.subscription.deleted") {
-    await subRef.set({ smsEnabled: false, stripeStatus: "canceled" }, { merge: true });
+    const existingDoc = await subRef.get();
+    const data = existingDoc.exists ? existingDoc.data() : {};
+    if (data.planStripeSubscriptionId === sub.id) {
+      await subRef.set({ planActive: false, planStripeStatus: "canceled" }, { merge: true });
+    } else {
+      await subRef.set({ smsEnabled: false, stripeStatus: "canceled" }, { merge: true });
+    }
   }
 
   res.json({ received: true });

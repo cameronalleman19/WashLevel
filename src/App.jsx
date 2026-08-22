@@ -328,6 +328,7 @@ function LandingPage() {
         <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
           <LandingLink href="#about">About</LandingLink>
           <LandingLink href="#features">Features</LandingLink>
+          <LandingLink href="#pricing">Pricing</LandingLink>
           <LandingLink href="#sms">Text Alerts</LandingLink>
           <LandingLink href="#contact">Contact</LandingLink>
           <div style={{ width: 1, height: 16, background: "#e2e8f0" }} />
@@ -362,6 +363,34 @@ function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div id="pricing" style={{ background: "#fff", padding: "56px 24px" }}>
+        <div style={{ maxWidth: 1060, margin: "0 auto", textAlign: "center" }}>
+          <div style={{ display: "inline-block", background: "rgba(62,198,224,0.12)", color: "#0e7490", fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "4px 14px", borderRadius: 999, marginBottom: 14 }}>Best Pricing In The Industry</div>
+          <h2 style={{ fontSize: 30, fontWeight: 800, color: "#0f1f35", marginBottom: 8 }}>Simple, Transparent Pricing</h2>
+          <p style={{ fontSize: 15, color: "#64748b", marginBottom: 36, maxWidth: 560, margin: "0 auto 36px" }}>No per-employee fees. No hidden costs. Competitors charge $200-$500+/month for less. WashLevel gives you more for a fraction of the price.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 16, textAlign: "left" }}>
+            {[
+              { name: "Single Site", price: "$39", period: "/mo", loc: "1 location", popular: false },
+              { name: "Operator", price: "$49", period: "/mo", loc: "Up to 3 locations", popular: true },
+              { name: "Regional", price: "$100", period: "/mo", loc: "Up to 5 locations", popular: false },
+              { name: "Enterprise", price: "$200", period: "/mo", loc: "Up to 10 locations", popular: false },
+            ].map(p => (
+              <div key={p.name} style={{ background: p.popular ? "#0f1f35" : "#fff", border: p.popular ? "2px solid #0f1f35" : "1px solid #e2e8f0", borderRadius: 14, padding: 24, position: "relative", display: "flex", flexDirection: "column" }}>
+                {p.popular && <div style={{ position: "absolute", top: -11, left: "50%", transform: "translateX(-50%)", background: "#3ec6e0", color: "#06243b", fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 999, whiteSpace: "nowrap" }}>Most Popular</div>}
+                <div style={{ fontSize: 14, fontWeight: 700, color: p.popular ? "#94a3b8" : "#64748b", marginBottom: 6 }}>{p.name}</div>
+                <div style={{ fontSize: 36, fontWeight: 800, color: p.popular ? "#fff" : "#0f1f35", marginBottom: 2 }}>{p.price}<span style={{ fontSize: 15, fontWeight: 500, color: p.popular ? "#94a3b8" : "#64748b" }}>{p.period}</span></div>
+                <div style={{ fontSize: 13, color: p.popular ? "#cbd5e1" : "#64748b", marginBottom: 16 }}>{p.loc}</div>
+                <div style={{ fontSize: 13, color: p.popular ? "#cbd5e1" : "#475569", lineHeight: 1.8, flex: 1 }}>
+                  {"Tasks, Inspections & SOPs|Time Clock & Payroll|Inventory & Barcodes|Team Notifications|Equipment Monitoring|Multi-Location Dashboard".split("|").map(f => <div key={f} style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: "#3ec6e0", fontWeight: 700, fontSize: 14 }}>✓</span> {f}</div>)}
+                </div>
+                <a href="/?login=1" style={{ display: "block", textAlign: "center", marginTop: 18, background: p.popular ? "#3ec6e0" : "#0f1f35", color: p.popular ? "#06243b" : "#fff", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, textDecoration: "none" }}>Get Started</a>
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 18 }}>Need more than 10 locations? <a href="#contact" style={{ color: "#0f1f35", fontWeight: 600 }}>Contact us</a> for custom pricing.</p>
         </div>
       </div>
 
@@ -464,6 +493,51 @@ function SmsTermsPage() {
       <H>Support</H>
       <p>Carriers are not liable for delayed or undelivered messages.</p>
     </LegalShell>
+  );
+}
+
+function PlanPaywall({ user }) {
+  const [loading, setLoading] = useState(null);
+  const plans = [
+    { name: "Single Site", price: "$39", period: "/mo", loc: "1 location", priceId: "price_1U7G4lERWU7SaCxDlw09PgzF", popular: false },
+    { name: "Operator", price: "$49", period: "/mo", loc: "Up to 3 locations", priceId: "price_1U7G7MERWU7SaCxDT5a6OAwj", popular: true },
+    { name: "Regional", price: "$100", period: "/mo", loc: "Up to 5 locations", priceId: "price_1U7G7oERWU7SaCxDJxmerjlr", popular: false },
+    { name: "Enterprise", price: "$200", period: "/mo", loc: "Up to 10 locations", priceId: "price_1U7G9PERWU7SaCxDpc9Ff2Wi", popular: false },
+  ];
+  const handleSelect = async (priceId) => {
+    setLoading(priceId);
+    try {
+      const fn = httpsCallable(functions, "createWashLevelCheckout");
+      const res = await fn({ email: user.email, priceId });
+      window.location.href = res.data.url;
+    } catch(e) { alert("Error: " + e.message); setLoading(null); }
+  };
+  return (
+    <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ maxWidth: 1060, width: "100%", textAlign: "center" }}>
+        <div style={{ fontWeight: 800, fontSize: 22, color: "#0f1f35", marginBottom: 6 }}>Choose Your Plan</div>
+        <div style={{ fontSize: 14, color: "#64748b", marginBottom: 8 }}>Select a plan to access WashLevel. Cancel anytime from your dashboard.</div>
+        <div style={{ display: "inline-block", background: "rgba(62,198,224,0.12)", color: "#0e7490", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "3px 12px", borderRadius: 999, marginBottom: 28 }}>Best Pricing In The Industry</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 16, textAlign: "left" }}>
+          {plans.map(p => (
+            <div key={p.name} style={{ background: p.popular ? "#0f1f35" : "#fff", border: p.popular ? "2px solid #0f1f35" : "1px solid #e2e8f0", borderRadius: 14, padding: 24, position: "relative", display: "flex", flexDirection: "column" }}>
+              {p.popular && <div style={{ position: "absolute", top: -11, left: "50%", transform: "translateX(-50%)", background: "#3ec6e0", color: "#06243b", fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 999, whiteSpace: "nowrap" }}>Most Popular</div>}
+              <div style={{ fontSize: 14, fontWeight: 700, color: p.popular ? "#94a3b8" : "#64748b", marginBottom: 6 }}>{p.name}</div>
+              <div style={{ fontSize: 36, fontWeight: 800, color: p.popular ? "#fff" : "#0f1f35", marginBottom: 2 }}>{p.price}<span style={{ fontSize: 15, fontWeight: 500, color: p.popular ? "#94a3b8" : "#64748b" }}>{p.period}</span></div>
+              <div style={{ fontSize: 13, color: p.popular ? "#cbd5e1" : "#64748b", marginBottom: 16 }}>{p.loc}</div>
+              <div style={{ fontSize: 13, color: p.popular ? "#cbd5e1" : "#475569", lineHeight: 1.8, flex: 1 }}>
+                {"Tasks, Inspections & SOPs|Time Clock & Payroll|Inventory & Barcodes|Team Notifications|Equipment Monitoring|Multi-Location Dashboard".split("|").map(f => <div key={f} style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: "#3ec6e0", fontWeight: 700, fontSize: 14 }}>✓</span> {f}</div>)}
+              </div>
+              <button onClick={() => handleSelect(p.priceId)} disabled={loading === p.priceId} style={{ marginTop: 18, background: p.popular ? "#3ec6e0" : "#0f1f35", color: p.popular ? "#06243b" : "#fff", border: "none", borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", width: "100%" }}>
+                {loading === p.priceId ? "Redirecting..." : "Subscribe"}
+              </button>
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 18 }}>Need more than 10 locations? Email support@washlevel.com for custom pricing.</p>
+        <button onClick={() => { import("firebase/auth").then(m => m.getAuth().signOut()); }} style={{ marginTop: 20, background: "none", border: "none", color: "#64748b", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>Sign out</button>
+      </div>
+    </div>
   );
 }
 
@@ -6575,7 +6649,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "nowrap" }}>
                   {globalEditData.barcode ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
-                      <div style={{ fontSize: 11, color: "#059669", fontWeight: 600, flex: 1 }}>{"\u2713"} {globalEditData.barcode}</div>
+                      <div style={{ fontSize: 11, color: "#059669", fontWeight: 600, flex: 1 }}>{"✓"} {globalEditData.barcode}</div>
                       <button onClick={() => setGlobalScanOpen(true)} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Rescan</button>
                       <button onClick={() => setGlobalEditData(p => ({...p, barcode: ""}))} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Remove</button>
                       <button onClick={() => printBarcode({ name: globalEditData.name, barcode: globalEditData.barcode })} style={{ background: "#f0fdf4", color: "#059669", border: "1px solid #bbf7d0", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Print</button>
@@ -7629,6 +7703,22 @@ const [zipCode, setZipCode] = useState("");
 const [saved, setSaved] = useState(false);
 const [sortedLocs, setSortedLocs] = useState([]);
 const [locEquipment, setLocEquipment] = useState({});
+const [planSub, setPlanSubSettings] = useState(null);
+useEffect(() => {
+  if (!user?.uid || user?.role !== "owner") return;
+  const unsub = onSnapshot(doc(db, "subscriptions", user.uid), snap => {
+    setPlanSubSettings(snap.exists() ? snap.data() : null);
+  });
+  return () => unsub();
+}, [user?.uid, user?.role]);
+const openPlanBilling = async () => {
+  if (!planSub?.planStripeCustomerId) { alert("No billing account found."); return; }
+  try {
+    const fn = httpsCallable(functions, "createPortalSession");
+    const res = await fn({});
+    window.location.href = res.data.url;
+  } catch(e) { alert("Error: " + e.message); }
+};
 
 useEffect(() => {
   if (!locations.length) return;
@@ -7715,10 +7805,29 @@ return (
 <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Manage locations and preferences</div>
 </div>
 <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-  {[["profile","Profile"],["locations","Locations"],["integrations","Integrations"]].map(([id,label]) => (
+  {[["profile","Profile"],["locations","Locations"],["integrations","Integrations"],...(user?.role === "owner" ? [["billing","Billing"]] : [])].map(([id,label]) => (
     <button key={id} onClick={() => setSettingsTab(id)} style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: settingsTab === id ? "#0f1f35" : "#f3f4f6", color: settingsTab === id ? "#fff" : "#6b7280" }}>{label}</button>
   ))}
 </div>
+{settingsTab === "billing" && user?.role === "owner" && <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
+  <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Subscription</div>
+  {planSub?.planActive ? (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{planSub.planName || "Active Plan"}</span>
+        <span style={{ fontSize: 12, color: "#64748b" }}>— {planSub.planStripeStatus || "active"}</span>
+      </div>
+      {planSub.planUntil && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Current period ends {new Date(planSub.planUntil).toLocaleDateString()}</div>}
+      {planSub.locationLimit && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Location limit: {planSub.locationLimit}</div>}
+      {planSub.planStripeCustomerId && <button onClick={openPlanBilling} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "10px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Manage Billing</button>}
+    </div>
+  ) : (
+    <div>
+      <div style={{ fontSize: 14, color: "#64748b", marginBottom: 12 }}>No active subscription. You may be on a grandfathered account.</div>
+    </div>
+  )}
+</div>}
 {settingsTab === "profile" && <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
   <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Your Profile</div>
   <div style={{ marginBottom: 12 }}>
@@ -9651,10 +9760,22 @@ return (
 );
 }
 
+const PAYWALL_CUTOFF = "2026-08-22T00:00:00.000Z";
+
 function AppInner() {
 const { user, loading, refreshUser } = useAuth();
 const [pendingInvite, setPendingInvite] = useState(null);
 const [acceptingInvite, setAcceptingInvite] = useState(false);
+const [planSub, setPlanSub] = useState(undefined);
+
+useEffect(() => {
+  if (!user?.uid) { setPlanSub(undefined); return; }
+  if (user.role !== "owner") { setPlanSub({ planActive: true }); return; }
+  const unsub = onSnapshot(doc(db, "subscriptions", user.uid), snap => {
+    setPlanSub(snap.exists() ? snap.data() : null);
+  });
+  return () => unsub();
+}, [user?.uid, user?.role]);
 
 useEffect(() => {
   if (!user) { setPendingInvite(null); return; }
@@ -9721,6 +9842,10 @@ if (user && pendingInvite) {
 const landingPath = window.location.pathname;
 if (landingPath === "/privacy") return <PrivacyPage />;
 if (landingPath === "/sms-terms") return <SmsTermsPage />;
+if (user && user.role === "owner" && planSub !== undefined) {
+  const grandfathered = !user.createdAt || user.createdAt < PAYWALL_CUTOFF;
+  if (!grandfathered && (!planSub || !planSub.planActive)) return <PlanPaywall user={user} />;
+}
 if (user) return <Dashboard />;
 const params = new URLSearchParams(window.location.search);
 const inviteEmail = params.get("invite");
