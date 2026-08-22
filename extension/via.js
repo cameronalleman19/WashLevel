@@ -192,13 +192,21 @@ async function viaSync(){
   V$("viaSyncBtn").disabled = true;
   V$("viaStatus").textContent = "Loading exception list...";
   try {
-    const res = await safeFetch(VBASE + "/consumerpassexceptions/", {credentials: "include"});
-    const html = await res.text();
-    if (/type="password"/i.test(html)){ V$("viaStatus").textContent = "Not logged into Dencar."; V$("viaSyncBtn").disabled = false; return; }
     const ids = [];
-    const re = /consumerpassexceptions\/([0-9a-fA-F-]{36})/g;
-    let m;
-    while ((m = re.exec(html))){ if (!ids.includes(m[1])) ids.push(m[1]); }
+    const viaFilters = "High=true&Medium=true&Low=true&Noted=true";
+    for (let pg = 1; pg <= 50; pg++){
+      V$("viaStatus").textContent = "Loading exception list page " + pg + "...";
+      const url = VBASE + "/consumerpassexceptions/?CurrentPage=" + pg + "&" + viaFilters;
+      const res = await safeFetch(url, {credentials: "include"});
+      const html = await res.text();
+      if (/type="password"/i.test(html)){ V$("viaStatus").textContent = "Not logged into Dencar."; V$("viaSyncBtn").disabled = false; return; }
+      const re = /consumerpassexceptions\/([0-9a-fA-F-]{36})/g;
+      let m;
+      let pageCt = 0;
+      while ((m = re.exec(html))){ if (!ids.includes(m[1])){ ids.push(m[1]); pageCt++; } }
+      if (pageCt === 0) break;
+      await new Promise(r => setTimeout(r, 150));
+    }
     if (!ids.length){ V$("viaStatus").textContent = "No open exceptions found."; viaData = {}; await viaSave(); renderViaList(); V$("viaSyncBtn").disabled = false; return; }
     const fresh = {};
     for (let i = 0; i < ids.length; i++){
