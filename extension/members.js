@@ -247,34 +247,76 @@ function mTile(label, val){
   return "<div class=\"stat\"><label>" + label + "</label><div>" + val + "</div></div>";
 }
 
+function mAllTimeHigh(){
+  const daySums = {};
+  for (const s of mFilteredSites()){
+    for (const dt of Object.keys(mHist[s.id] || {})){
+      const v = mHist[s.id][dt].consumerVehicles || 0;
+      if (v) daySums[dt] = (daySums[dt] || 0) + v;
+    }
+  }
+  let max = 0;
+  for (const dt of Object.keys(daySums)){ if (daySums[dt] > max) max = daySums[dt]; }
+  return max;
+}
+
+function mTimeRange(){
+  const sel = M$("memTimeFrame");
+  const v = sel ? sel.value : "mtd";
+  const today = new Date();
+  const todayStr = mDs(today);
+  if (v === "today") return {from: todayStr, to: todayStr, label: "Today"};
+  if (v === "7d"){ const d = new Date(today); d.setDate(d.getDate() - 6); return {from: mDs(d), to: todayStr, label: "Last 7 days"}; }
+  if (v === "30d"){ const d = new Date(today); d.setDate(d.getDate() - 29); return {from: mDs(d), to: todayStr, label: "Last 30 days"}; }
+  if (v === "mtd") return {from: todayStr.slice(0, 8) + "01", to: todayStr, label: "Month to date"};
+  if (v === "ytd") return {from: today.getFullYear() + "-01-01", to: todayStr, label: "Year to date"};
+  if (/^\d{4}-\d{2}$/.test(v)){
+    const p = v.split("-"); const y = parseInt(p[0]), m = parseInt(p[1]) - 1;
+    const start = new Date(y, m, 1); const end = new Date(y, m + 1, 0);
+    return {from: mDs(start), to: end > today ? todayStr : mDs(end), label: start.toLocaleString("en-US", {month: "long", year: "numeric"})};
+  }
+  if (/^\d{4}$/.test(v)){
+    const y = parseInt(v);
+    return {from: y + "-01-01", to: y === today.getFullYear() ? todayStr : y + "-12-31", label: v};
+  }
+  return {from: todayStr.slice(0, 8) + "01", to: todayStr, label: "Month to date"};
+}
+
+function mPopulateTimeFrame(){
+  const sel = M$("memTimeFrame");
+  if (!sel) return;
+  const cur = sel.value || "mtd";
+  const today = new Date();
+  let html = '<option value="today">Today</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="mtd">Month to date</option>';
+  html += '<optgroup label="Months">';
+  for (let i = 1; i <= 24; i++){
+    const d = mAddMonths(today, -i); const k = mMonthKey(d);
+    html += '<option value="' + k + '">' + d.toLocaleString("en-US", {month: "long", year: "numeric"}) + '</option>';
+  }
+  html += '</optgroup><option value="ytd">Year to date</option><optgroup label="Years">';
+  for (let y = today.getFullYear(); y >= today.getFullYear() - 5; y--) html += '<option value="' + y + '">' + y + '</option>';
+  html += '</optgroup>';
+  sel.innerHTML = html;
+  sel.value = cur;
+}
+
 function mRenderTiles(){
   const el = M$("memTiles");
   if (!el) return;
-  const today = new Date();
-  const todayStr = mDs(today);
-  const yest = new Date(today); yest.setDate(yest.getDate() - 1);
-  const wkStart = new Date(today); wkStart.setDate(wkStart.getDate() - today.getDay());
-  const moStart = todayStr.slice(0, 8) + "01";
-  const lmEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-  const lmStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
-
-  const t = mMemberRange(todayStr, todayStr);
-  const y = mMemberRange(mDs(yest), mDs(yest));
-  const w = mMemberRange(mDs(wkStart), todayStr);
-  const m = mMemberRange(moStart, todayStr);
-  const lm = mMemberRange(mDs(lmStart), mDs(lmEnd));
-  const r30 = mMemberRange(mDs(d30), todayStr);
-
+  const tr = mTimeRange();
+  const r = mMemberRange(tr.from, tr.to);
+  const fromD = new Date(tr.from + "T00:00:00");
+  const toD = new Date(tr.to + "T00:00:00");
+  const days = Math.max(1, Math.round((toD - fromD) / 86400000) + 1);
+  const members = mLatestVehicles() || Object.keys(mConsumers).length;
+  const ath = mAllTimeHigh();
   el.innerHTML =
-    mTile("Member sales today", mMoney0(t.rev)) +
-    mTile("Member sales yesterday", mMoney0(y.rev)) +
-    mTile("Week to date", mMoney0(w.rev)) +
-    mTile("Month to date", mMoney0(m.rev)) +
-    mTile("Last month", mMoney0(lm.rev)) +
-    mTile("Member $/wash MTD", m.passUse ? "$" + (m.rev / m.passUse).toFixed(2) : "--") +
-    mTile("Member $/wash 30d", r30.passUse ? "$" + (r30.rev / r30.passUse).toFixed(2) : "--") +
-    mTile("Pass uses 30d", r30.passUse.toLocaleString("en-US"));
+    mTile("Active members (vehicles)", members) +
+    mTile("All-time high", ath || "--") +
+    mTile("Member sales (" + tr.label + ")", mMoney0(r.rev)) +
+    mTile("Pass uses", r.passUse.toLocaleString("en-US")) +
+    mTile("Member $/wash", r.passUse ? "$" + (r.rev / r.passUse).toFixed(2) : "--") +
+    mTile("Avg daily revenue", mMoney0(r.rev / days));
 }
 
 function mLatestVehicles(){
@@ -390,20 +432,11 @@ function mRenderFrequency(){
   if (!active.length){ el.innerHTML = "<p>No active members with usage data.</p>"; return; }
   const labels = ["0x","1x","2x","3x","4x","5x","6x","7x","8x+"];
   const recentBuckets = new Array(9).fill(0);
-  const tenureBuckets = new Array(9).fill(0);
   for (const c of active){
     const r = Math.round(mRecentRateVeh(c));
     recentBuckets[Math.min(r, 8)]++;
-    const t = Math.round(mTenureRate(c));
-    tenureBuckets[Math.min(t, 8)]++;
   }
-  el.innerHTML =
-    '<div style="display:flex;gap:24px;flex-wrap:wrap">' +
-    '<div style="flex:1;min-width:280px"><h3 style="margin:0 0 4px;font-size:14px;color:#b9c6da">Recent (last 2 months)</h3>' +
-    mBarChart(recentBuckets, labels, "#4f8ef7") + '</div>' +
-    '<div style="flex:1;min-width:280px"><h3 style="margin:0 0 4px;font-size:14px;color:#b9c6da">Tenure average (up to 12mo)</h3>' +
-    mBarChart(tenureBuckets, labels, "#7c5cbf") + '</div>' +
-    '</div>';
+  el.innerHTML = mBarChart(recentBuckets, labels, "#4f8ef7");
 }
 
 function mRenderTierBreakdown(){
@@ -501,12 +534,12 @@ async function memRender(){
   M$("memStatus").textContent = "Calculating...";
   await memLoad();
   mRenderTiles();
+  mRenderEconomics();
   mRenderChart();
   if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); }
   mRenderIncomplete();
   mRenderRisk();
   await mRenderCohorts();
-  mRenderEconomics();
   mRenderFrequency();
   mRenderTierBreakdown();
   mRenderCancelTiming();
@@ -534,5 +567,7 @@ onReady( () => {
     mSelectedSite = mSiteFilter.value || null;
     memRender();
   });
-  memRender().then(mPopulateSiteFilter);
+  const memTF = M$("memTimeFrame");
+  if (memTF) memTF.addEventListener("change", () => { mRenderTiles(); });
+  memRender().then(() => { mPopulateSiteFilter(); mPopulateTimeFrame(); });
 });
