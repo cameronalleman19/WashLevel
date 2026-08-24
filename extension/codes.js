@@ -133,6 +133,10 @@ async function cFullSync(statusCb){
     var result = await cFetchPage(page);
     all.push.apply(all, result.codes);
     totalPages = result.totalPages;
+    /* checkpoint after each page */
+    var seen = {};
+    codesCache = all.filter(function(c){ var k=c.id; if(seen[k]) return false; seen[k]=true; return true; });
+    await cSave();
     page++;
   }
   /* dedup by UUID */
@@ -140,6 +144,7 @@ async function cFullSync(statusCb){
   all = all.filter(function(c){ var k=c.id; if(seen[k]) return false; seen[k]=true; return true; });
   codesCache = all;
   await cSave();
+  await chrome.storage.local.set({washCodesLastSync: Date.now()});
   return all;
 }
 
