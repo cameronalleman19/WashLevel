@@ -104,14 +104,41 @@ function mRenderChart(){
 }
 
 function mInitCollapsible(){
-  document.querySelectorAll(".collapsible").forEach(h => {
+  const page = document.getElementById("page-members");
+  if (!page) return;
+  const prefs = JSON.parse(localStorage.getItem("memCollapsed") || "{}");
+  page.querySelectorAll("h2").forEach(h => {
+    const key = h.textContent.trim().replace(/\s*[\u25B6\u25BC]\s*$/, "").trim();
+    // Wrap following siblings until next h2 in a container div
+    let wrap = h.nextElementSibling;
+    if (wrap && wrap.classList.contains("mem-collapse-wrap")) return; // already initialized
+    const div = document.createElement("div");
+    div.className = "mem-collapse-wrap";
+    let sib = h.nextSibling;
+    while (sib && !(sib.nodeType === 1 && sib.tagName === "H2")){
+      const next = sib.nextSibling;
+      div.appendChild(sib);
+      sib = next;
+    }
+    h.parentNode.insertBefore(div, sib);
+    // Add arrow
+    const arrow = document.createElement("span");
+    arrow.className = "collapse-arrow";
+    arrow.style.cssText = "margin-left:8px;font-size:12px";
+    h.appendChild(arrow);
+    // Apply saved state
+    const collapsed = prefs[key] || false;
+    div.style.display = collapsed ? "none" : "";
+    arrow.textContent = collapsed ? "\u25B6" : "\u25BC";
+    // Click handler
     h.style.cursor = "pointer";
     h.addEventListener("click", () => {
-      const t = document.getElementById(h.dataset.target);
-      if (!t) return;
-      const arrow = h.querySelector(".collapse-arrow");
-      if (t.style.display === "none"){ t.style.display = ""; if (arrow) arrow.textContent = "\u25BC"; }
-      else { t.style.display = "none"; if (arrow) arrow.textContent = "\u25B6"; }
+      const isHidden = div.style.display === "none";
+      div.style.display = isHidden ? "" : "none";
+      arrow.textContent = isHidden ? "\u25BC" : "\u25B6";
+      const p = JSON.parse(localStorage.getItem("memCollapsed") || "{}");
+      p[key] = !isHidden;
+      localStorage.setItem("memCollapsed", JSON.stringify(p));
     });
   });
 }
