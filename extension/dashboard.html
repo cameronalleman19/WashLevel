@@ -120,9 +120,25 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <div id="memLtv" class="cards"></div>
 <h2>Member sales - last 30 days</h2>
 <canvas id="memChart"></canvas>
-<h2>Incomplete signups</h2>
-<p style="color:#8fa3c0;font-size:13px;margin:-6px 0 10px">New members without a name or email. Reach out before their renewal date or the pass won't auto-renew.</p>
+<h2 class="collapsible" data-target="secIncomplete">Incomplete signups <span class="collapse-arrow">▼</span></h2>
+<div id="secIncomplete">
+<p style="color:#8fa3c0;font-size:13px;margin:4px 0 10px">New members without a name or email. Reach out before their renewal date or the pass won't auto-renew.</p>
 <table class="via"><thead><tr><th>Phone</th><th>Signed up</th><th>Days left</th><th>Site</th><th></th></tr></thead><tbody id="memIncBody"></tbody></table>
+</div>
+<h2 class="collapsible" data-target="secLost">Recently lost members <span class="collapse-arrow">▼</span></h2>
+<div id="secLost">
+<div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px">
+<p style="color:#8fa3c0;font-size:13px;margin:0">Members who cancelled or whose card expired.</p>
+<select id="memLostPeriod">
+<option value="30">Last 30 days</option>
+<option value="60">Last 60 days</option>
+<option value="90" selected>Last 90 days</option>
+<option value="180">Last 6 months</option>
+<option value="365">Last year</option>
+</select>
+</div>
+<table class="via"><thead><tr><th>Name</th><th>Phone</th><th>Reason</th><th>Date</th><th>Plan</th><th></th></tr></thead><tbody id="memLostBody"></tbody></table>
+</div>
 <h2>Wash frequency distribution</h2>
 <p style="color:#8fa3c0;font-size:13px;margin:-6px 0 10px">Average washes per month per vehicle across active members.</p>
 <div id="memFrequency"></div>
@@ -132,12 +148,14 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <p style="color:#8fa3c0;font-size:13px;margin:-6px 0 10px">When members cancel relative to their signup month.</p>
 <div id="memCancelChart"></div>
 <table class="via"><thead><tr><th>Period</th><th>Cancellations</th><th>% of total</th></tr></thead><tbody id="memCancelBody"></tbody></table>
-<h2>At-risk members</h2>
-<table class="via members"><thead><tr><th>Name</th><th>Risk</th><th>Why</th><th>Washes/mo (recent)</th><th>Baseline</th><th>Last wash</th></tr></thead><tbody id="memRiskBody"></tbody></table>
-<h2>Retention by signup month</h2>
-<table class="via"><thead><tr><th>Cohort</th><th>Signups</th><th>1 mo</th><th>3 mo</th><th>6 mo</th><th>12 mo</th></tr></thead><tbody id="memCohortBody"></tbody></table>
 <h2>Vehicle plans</h2>
 <section class="summary" id="memVehicles"></section>
+<h2 class="collapsible" data-target="secRisk">At-risk members <span class="collapse-arrow">▶</span></h2>
+<div id="secRisk" style="display:none">
+<table class="via members"><thead><tr><th>Name</th><th>Risk</th><th>Why</th><th>Washes/mo (recent)</th><th>Baseline</th><th>Last wash</th></tr></thead><tbody id="memRiskBody"></tbody></table>
+</div>
+<h2>Retention by signup month</h2>
+<table class="via"><thead><tr><th>Cohort</th><th>Signups</th><th>1 mo</th><th>3 mo</th><th>6 mo</th><th>12 mo</th></tr></thead><tbody id="memCohortBody"></tbody></table>
 <h2>Net members by month</h2>
 <table class="via"><thead><tr><th>Month</th><th>New</th><th>Cancelled</th><th>Net</th><th>Declines</th></tr></thead><tbody id="memNetBody"></tbody></table>
 </div>

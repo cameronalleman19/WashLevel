@@ -103,6 +103,68 @@ function mRenderChart(){
   wlLineChart(cv, labels, vals);
 }
 
+function mInitCollapsible(){
+  document.querySelectorAll(".collapsible").forEach(h => {
+    h.style.cursor = "pointer";
+    h.addEventListener("click", () => {
+      const t = document.getElementById(h.dataset.target);
+      if (!t) return;
+      const arrow = h.querySelector(".collapse-arrow");
+      if (t.style.display === "none"){ t.style.display = ""; if (arrow) arrow.textContent = "\u25BC"; }
+      else { t.style.display = "none"; if (arrow) arrow.textContent = "\u25B6"; }
+    });
+  });
+}
+
+function mRenderLostMembers(){
+  const tb = M$("memLostBody");
+  if (!tb) return;
+  const sel = M$("memLostPeriod");
+  const days = sel ? parseInt(sel.value) || 30 : 30;
+  const cut = Date.now() - days * 86400000;
+  const lost = Object.values(mConsumers).filter(c => {
+    if (!c.signup) return false;
+    const lastBill = Math.max(c.lastNew || 0, c.lastRenew || 0);
+    if (!lastBill) return false;
+    // Cancelled after cutoff
+    if (c.cancelled && c.cancelled > (c.lastNew || 0) && c.cancelled > cut) return true;
+    // Expired: last billing > 45 days ago but not actively cancelled, and was active before
+    if (!c.cancelled || c.cancelled <= (c.lastNew || 0)){
+      if (lastBill < Date.now() - 45 * 86400000 && lastBill > cut) return true;
+    }
+    return false;
+  });
+  if (!lost.length){
+    tb.innerHTML = "<tr><td colspan=\"6\">No recently lost members in this period.</td></tr>";
+    return;
+  }
+  lost.sort((a, b) => {
+    const aT = a.cancelled && a.cancelled > (a.lastNew || 0) ? a.cancelled : Math.max(a.lastNew || 0, a.lastRenew || 0);
+    const bT = b.cancelled && b.cancelled > (b.lastNew || 0) ? b.cancelled : Math.max(b.lastNew || 0, b.lastRenew || 0);
+    return bT - aT;
+  });
+  tb.innerHTML = "";
+  for (const c of lost){
+    const wasCancelled = c.cancelled && c.cancelled > (c.lastNew || 0);
+    const reason = wasCancelled ? "Cancelled" : "Expired / Declined";
+    const reasonStyle = wasCancelled ? "color:#f87171" : "color:#ffd166";
+    const lostDate = wasCancelled ? c.cancelled : Math.max(c.lastNew || 0, c.lastRenew || 0);
+    const phone = c.phone || "";
+    const phoneClean = phone.replace(/[^0-9+]/g, "");
+    const phoneLinks = phoneClean
+      ? "<a href=\"tel:" + phoneClean + "\" class=\"via-open\">" + mEsc(phone) + "</a> <a href=\"sms:" + phoneClean + "\" class=\"via-open\" title=\"Text\">SMS</a>"
+      : "--";
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + mEsc(c.name || "(no name)") + "</td>" +
+      "<td>" + phoneLinks + "</td>" +
+      "<td style=\"" + reasonStyle + "\">" + reason + "</td>" +
+      "<td>" + mDate(lostDate) + "</td>" +
+      "<td>" + mEsc(c.washPlan || "--") + "</td>" +
+      "<td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
+    tb.appendChild(tr);
+  }
+}
+
 function mRenderIncomplete(){
   const tb = M$("memIncBody");
   if (!tb) return;
@@ -538,6 +600,7 @@ async function memRender(){
   mRenderChart();
   if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); }
   mRenderIncomplete();
+  mRenderLostMembers();
   mRenderRisk();
   await mRenderCohorts();
   mRenderFrequency();
@@ -548,6 +611,7 @@ async function memRender(){
   mRenderNet();
   await mRenderConversions();
   M$("memStatus").textContent = "";
+  mInitCollapsible();
 }
 
 function mPopulateSiteFilter(){
@@ -567,6 +631,8 @@ onReady( () => {
     mSelectedSite = mSiteFilter.value || null;
     memRender();
   });
+  const memLP = M$("memLostPeriod");
+  if (memLP) memLP.addEventListener("change", mRenderLostMembers);
   const memTF = M$("memTimeFrame");
   if (memTF) memTF.addEventListener("change", () => { mRenderTiles(); });
   memRender().then(() => { mPopulateSiteFilter(); mPopulateTimeFrame(); });

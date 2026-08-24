@@ -94,12 +94,18 @@ async function fetchVehicleCount(id){
     const cRes = await safeFetch(CBASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
     if (!cRes.ok || cRes.type === "opaqueredirect" || cRes.status === 0) return -1;
     const cDoc = new DOMParser().parseFromString(await cRes.text(), "text/html");
+    let cPhone = "", cFavSite = "";
+    for (const s of cDoc.querySelectorAll("strong")){
+      const t = s.textContent.trim();
+      if (/^phone\s*#?$/i.test(t)){ const p = s.nextElementSibling; if (p) cPhone = p.textContent.trim(); }
+      if (/^favorite\s*site$/i.test(t)){ const p = s.nextElementSibling; if (p) cFavSite = p.textContent.trim().split("\n")[0].trim(); }
+    }
     let passUrl = "";
     cDoc.querySelectorAll('a[href*="/consumerpass/"]').forEach(a => {
       const m = (a.getAttribute("href") || "").match(/\/consumerpass\/([0-9a-fA-F-]{36})\//);
       if (m) passUrl = "/consumerpass/" + m[1] + "/";
     });
-    if (!passUrl) return 1;
+    if (!passUrl) return {veh: 1, washPlan: "", phone: cPhone, favSite: cFavSite};
     // Step 2: fetch pass page, read Vehicle Count <strong> + <p>
     const res = await safeFetch(CBASE + passUrl, {credentials: "include", redirect: "manual"});
     if (!res.ok || res.type === "opaqueredirect" || res.status === 0) return -1;
@@ -116,8 +122,8 @@ async function fetchVehicleCount(id){
         if (p) washPlan = p.textContent.trim();
       }
     }
-    return {veh: veh, washPlan: washPlan};
-  } catch(e){ return {veh: 1, washPlan: ""}; }
+    return {veh: veh, washPlan: washPlan, phone: cPhone, favSite: cFavSite};
+  } catch(e){ return {veh: 1, washPlan: "", phone: "", favSite: ""}; }
 }
 
 async function fetchConsumerPhone(id){
@@ -163,7 +169,7 @@ async function fetchVehBatch(ids, fresh){
     C$("consStatus").textContent = "Fetching vehicle count " + (i + 1) + "/" + ids.length + "...";
     const v = await fetchVehicleCount(ids[i]);
     if (v === -1){ C$("consStatus").textContent = "Dencar session expired at " + (i + 1) + "/" + ids.length + ". Log in to Dencar and re-sync."; consumers = fresh; await consSave(); renderConsumers(); C$("consSyncBtn").disabled = false; throw new Error("SESSION_EXPIRED"); }
-    fresh[ids[i]].veh = v.veh; fresh[ids[i]].vehChecked = true; if (v.washPlan) fresh[ids[i]].washPlan = v.washPlan;
+    fresh[ids[i]].veh = v.veh; fresh[ids[i]].vehChecked = true; if (v.washPlan) fresh[ids[i]].washPlan = v.washPlan; if (v.phone) fresh[ids[i]].phone = v.phone; if (v.favSite) fresh[ids[i]].favSite = v.favSite;
     if (i % 10 === 9){ consumers = fresh; await consSave(); }
     await new Promise(r => setTimeout(r, 100));
   }
