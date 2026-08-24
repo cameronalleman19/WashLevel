@@ -597,6 +597,8 @@ async function memRender(){
   await memLoad();
   mRenderTiles();
   mRenderEconomics();
+  mRenderVehicles();
+  mRenderTierBreakdown();
   mRenderChart();
   if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); }
   mRenderIncomplete();
@@ -604,14 +606,11 @@ async function memRender(){
   mRenderRisk();
   await mRenderCohorts();
   mRenderFrequency();
-  mRenderTierBreakdown();
   mRenderCancelTiming();
-  mRenderVehicles();
   if (typeof wlTips === "function"){ wlTips("memLtv", WL_TIP_MEM_ECON); }
   mRenderNet();
   await mRenderConversions();
   M$("memStatus").textContent = "";
-  mInitCollapsible();
 }
 
 function mPopulateSiteFilter(){
@@ -631,6 +630,7 @@ onReady( () => {
     mSelectedSite = mSiteFilter.value || null;
     memRender();
   });
+  mInitCollapsible();
   const memLP = M$("memLostPeriod");
   if (memLP) memLP.addEventListener("change", mRenderLostMembers);
   const memTF = M$("memTimeFrame");
