@@ -164,6 +164,33 @@ async function fetchIncompletePhones(fresh){
   }
 }
 
+async function fetchLostMemberInfo(fresh){
+  const cut = Date.now() - 365 * 86400000;
+  const ids = Object.keys(fresh).filter(id => {
+    const c = fresh[id];
+    if (c.phone) return false;
+    const lastBill = Math.max(c.lastNew || 0, c.lastRenew || 0);
+    if (!lastBill || lastBill < cut) return false;
+    if (c.cancelled && c.cancelled > (c.lastNew || 0) && c.cancelled > cut) return true;
+    if (lastBill < Date.now() - 45 * 86400000) return true;
+    return false;
+  });
+  if (!ids.length) return;
+  for (let i = 0; i < ids.length; i++){
+    C$("consStatus").textContent = "Fetching lost member info " + (i + 1) + "/" + ids.length + "...";
+    const v = await fetchVehicleCount(ids[i]);
+    if (v === -1) break;
+    if (v.phone) fresh[ids[i]].phone = v.phone;
+    if (v.favSite) fresh[ids[i]].favSite = v.favSite;
+    if (v.washPlan) fresh[ids[i]].washPlan = v.washPlan;
+    fresh[ids[i]].veh = v.veh;
+    if (i % 10 === 9){ consumers = fresh; await consSave(); }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  consumers = fresh;
+  await consSave();
+}
+
 async function fetchVehBatch(ids, fresh){
   for (let i = 0; i < ids.length; i++){
     C$("consStatus").textContent = "Fetching vehicle count " + (i + 1) + "/" + ids.length + "...";
@@ -220,6 +247,7 @@ async function consSync(){
           await fetchVehBatch(vehIds2, fresh);
         }
         await fetchIncompletePhones(fresh);
+        await fetchLostMemberInfo(fresh);
         consumers = fresh;
         await consSave();
         C$("consStatus").textContent = "Up to date. " + list.length + " consumers.";
@@ -304,6 +332,7 @@ async function consSync(){
       await fetchVehBatch(vehIds, fresh);
     }
     await fetchIncompletePhones(fresh);
+    await fetchLostMemberInfo(fresh);
     consumers = fresh;
     await chrome.storage.local.set({washTiers: tiers, plateVisits: pv, plateSiteMap: psm, lastPaymentSync: endStr});
     await consSave();
