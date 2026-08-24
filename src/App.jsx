@@ -300,7 +300,7 @@ const LandingLink = ({ href, children }) => (
 function LandingFooter() {
   return (
     <div style={{ background: "#0f1f35", color: "#94a3b8", padding: "32px 24px", textAlign: "center", fontSize: 13 }}>
-      <div style={{ fontWeight: 800, fontSize: 16, color: "#fff", marginBottom: 10 }}>WashLevel</div>
+      <div style={{ marginBottom: 10 }}><img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 28 }} /></div>
       <div style={{ marginBottom: 6 }}>90 Cumberland Parkway, Mechanicsburg, PA</div>
       <div style={{ marginBottom: 6 }}>(717) 966-1794 &nbsp;|&nbsp; support@washlevel.com</div>
       <div style={{ marginTop: 14, display: "flex", gap: 18, justifyContent: "center" }}>
@@ -324,7 +324,7 @@ function LandingPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "inherit" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, background: "#fff", zIndex: 10 }}>
-        <div style={{ fontWeight: 800, fontSize: 20, color: "#0f1f35" }}>WashLevel</div>
+        <div><img src="/lockup-light.svg" alt="WashLevel" style={{ height: 32 }} /></div>
         <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
           <LandingLink href="#about">About</LandingLink>
           <LandingLink href="#features">Features</LandingLink>
@@ -430,7 +430,7 @@ function LegalShell({ title, children }) {
   return (
     <div style={{ minHeight: "100vh", background: "#fff" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
-        <a href="/" style={{ fontWeight: 800, fontSize: 20, color: "#0f1f35", textDecoration: "none" }}>WashLevel</a>
+        <a href="/" style={{ textDecoration: "none" }}><img src="/lockup-light.svg" alt="WashLevel" style={{ height: 28 }} /></a>
         <a href="/?login=1" style={{ background: "#0f1f35", color: "#fff", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Log In</a>
       </div>
       <div style={{ maxWidth: 780, margin: "0 auto", padding: "48px 24px", fontSize: 14.5, color: "#334155", lineHeight: 1.7 }}>
@@ -687,7 +687,7 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "", inviteBi
       <div style={{ width: "100%", maxWidth: 440, padding: "0 16px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#0f1f35", borderRadius: 14, padding: "10px 22px" }}>
-            <span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
+            <img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 32 }} />
             <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
           </div>
           <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 8 }}>Car Wash Operations Platform</div>
@@ -853,7 +853,7 @@ boxShadow: open ? "6px 0 32px rgba(0,0,0,0.3)" : "none"
 }}>
 <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-<span style={{ color: "#fff", fontWeight: 800, fontSize: 18, letterSpacing: "-0.3px" }}>WashLevel</span>
+<img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 28 }} />
 <span style={{ background: "#00d4aa", color: "#0f1f35", fontSize: 9, fontWeight: 800, borderRadius: 4, padding: "2px 6px", letterSpacing: "0.05em" }}>PRO</span>
 </div>
 </div>
@@ -3636,6 +3636,11 @@ function TimeClock({ locId, locationName, allLocations }) {
   const isManager = user?.role === "manager" || user?.role === "owner" || !user?.isTeamMember;
   const today = new Date().toISOString().split("T")[0];
   const clockDocId = user?.uid + "_" + today;
+  const [clockNote, setClockNote] = useState("");
+  const [editingNoteIdx, setEditingNoteIdx] = useState(null);
+  const [editNoteText, setEditNoteText] = useState("");
+  const [historyNoteEdit, setHistoryNoteEdit] = useState(null);
+  const [teamNoteEdit, setTeamNoteEdit] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -3736,7 +3741,7 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
       await setDoc(doc(db, "timeclock", clockDocId), {
         uid: user.uid, ownerId: myOwnerId, name: user.name || user.email, date: today,
         mainClockIn: nowStr, mainClockOut: null,
-        sessions: [{ in: nowStr, out: null }],
+        sessions: [{ in: nowStr, out: null, note: clockNote || "" }],
         locationTimes: locClocks
       });
     } else if (isClockedIn) {
@@ -3748,7 +3753,7 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
       });
     } else {
       // Start a new session
-      const updatedSessions = [...sessions, { in: nowStr, out: null }];
+      const updatedSessions = [...sessions, { in: nowStr, out: null, note: clockNote || "" }];
       await updateDoc(doc(db, "timeclock", clockDocId), {
         mainClockIn: nowStr, mainClockOut: null,
         sessions: updatedSessions
@@ -3893,11 +3898,14 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
                   <div key={i} style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>
                     {fmt(s.in)} — {s.out ? fmt(s.out) : <span style={{ color: "#059669", fontWeight: 600 }}>Now</span>}
                     {s.in && <span style={{ color: "#94a3b8" }}> ({elapsed(s.in, s.out)})</span>}
+                    {s.note && <div style={{ fontSize: 11, color: "#6b7280", fontStyle: "italic" }}>Note: {s.note}</div>}
+                    {editingNoteIdx === i ? <div style={{ display: "flex", gap: 4, marginTop: 2 }}><input value={editNoteText} onChange={e => setEditNoteText(e.target.value)} style={{ flex: 1, padding: "3px 6px", fontSize: 11, border: "1px solid #e5e7eb", borderRadius: 4, color: "#0f1f35", background: "#fff" }} /><button onClick={async () => { const updated = sessions.map((ss, ii) => ii === i ? { ...ss, note: editNoteText } : ss); await updateDoc(doc(db, "timeclock", clockDocId), { sessions: updated }); setEditingNoteIdx(null); }} style={{ fontSize: 10, padding: "3px 8px", background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Save</button><button onClick={() => setEditingNoteIdx(null)} style={{ fontSize: 10, padding: "3px 8px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 4, cursor: "pointer" }}>Cancel</button></div> : <button onClick={() => { setEditingNoteIdx(i); setEditNoteText(s.note || ""); }} style={{ fontSize: 10, color: "#0ea5e9", background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 2 }}>{s.note ? "Edit note" : "Add note"}</button>}
                   </div>
                 ))}
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35", marginTop: 6 }}>Total: {totalSessionHrs} hrs</div>
               </div>
             )}
+            <textarea value={clockNote} onChange={e => setClockNote(e.target.value)} placeholder="Add a note (optional)..." rows={2} style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13, resize: "vertical", marginTop: 8, boxSizing: "border-box", background: "#fff", color: "#0f1f35" }} />
             <button onClick={handleMainClock} style={{ background: isClockedIn ? "#ef4444" : "#059669", color: "#fff", border: "none", borderRadius: 10, padding: "14px 40px", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
               {isClockedIn ? "Clock Out" : "Clock In"}
             </button>
@@ -3949,6 +3957,8 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
                             <div key={i} style={{ fontSize: 11, color: "#94a3b8" }}>
                               Session {i + 1}: {fmt(s.in)} — {s.out ? fmt(s.out) : <span style={{ color: "#059669" }}>Now</span>}
                               {s.in && <span> ({elapsed(s.in, s.out)})</span>}
+                              {s.note && <div style={{ fontSize: 10, color: "#6b7280", fontStyle: "italic" }}>Note: {s.note}</div>}
+                              {historyNoteEdit && historyNoteEdit.docId === e.id && historyNoteEdit.idx === i ? <div style={{ display: "flex", gap: 4, marginTop: 2 }}><input value={editNoteText} onChange={ev => setEditNoteText(ev.target.value)} style={{ flex: 1, padding: "3px 6px", fontSize: 11, border: "1px solid #e5e7eb", borderRadius: 4, color: "#0f1f35", background: "#fff" }} /><button onClick={async () => { const allSess = e.sessions || (e.mainClockIn ? [{ in: e.mainClockIn, out: e.mainClockOut }] : []); const updated = allSess.map((ss, ii) => ii === i ? { ...ss, note: editNoteText } : ss); await updateDoc(doc(db, "timeclock", e.id), { sessions: updated }); setHistoryNoteEdit(null); }} style={{ fontSize: 10, padding: "3px 8px", background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Save</button><button onClick={() => setHistoryNoteEdit(null)} style={{ fontSize: 10, padding: "3px 8px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 4, cursor: "pointer" }}>Cancel</button></div> : <button onClick={() => { setHistoryNoteEdit({ docId: e.id, idx: i }); setEditNoteText(s.note || ""); }} style={{ fontSize: 10, color: "#0ea5e9", background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 1 }}>{s.note ? "Edit note" : "Add note"}</button>}
                             </div>
                           ))
                         ) : (
@@ -4024,6 +4034,8 @@ setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.
                                   {ss.length > 1 && <span style={{ color: "#cbd5e1" }}>S{i+1}: </span>}
                                   {fmt(s.in)} — {s.out ? fmt(s.out) : <span style={{ color: "#10b981" }}>Active</span>}
                                   {s.in && s.out && <span style={{ color: "#64748b", marginLeft: 4 }}>({elapsed(s.in, s.out)})</span>}
+                                  {s.note && <div style={{ fontSize: 10, color: "#6b7280", fontStyle: "italic" }}>Note: {s.note}</div>}
+                                  {teamNoteEdit && teamNoteEdit.docId === e.id && teamNoteEdit.idx === i ? <div style={{ display: "flex", gap: 4, marginTop: 2 }}><input value={editNoteText} onChange={ev => setEditNoteText(ev.target.value)} style={{ flex: 1, padding: "3px 6px", fontSize: 11, border: "1px solid #e5e7eb", borderRadius: 4, color: "#0f1f35", background: "#fff" }} /><button onClick={async () => { const allSess = e.sessions || (e.mainClockIn ? [{ in: e.mainClockIn, out: e.mainClockOut }] : []); const updated = allSess.map((ss, ii) => ii === i ? { ...ss, note: editNoteText } : ss); const fn = httpsCallable(functions, "updateTimeclockEntry"); await fn({ docId: e.id, sessions: updated, editedBy: user.uid, editedAt: new Date().toISOString() }); setTeamNoteEdit(null); }} style={{ fontSize: 10, padding: "3px 8px", background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Save</button><button onClick={() => setTeamNoteEdit(null)} style={{ fontSize: 10, padding: "3px 8px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 4, cursor: "pointer" }}>Cancel</button></div> : <button onClick={() => { setTeamNoteEdit({ docId: e.id, idx: i }); setEditNoteText(s.note || ""); }} style={{ fontSize: 10, color: "#0ea5e9", background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 1 }}>{s.note ? "Edit note" : "Add note"}</button>}
                                 </div>
                               ))}
                               {ss.length > 1 && dayMs > 0 && (
@@ -8705,7 +8717,7 @@ function SetupWizard({ user, logout }) {
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#0f1f35", borderRadius: 14, padding: "10px 22px", marginBottom: 12 }}>
-            <span style={{ color: "#fff", fontWeight: 700, fontSize: 20 }}>WashLevel</span>
+            <img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 32 }} />
             <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
           </div>
           {/* Step indicator */}
@@ -8830,6 +8842,7 @@ function SetupWizard({ user, logout }) {
 function AlertSettings({ locId, locations, user, setView, setLocId }) {
   const [prefs, setPrefs] = useState(null);
   const [notifTab, setNotifTab] = useState("inbox");
+  const [notifFilter, setNotifFilter] = useState("all");
   const [smsTab, setSmsTab] = useState(false);
   const [smsSubscription, setSmsSubscription] = useState(null);
   const [smsUsers, setSmsUsers] = useState([]);
@@ -8840,6 +8853,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const filteredNotifs = notifFilter === "unread" ? notifications.filter(n => !n.read) : notifFilter === "read" ? notifications.filter(n => n.read) : notifications;
   const [notifDetail, setNotifDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -9033,13 +9047,20 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
         <button onClick={() => setNotifTab("sms")} style={{ padding: "7px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: notifTab === "sms" ? "#0f1f35" : "#f1f5f9", color: notifTab === "sms" ? "#fff" : "#64748b" }}>Text Alerts</button>
       </div>
       <div style={{ display: notifTab === "inbox" ? "block" : "none" }}>
-        {notifications.length === 0 ? (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
+          {["all","unread","read"].map(f => (<button key={f} onClick={() => setNotifFilter(f)} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid " + (notifFilter === f ? "#0f1f35" : "#e5e7eb"), fontSize: 12, fontWeight: 600, cursor: "pointer", background: notifFilter === f ? "#0f1f35" : "#fff", color: notifFilter === f ? "#fff" : "#64748b", textTransform: "capitalize" }}>{f}{f === "unread" && notifications.filter(n => !n.read).length > 0 ? " (" + notifications.filter(n => !n.read).length + ")" : ""}</button>))}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            {notifications.some(n => !n.read) && <button onClick={async () => { for (const nn of notifications.filter(x => !x.read)) { await updateDoc(doc(db, "users", user.uid, "notifications", nn.id), { read: true }); }}} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #e5e7eb", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "#fff", color: "#3b82f6" }}>Mark All Read</button>}
+            {notifications.length > 0 && <button onClick={async () => { if (!window.confirm("Delete all notifications?")) return; for (const nn of notifications) { await deleteDoc(doc(db, "users", user.uid, "notifications", nn.id)); }}} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #fecaca", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "#fff", color: "#dc2626" }}>Clear All</button>}
+          </div>
+        </div>
+        {filteredNotifs.length === 0 ? (
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 32, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🔔</div>
-            <div style={{ fontWeight: 600, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>No notifications yet</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: "#0f1f35", marginBottom: 4 }}>{notifFilter === "all" ? "No notifications yet" : "No " + notifFilter + " notifications"}</div>
             <div style={{ fontSize: 13, color: "#94a3b8" }}>Task assignments and alerts will appear here</div>
           </div>
-        ) : notifications.map(n => (
+        ) : filteredNotifs.map(n => (
           <div key={n.id} style={{ background: n.read ? "#fff" : "#eff6ff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 10, display: "flex", gap: 12, alignItems: "flex-start" }}>
             <div style={{ fontSize: 20 }}>{n.link === "inventory" ? "📦" : "📋"}</div>
             <div style={{ flex: 1, cursor: "pointer" }} onClick={async () => {
@@ -9070,8 +9091,9 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
               <div style={{ fontSize: 13, color: "#334155", marginTop: 2 }}>{n.body}</div>
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6" }} />}
+              <button onClick={async (e) => { e.stopPropagation(); await updateDoc(doc(db, "users", user.uid, "notifications", n.id), { read: !n.read }); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#3b82f6", fontSize: 10, padding: 2, whiteSpace: "nowrap" }}>{n.read ? "Unread" : "Read"}</button>
               <button onClick={async () => { await deleteDoc(doc(db, "users", user.uid, "notifications", n.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16, padding: 2 }}>✕</button>
             </div>
           </div>

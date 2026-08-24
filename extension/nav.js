@@ -1,12 +1,12 @@
-onReady( () => {
+document.addEventListener("DOMContentLoaded", () => {
+  /* group toggles — just expand/collapse, no navigation */
   document.querySelectorAll(".nav-group-toggle").forEach(g => {
     g.addEventListener("click", () => {
       g.closest(".nav-group").classList.toggle("open");
-      const firstItem = g.closest(".nav-group").querySelector(".nav-subgroup .nav-btn[data-page]");
-      if (firstItem) firstItem.click();
     });
   });
 
+  /* tab buttons — switch page + persist choice */
   document.querySelectorAll(".nav-btn[data-page]").forEach(b => {
     b.addEventListener("click", () => {
       document.querySelectorAll(".nav-btn[data-page]").forEach(x => x.classList.remove("active"));
@@ -14,87 +14,32 @@ onReady( () => {
       b.classList.add("active");
       const pg = document.getElementById("page-" + b.dataset.page);
       if (pg) pg.classList.add("active");
+      chrome.storage.local.set({ sidecarActiveTab: b.dataset.page });
     });
   });
 
-  document.querySelectorAll(".nav-subgroup .nav-btn.active").forEach(b => {
-    b.closest(".nav-group").classList.add("open");
-  });
-
-  /* ── Platform toggles ── */
-  const PLAT_MAP = {
-    dencar:    { groupLabel: 'Dencar',    pages: ['overview','consumers','via','members','retail','codes'] },
-    cryptopay: { groupLabel: 'Cryptopay', pages: ['cp-overview','cryptopay','cp-purchases','cp-projections','cp-statistics'] }
-  };
-
-  function applyPlatformToggles(toggles) {
-    Object.entries(PLAT_MAP).forEach(([key, cfg]) => {
-      const grpBtn = [...document.querySelectorAll('.nav-group-toggle')].find(b => b.textContent.trim() === cfg.groupLabel);
-      const grp = grpBtn ? grpBtn.closest('.nav-group') : null;
-      if (grp) grp.style.display = toggles[key] ? '' : 'none';
-    });
-    const hiddenPages = Object.entries(PLAT_MAP)
-      .flatMap(([, cfg]) => cfg.pages);
-    const activeBtn = document.querySelector('.nav-btn[data-page].active');
-    if (activeBtn && hiddenPages.includes(activeBtn.dataset.page)) {
-      const fallback = document.querySelector('.nav-btn[data-page="settings"]');
-      if (fallback) fallback.click();
+  /* restore last active tab on load */
+  chrome.storage.local.get("sidecarActiveTab", res => {
+    const tab = res.sidecarActiveTab;
+    if (!tab) {
+      /* no saved tab — just open the group that has the default active button */
+      document.querySelectorAll(".nav-subgroup .nav-btn.active").forEach(b => {
+        b.closest(".nav-group").classList.add("open");
+      });
+      return;
     }
-  }
-
-  function loadToggles(cb) {
-    chrome.storage.local.get('platformToggles', r => {
-      cb(Object.assign({ dencar: true, cryptopay: true }, r.platformToggles || {}));
+    const btn = document.querySelector('.nav-btn[data-page="' + tab + '"]');
+    if (btn) {
+      /* clear defaults set in HTML */
+      document.querySelectorAll(".nav-btn[data-page]").forEach(x => x.classList.remove("active"));
+      document.querySelectorAll(".page").forEach(x => x.classList.remove("active"));
+      btn.classList.add("active");
+      const pg = document.getElementById("page-" + tab);
+      if (pg) pg.classList.add("active");
+    }
+    /* open the group containing the restored tab */
+    document.querySelectorAll(".nav-subgroup .nav-btn.active").forEach(b => {
+      b.closest(".nav-group").classList.add("open");
     });
-  }
-
-  function saveToggles(t) { chrome.storage.local.set({ platformToggles: t }); }
-
-  loadToggles(t => {
-    const dEl = document.getElementById('tog-dencar');
-    const cEl = document.getElementById('tog-cryptopay');
-    dEl.checked = t.dencar;
-    cEl.checked = t.cryptopay;
-    applyPlatformToggles(t);
-
-    const onChange = () => {
-      const cur = { dencar: dEl.checked, cryptopay: cEl.checked };
-      saveToggles(cur);
-      applyPlatformToggles(cur);
-    };
-    dEl.addEventListener('change', onChange);
-    cEl.addEventListener('change', onChange);
   });
 });
-
-
-/* ── Mobile hamburger menu ── */
-(function() {
-  var btn = document.getElementById('hamburgerBtn');
-  var nav = document.getElementById('sideNav');
-  var overlay = document.getElementById('navOverlay');
-  if (!btn || !nav || !overlay) return;
-
-  function openMenu() {
-    nav.classList.add('open');
-    overlay.classList.add('open');
-  }
-  function closeMenu() {
-    nav.classList.remove('open');
-    overlay.classList.remove('open');
-  }
-
-  btn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    if (nav.classList.contains('open')) closeMenu();
-    else openMenu();
-  });
-  overlay.addEventListener('click', closeMenu);
-
-  /* Close menu when a nav button is tapped */
-  nav.querySelectorAll('.nav-btn[data-page]').forEach(function(b) {
-    b.addEventListener('click', function() {
-      closeMenu();
-    });
-  });
-})();
