@@ -336,6 +336,18 @@ function render(){
   $("sumYest").textContent = fmtMoney(byDate[ds(yestD)] || 0);
   $("sumLastWk").textContent = fmtMoney(lastWk);
   $("sumLastMo").textContent = fmtMoney(lastMo);
+  // YoY MTD comparison
+  var lyRef = new Date(today); lyRef.setFullYear(lyRef.getFullYear() - 1);
+  var lyMoStart = ds(lyRef).slice(0,8) + "01", lyMoEnd = ds(lyRef);
+  var lyMtd = 0;
+  for (var dt2 of Object.keys(byDate)){ if (dt2 >= lyMoStart && dt2 <= lyMoEnd) lyMtd += byDate[dt2]; }
+  var yoyPct = lyMtd ? Math.round((p.mtd - lyMtd) / lyMtd * 100) : null;
+  var yoyEl = $("sumYoY");
+  if (yoyEl){
+    if (yoyPct !== null){
+      yoyEl.innerHTML = fmtMoney(lyMtd) + " <span class=\"delta " + (yoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (yoyPct >= 0 ? "+" : "") + yoyPct + "%</span>";
+    } else { yoyEl.textContent = "no data"; }
+  }
   $("sumToday").textContent = fmtMoney(byDate[todayStr] || 0);
   $("sumWtd").textContent = fmtMoney(wtd);
   $("sumMtd").textContent = fmtMoney(p.mtd);
@@ -387,6 +399,19 @@ function renderSiteCards(todayStr, today){
       "<div class=\"row\"><span>Members: " + members + "</span><span>Use/member 30d: " + memberUse + "</span></div>" +
       "<div class=\"row\"><span>Renews: " + (r.passRenew || 0) + "</span><span>New: " + ((r.newPass || 0) + (r.newPassOnline || 0)) + "</span><span>Cancelled: " + (r.passCancelled || 0) + "</span><span>Declined: " + (r.declined || 0) + "</span></div>" +
       "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+    // YoY for this site card
+    var sYoyFrom = todayStr.slice(0,8) + "01";
+    var sCurMtd = sumRange(s.id, sYoyFrom, todayStr);
+    var sLyRef = new Date(today); sLyRef.setFullYear(sLyRef.getFullYear() - 1);
+    var sLyFrom = ds(sLyRef).slice(0,8) + "01", sLyTo = ds(sLyRef);
+    var sLyMtd = sumRange(s.id, sLyFrom, sLyTo);
+    var sYoyPct = sLyMtd.revenue ? Math.round((sCurMtd.revenue - sLyMtd.revenue) / sLyMtd.revenue * 100) : null;
+    if (sYoyPct !== null){
+      var yDiv = document.createElement("div");
+      yDiv.className = "delta " + (sYoyPct >= 0 ? "up" : "down");
+      yDiv.textContent = (sYoyPct >= 0 ? "+" : "") + sYoyPct + "% vs last year MTD (" + fmtMoney(sLyMtd.revenue) + ")";
+      div.appendChild(yDiv);
+    }
     div.addEventListener("click", () => openDetail(s));
     wrap.appendChild(div);
   }

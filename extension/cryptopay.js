@@ -668,6 +668,18 @@ function cpOvRender(){
   $("cpOvYest").textContent = cpMoney(byDate[cpDs(yestD)] || 0);
   $("cpOvLastWk").textContent = cpMoney(lastWk);
   $("cpOvLastMo").textContent = cpMoney(lastMo);
+  // YoY MTD comparison
+  var cpLyRef = new Date(today); cpLyRef.setFullYear(cpLyRef.getFullYear() - 1);
+  var cpLyMoStart = cpDs(cpLyRef).slice(0,8) + "01", cpLyMoEnd = cpDs(cpLyRef);
+  var cpLyMtd = 0;
+  for (var dt2 of Object.keys(byDate)){ if (dt2 >= cpLyMoStart && dt2 <= cpLyMoEnd) cpLyMtd += byDate[dt2]; }
+  var cpYoyPct = cpLyMtd ? Math.round((p.mtd - cpLyMtd) / cpLyMtd * 100) : null;
+  var cpYoyEl = $("cpOvYoY");
+  if (cpYoyEl){
+    if (cpYoyPct !== null){
+      cpYoyEl.innerHTML = cpMoney(cpLyMtd) + " <span class=\"delta " + (cpYoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (cpYoyPct >= 0 ? "+" : "") + cpYoyPct + "%</span>";
+    } else { cpYoyEl.textContent = "no data"; }
+  }
   $("cpOvToday").textContent = cpMoney(byDate[todayStr] || 0);
   $("cpOvWtd").textContent = cpMoney(wtd);
   $("cpOvMtd").textContent = cpMoney(p.mtd);
@@ -718,6 +730,19 @@ function cpOvRenderSiteCards(todayStr){
     projRow.title = "Projected total for this month: month to date plus an estimate for each remaining day, using this site's average for that weekday over the last 8 weeks. " + conf.note;
     projRow.innerHTML = "<span>Month projection: " + cpMoney(proj.projected) + (conf.label === "good" ? "" : "*") + "</span>";
     div.appendChild(projRow);
+    // YoY for this CryptoPay site card
+    var cpSYoyFrom = todayStr.slice(0,8) + "01";
+    var cpSCurMtd = cpSumRange(s.id, cpSYoyFrom, todayStr);
+    var cpSLyRef = new Date(today); cpSLyRef.setFullYear(cpSLyRef.getFullYear() - 1);
+    var cpSLyFrom = cpDs(cpSLyRef).slice(0,8) + "01", cpSLyTo = cpDs(cpSLyRef);
+    var cpSLyMtd = cpSumRange(s.id, cpSLyFrom, cpSLyTo);
+    var cpSYoyPct = cpSLyMtd.revenue ? Math.round((cpSCurMtd.revenue - cpSLyMtd.revenue) / cpSLyMtd.revenue * 100) : null;
+    if (cpSYoyPct !== null){
+      var cpYDiv = document.createElement("div");
+      cpYDiv.className = "delta " + (cpSYoyPct >= 0 ? "up" : "down");
+      cpYDiv.textContent = (cpSYoyPct >= 0 ? "+" : "") + cpSYoyPct + "% vs last year MTD (" + cpMoney(cpSLyMtd.revenue) + ")";
+      div.appendChild(cpYDiv);
+    }
     div.addEventListener("click", () => cpOpenDetail(s));
     wrap.appendChild(div);
   }
