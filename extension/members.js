@@ -682,7 +682,8 @@ function mRenderYoY(){
   html += mTile("Net vs LY (MTD)", (mtd.net >= 0 ? "+" : "") + mtd.net + mYoySpan(netPcMtd) + "<br><small>LY: " + (lyMtd.net >= 0 ? "+" : "") + lyMtd.net + "</small>");
   html += mTile("Net vs LY (YTD)", (ytd.net >= 0 ? "+" : "") + ytd.net + mYoySpan(netPcYtd) + "<br><small>LY: " + (lyYtd.net >= 0 ? "+" : "") + lyYtd.net + "</small>");
 
-  html += '<div style="margin-top:14px"><div id="memYoYToggles" style="margin-bottom:6px"></div><div id="memYoYView" style="margin-bottom:10px"></div><canvas id="memYoYChart" style="width:100%"></canvas></div>';
+  var cwrap = M$("memYoYChartWrap");
+  if (cwrap) cwrap.innerHTML = '<div id="memYoYToggles" style="margin-bottom:6px"></div><div id="memYoYView" style="margin-bottom:10px"></div><canvas id="memYoYChart" style="width:100%"></canvas>';
   // Per-site table
   if (mSites.length > 1){
     html += "<table class=\"via\" style=\"margin-top:12px\"><thead><tr><th>Site</th><th>Rev MTD</th><th>LY</th><th>YoY</th><th>Rev YTD</th><th>LY</th><th>YoY</th><th>New MTD</th><th>LY</th><th>Cancel MTD</th><th>LY</th></tr></thead><tbody>";

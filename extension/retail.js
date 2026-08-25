@@ -247,8 +247,9 @@ function rRenderYoY(){
   html += rTile("$/wash vs LY (YTD)", rMoney(ytdPer) + rYoySpan(rYoyPc(ytdPer, lyYtdPer)) + "<br><small>LY: " + rMoney(lyYtdPer) + "</small>");
   el.innerHTML = html;
 
-  html += '<div style="margin-top:14px"><div id="retYoYToggles" style="margin-bottom:6px"></div><div id="retYoYView" style="margin-bottom:10px"></div><canvas id="retYoYChart" style="width:100%"></canvas></div>';
   el.innerHTML = html;
+  var cwrap = R$("retYoYChartWrap");
+  if (cwrap) cwrap.innerHTML = '<div id="retYoYToggles" style="margin-bottom:6px"></div><div id="retYoYView" style="margin-bottom:10px"></div><canvas id="retYoYChart" style="width:100%"></canvas>';
   // Render YoY chart
   setTimeout(function(){
     var cv = R$("retYoYChart");

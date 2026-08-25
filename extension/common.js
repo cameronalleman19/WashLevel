@@ -75,57 +75,91 @@ function wlLineChart(cv, labels, vals, fmt){
   }
 }
 
-function wlYoYChart(cv, tyVals, lyVals, labels, opts){
-  opts = opts || {};
+function wlYoYDraw(cv, hoverIdx){
+  var st = cv._yoy; if (!st) return;
   var ctx = cv.getContext("2d");
   var W = cv.width = cv.clientWidth || 800;
-  var H = cv.height = opts.height || 260;
+  var H = cv.height = st.height || 260;
   ctx.clearRect(0, 0, W, H);
   var padL = 60, padB = 30, padT = 26, padR = 14;
-  var all = tyVals.concat(lyVals);
-  var max = 1; for (var i = 0; i < all.length; i++){ if ((all[i]||0) > max) max = all[i]; }
-  var fmt = opts.fmt || wlMoney0;
-  var fmtInt = function(v){ return Math.round(v).toLocaleString("en-US"); };
-  var useFmt = opts.fmtFn || fmt;
+  var max = st.max;
+  var useFmt = st.fmt;
+  var tyColor = st.tyColor || "#4da3ff";
+  var lyColor = st.lyColor || "#fb923c";
+  var n = st.n;
+  var xw = n > 1 ? (W - padL - padR) / (n - 1) : 0;
+  var yOf = function(v){ return H - padB - ((v||0) / max) * (H - padB - padT); };
+  // Axes
   ctx.strokeStyle = "#3a4a63";
   ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
   ctx.fillStyle = "#8fa3c0"; ctx.font = "11px sans-serif";
   ctx.fillText(useFmt(max), 4, padT + 10);
-  var n = labels.length;
-  var xw = n > 1 ? (W - padL - padR) / (n - 1) : 0;
   var step = Math.max(1, Math.ceil(n / 10));
-  for (var i = 0; i < n; i += step){ ctx.fillText(labels[i], padL + i * xw - 10, H - 8); }
-  var yOf = function(v){ return H - padB - ((v||0) / max) * (H - padB - padT); };
+  for (var i = 0; i < n; i += step) ctx.fillText(st.labels[i], padL + i * xw - 10, H - 8);
+  // LY line (dashed)
   ctx.save(); ctx.setLineDash([6, 4]);
-  ctx.strokeStyle = opts.lyColor || "#fb923c"; ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (var i = 0; i < n; i++){ var x = padL + i * xw; if (i === 0) ctx.moveTo(x, yOf(lyVals[i])); else ctx.lineTo(x, yOf(lyVals[i])); }
+  ctx.strokeStyle = lyColor; ctx.lineWidth = 2; ctx.beginPath();
+  for (var i = 0; i < n; i++){ var x = padL + i * xw; if (i === 0) ctx.moveTo(x, yOf(st.lyVals[i])); else ctx.lineTo(x, yOf(st.lyVals[i])); }
   ctx.stroke(); ctx.restore();
-  ctx.strokeStyle = opts.tyColor || "#4da3ff"; ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  for (var i = 0; i < n; i++){ var x = padL + i * xw; if (i === 0) ctx.moveTo(x, yOf(tyVals[i])); else ctx.lineTo(x, yOf(tyVals[i])); }
+  // TY line (solid)
+  ctx.strokeStyle = tyColor; ctx.lineWidth = 2.5; ctx.beginPath();
+  for (var i = 0; i < n; i++){ var x = padL + i * xw; if (i === 0) ctx.moveTo(x, yOf(st.tyVals[i])); else ctx.lineTo(x, yOf(st.tyVals[i])); }
   ctx.stroke();
-  ctx.fillStyle = opts.tyColor || "#4da3ff"; ctx.fillRect(padL + 10, 6, 20, 3);
+  // TY fill
+  ctx.lineTo(padL + (n - 1) * xw, H - padB); ctx.lineTo(padL, H - padB); ctx.closePath();
+  ctx.fillStyle = "rgba(77,163,255,0.10)"; ctx.fill();
+  // Legend
+  ctx.fillStyle = tyColor; ctx.fillRect(padL + 10, 6, 20, 3);
   ctx.fillStyle = "#eaeef5"; ctx.font = "11px sans-serif";
-  ctx.fillText(opts.tyLabel || "This year", padL + 34, 11);
-  ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = opts.lyColor || "#fb923c"; ctx.lineWidth = 2;
+  ctx.fillText(st.tyLabel || "This year", padL + 34, 11);
+  ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = lyColor; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(padL + 130, 7); ctx.lineTo(padL + 150, 7); ctx.stroke(); ctx.restore();
-  ctx.fillStyle = "#eaeef5"; ctx.fillText(opts.lyLabel || "Last year", padL + 154, 11);
-  cv._yoy = {tyVals: tyVals, lyVals: lyVals, labels: labels, padL: padL, xw: xw, fmt: useFmt, n: n};
+  ctx.fillStyle = "#eaeef5"; ctx.fillText(st.lyLabel || "Last year", padL + 154, 11);
+  // Crosshair hover
+  if (hoverIdx >= 0 && hoverIdx < n){
+    var hx = padL + hoverIdx * xw;
+    var tyY = yOf(st.tyVals[hoverIdx]); var lyY = yOf(st.lyVals[hoverIdx]);
+    ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hx, padT); ctx.lineTo(hx, H - padB); ctx.stroke();
+    ctx.fillStyle = tyColor; ctx.beginPath(); ctx.arc(hx, tyY, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = lyColor; ctx.beginPath(); ctx.arc(hx, lyY, 4, 0, Math.PI * 2); ctx.fill();
+    var txt = st.labels[hoverIdx] + "  TY: " + useFmt(st.tyVals[hoverIdx]||0) + "  LY: " + useFmt(st.lyVals[hoverIdx]||0);
+    ctx.font = "12px sans-serif";
+    var tw = ctx.measureText(txt).width + 14;
+    var bx = hx - tw / 2;
+    if (bx < padL) bx = padL; if (bx + tw > W - 8) bx = W - 8 - tw;
+    var by = padT + 2;
+    ctx.fillStyle = "rgba(20,20,20,0.9)"; ctx.fillRect(bx, by, tw, 20);
+    ctx.strokeStyle = tyColor; ctx.strokeRect(bx, by, tw, 20);
+    ctx.fillStyle = "#fff"; ctx.fillText(txt, bx + 7, by + 14);
+  }
+}
+
+function wlYoYChart(cv, tyVals, lyVals, labels, opts){
+  opts = opts || {};
+  var all = tyVals.concat(lyVals);
+  var max = 1; for (var i = 0; i < all.length; i++){ if ((all[i]||0) > max) max = all[i]; }
+  cv._yoy = {
+    tyVals: tyVals, lyVals: lyVals, labels: labels, n: labels.length,
+    max: max, fmt: opts.fmtFn || opts.fmt || wlMoney0,
+    tyColor: opts.tyColor || "#4da3ff", lyColor: opts.lyColor || "#fb923c",
+    tyLabel: opts.tyLabel || "This year", lyLabel: opts.lyLabel || "Last year",
+    height: opts.height || 260
+  };
+  wlYoYDraw(cv, -1);
   if (!cv._yoyBound){
     cv._yoyBound = true;
-    var tip = document.createElement("div"); tip.className = "chart-tip"; tip.style.display = "none";
-    document.body.appendChild(tip);
     cv.addEventListener("mousemove", function(e){
       var st = cv._yoy; if (!st) return;
       var rect = cv.getBoundingClientRect();
       var mx = (e.clientX - rect.left) * (cv.width / rect.width);
-      var idx = Math.round((mx - st.padL) / st.xw);
+      var padL = 60, padR = 14;
+      var xw = st.n > 1 ? (cv.width - padL - padR) / (st.n - 1) : 0;
+      var idx = Math.round((mx - padL) / xw);
       if (idx < 0) idx = 0; if (idx >= st.n) idx = st.n - 1;
-      tip.textContent = st.labels[idx] + ": " + st.fmt(st.tyVals[idx]||0) + " (TY) | " + st.fmt(st.lyVals[idx]||0) + " (LY)";
-      tip.style.display = "block"; tip.style.left = (e.pageX + 14) + "px"; tip.style.top = (e.pageY - 34) + "px";
+      wlYoYDraw(cv, idx);
     });
-    cv.addEventListener("mouseleave", function(){ tip.style.display = "none"; });
+    cv.addEventListener("mouseleave", function(){ wlYoYDraw(cv, -1); });
   }
 }
 
