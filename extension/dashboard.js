@@ -345,7 +345,7 @@ function render(){
   var yoyEl = $("sumYoY");
   if (yoyEl){
     if (yoyPct !== null){
-      yoyEl.innerHTML = fmtMoney(lyMtd) + " <span class=\"delta " + (yoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (yoyPct >= 0 ? "+" : "") + yoyPct + "%</span>";
+      yoyEl.innerHTML = fmtMoney(p.mtd) + " vs " + fmtMoney(lyMtd) + " <span class=\"delta " + (yoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">(" + (yoyPct >= 0 ? "+" : "") + yoyPct + "%)</span>";
     } else { yoyEl.textContent = "no data"; }
   }
   // YoY YTD comparison
@@ -360,7 +360,7 @@ function render(){
   var yoyYtdEl = $("sumYoYYtd");
   if (yoyYtdEl){
     if (yoyYtdPct !== null){
-      yoyYtdEl.innerHTML = fmtMoney(lyYtdRev) + " <span class=\"delta " + (yoyYtdPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (yoyYtdPct >= 0 ? "+" : "") + yoyYtdPct + "%</span>";
+      yoyYtdEl.innerHTML = fmtMoney(ytdRev) + " vs " + fmtMoney(lyYtdRev) + " <span class=\"delta " + (yoyYtdPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">(" + (yoyYtdPct >= 0 ? "+" : "") + yoyYtdPct + "%)</span>";
     } else { yoyYtdEl.textContent = "no data"; }
   }
   $("sumToday").textContent = fmtMoney(byDate[todayStr] || 0);
@@ -412,8 +412,7 @@ function renderSiteCards(todayStr, today){
       "<div class=\"row\"><span>Washes: " + (r.washes || 0) + "</span><span>Overall $/wash: " + fmtMoney(r.perWash || 0) + "</span></div>" +
       "<div class=\"row\"><span>Retail washes: " + rt.washes + "</span><span>Retail $/wash: " + fmtMoney(rt.per) + "</span></div>" +
       "<div class=\"row\"><span>Members: " + members + "</span><span>Use/member 30d: " + memberUse + "</span></div>" +
-      "<div class=\"row\"><span>Renews: " + (r.passRenew || 0) + "</span><span>New: " + ((r.newPass || 0) + (r.newPassOnline || 0)) + "</span><span>Cancelled: " + (r.passCancelled || 0) + "</span><span>Declined: " + (r.declined || 0) + "</span></div>" +
-      "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+      "<div class=\"row\"><span>Renews: " + (r.passRenew || 0) + "</span><span>New: " + ((r.newPass || 0) + (r.newPassOnline || 0)) + "</span><span>Cancelled: " + (r.passCancelled || 0) + "</span><span>Declined: " + (r.declined || 0) + "</span></div>";
     // YoY for this site card
     var sYoyFrom = todayStr.slice(0,8) + "01";
     var sCurMtd = sumRange(s.id, sYoyFrom, todayStr);
@@ -424,7 +423,7 @@ function renderSiteCards(todayStr, today){
     if (sYoyPct !== null){
       var yDiv = document.createElement("div");
       yDiv.className = "delta " + (sYoyPct >= 0 ? "up" : "down");
-      yDiv.textContent = (sYoyPct >= 0 ? "+" : "") + sYoyPct + "% vs last year MTD (" + fmtMoney(sLyMtd.revenue) + ")";
+      yDiv.textContent = "MTD: " + fmtMoney(sCurMtd.revenue) + " vs " + fmtMoney(sLyMtd.revenue) + " (" + (sYoyPct >= 0 ? "+" : "") + sYoyPct + "%)";
       div.appendChild(yDiv);
     }
     // YTD YoY for this site card
@@ -437,7 +436,7 @@ function renderSiteCards(todayStr, today){
     if (sYoyYtdPct !== null){
       var yDiv2 = document.createElement("div");
       yDiv2.className = "delta " + (sYoyYtdPct >= 0 ? "up" : "down");
-      yDiv2.textContent = (sYoyYtdPct >= 0 ? "+" : "") + sYoyYtdPct + "% vs last year YTD (" + fmtMoney(sLyYtd.revenue) + ")";
+      yDiv2.textContent = "YTD: " + fmtMoney(sYtdCur.revenue) + " vs " + fmtMoney(sLyYtd.revenue) + " (" + (sYoyYtdPct >= 0 ? "+" : "") + sYoyYtdPct + "%)";
       div.appendChild(yDiv2);
     }
     div.addEventListener("click", () => openDetail(s));
@@ -468,6 +467,109 @@ function periodRow(label, t, members, div){
   const mu = members ? (t.passUse / members / (div || 1)).toFixed(1) + "x" : "--";
   return "<tr><td>" + label + "</td><td>" + fmtMoney(t.revenue) + "</td><td>" + t.washes + "</td><td>" + fmtMoney(overall) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td><td>" + t.passUse + "</td><td>" + mu + "</td></tr>";
 }
+
+// ── Aggregate data helpers for YoY charts ──
+function dcAggByDay(metricFn){
+  var out = {};
+  for (var sid of Object.keys(hist)){
+    for (var dt of Object.keys(hist[sid])){
+      out[dt] = (out[dt] || 0) + metricFn(hist[sid][dt]);
+    }
+  }
+  return out;
+}
+function dcSiteByDay(sid, metricFn){
+  var out = {};
+  for (var dt of Object.keys(hist[sid] || {})){
+    out[dt] = (out[dt] || 0) + metricFn(hist[sid][dt]);
+  }
+  return out;
+}
+function dcMetricFns(){
+  return [
+    {key: "revenue", label: "Revenue", fn: function(r){ return r.revenue || 0; }, fmt: fmtMoney},
+    {key: "washes", label: "Washes", fn: function(r){ return r.washes || 0; }, fmt: function(v){ return Math.round(v).toLocaleString(); }},
+    {key: "retail", label: "Retail Revenue", fn: function(r){ return retail(r).revenue; }, fmt: fmtMoney}
+  ];
+}
+
+function dcYoYDailyMTD(byDay){
+  var today = new Date(), yr = today.getFullYear(), mo = today.getMonth();
+  var dayNum = today.getDate();
+  var tyVals = [], lyVals = [], labels = [];
+  for (var d = 1; d <= dayNum; d++){
+    var tyDt = ds(new Date(yr, mo, d));
+    var lyDt = ds(new Date(yr - 1, mo, d));
+    tyVals.push(byDay[tyDt] || 0);
+    lyVals.push(byDay[lyDt] || 0);
+    labels.push(String(d));
+  }
+  return {tyVals: tyVals, lyVals: lyVals, labels: labels};
+}
+
+function dcYoYMonthly12(byDay){
+  var today = new Date();
+  var tyVals = [], lyVals = [], labels = [];
+  for (var i = 11; i >= 0; i--){
+    var mRef = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    var mEnd = new Date(mRef.getFullYear(), mRef.getMonth() + 1, 0);
+    var lyRef = new Date(mRef.getFullYear() - 1, mRef.getMonth(), 1);
+    var lyEnd = new Date(lyRef.getFullYear(), lyRef.getMonth() + 1, 0);
+    if (mRef.getFullYear() === today.getFullYear() && mRef.getMonth() === today.getMonth()){
+      mEnd = today; lyEnd = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    }
+    var ty = 0, ly = 0;
+    for (var dt of Object.keys(byDay)){
+      if (dt >= ds(mRef) && dt <= ds(mEnd)) ty += byDay[dt];
+      if (dt >= ds(lyRef) && dt <= ds(lyEnd)) ly += byDay[dt];
+    }
+    tyVals.push(ty); lyVals.push(ly);
+    labels.push(mRef.toLocaleString("en-US", {month: "short"}));
+  }
+  return {tyVals: tyVals, lyVals: lyVals, labels: labels};
+}
+
+function dcOpenYoYChart(title, byDayFn, metrics, defaultView){
+  var modal = $("yoyChartModal");
+  if (!modal) return;
+  $("yoyChartTitle").textContent = title;
+  modal.style.display = "flex";
+  var curMetric = metrics[0].key;
+  var curView = defaultView || "mtd";
+  function draw(){
+    var mf = metrics.find(function(m){ return m.key === curMetric; });
+    var byDay = byDayFn(mf.fn);
+    var data = curView === "mtd" ? dcYoYDailyMTD(byDay) : dcYoYMonthly12(byDay);
+    wlYoYChart($("yoyChartCanvas"), data.tyVals, data.lyVals, data.labels, {fmtFn: mf.fmt});
+  }
+  function btn(label, active){ return '<button style="padding:6px 14px;border-radius:6px;border:1px solid #3a4a63;background:' + (active ? '#4da3ff' : '#1a2233') + ';color:#eaeef5;cursor:pointer;margin-right:6px;font-size:13px">' + label + '</button>'; }
+  function renderToggles(){
+    var mHtml = ""; for (var m of metrics) mHtml += btn(m.label, m.key === curMetric);
+    $("yoyChartToggles").innerHTML = mHtml;
+    var vHtml = btn("This Month", curView === "mtd") + btn("Last 12 Months", curView === "12mo");
+    $("yoyChartViewToggles").innerHTML = vHtml;
+    var mBtns = $("yoyChartToggles").querySelectorAll("button");
+    for (var i = 0; i < mBtns.length; i++)(function(idx){ mBtns[idx].addEventListener("click", function(){ curMetric = metrics[idx].key; renderToggles(); draw(); }); })(i);
+    var vBtns = $("yoyChartViewToggles").querySelectorAll("button");
+    vBtns[0].addEventListener("click", function(){ curView = "mtd"; renderToggles(); draw(); });
+    vBtns[1].addEventListener("click", function(){ curView = "12mo"; renderToggles(); draw(); });
+  }
+  renderToggles(); draw();
+}
+
+// Wire YoY chart modal close
+(function(){
+  var mc = $("yoyChartClose"), mm = $("yoyChartModal");
+  if (mc) mc.addEventListener("click", function(){ mm.style.display = "none"; });
+  if (mm) mm.addEventListener("click", function(e){ if (e.target === mm) mm.style.display = "none"; });
+})();
+
+// Wire overview tile clicks
+(function(){
+  var mtdTile = $("sumYoYTile"), ytdTile = $("sumYoYYtdTile");
+  if (mtdTile) mtdTile.addEventListener("click", function(){ dcOpenYoYChart("Dencar YoY \u2014 Month to Date", function(fn){ return dcAggByDay(fn); }, dcMetricFns(), "mtd"); });
+  if (ytdTile) ytdTile.addEventListener("click", function(){ dcOpenYoYChart("Dencar YoY \u2014 Year to Date", function(fn){ return dcAggByDay(fn); }, dcMetricFns(), "12mo"); });
+})();
 
 function yoyDetailHtml(site, today, todayStr, members){
   function yoyRow(label, from, to){
@@ -720,6 +822,7 @@ function openDetail(site){
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<h3>Year over Year</h3>" +
     yoyDetailHtml(site, today, todayStr, members) +
+    "<div style=\"margin:12px 0\"><div id=\"dcDetailYoYToggles\"></div><div id=\"dcDetailYoYView\"></div><canvas id=\"dcDetailYoYChart\" style=\"width:100%\"></canvas></div>" +
     "<h3>Breakdown by payment method <select id=\"dcDetailPeriod\">" + dcPeriodOptions(site.id) + "</select></h3>" +
     "<div id=\"dcBreakdown\"></div>" +
     "<h3>Activity by day of week &amp; time</h3>" +
@@ -759,6 +862,27 @@ function openDetail(site){
     });
   }
   dcRenderBreakdown();
+  // Wire detail YoY chart
+  (function(sid){
+    var metrics = dcMetricFns();
+    var curM = "revenue", curV = "mtd";
+    function draw(){
+      var mf = metrics.find(function(m){ return m.key === curM; });
+      var byDay = dcSiteByDay(sid, mf.fn);
+      var data = curV === "mtd" ? dcYoYDailyMTD(byDay) : dcYoYMonthly12(byDay);
+      var cv = $("dcDetailYoYChart");
+      if (cv) wlYoYChart(cv, data.tyVals, data.lyVals, data.labels, {fmtFn: mf.fmt});
+    }
+    function btn(l, a){ return "<button style=\"padding:5px 12px;border-radius:6px;border:1px solid #3a4a63;background:" + (a ? "#4da3ff" : "#1a2233") + ";color:#eaeef5;cursor:pointer;margin-right:5px;font-size:12px\">" + l + "</button>"; }
+    function renderT(){
+      var mH = ""; for (var m of metrics) mH += btn(m.label, m.key === curM);
+      var te = $("dcDetailYoYToggles"); if (te) te.innerHTML = mH;
+      var ve = $("dcDetailYoYView"); if (ve) ve.innerHTML = btn("This Month", curV === "mtd") + btn("Last 12 Months", curV === "12mo");
+      if (te){ var bs = te.querySelectorAll("button"); for (var i = 0; i < bs.length; i++)(function(idx){ bs[idx].addEventListener("click", function(){ curM = metrics[idx].key; renderT(); draw(); }); })(i); }
+      if (ve){ var vs = ve.querySelectorAll("button"); vs[0].addEventListener("click", function(){ curV = "mtd"; renderT(); draw(); }); vs[1].addEventListener("click", function(){ curV = "12mo"; renderT(); draw(); }); }
+    }
+    renderT(); draw();
+  })(site.id);
   dcRenderPlates();
   const chartDates = [], vals = [];
   for (let i = 29; i >= 0; i--){

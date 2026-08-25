@@ -69,8 +69,8 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
   <div class="stat"><label>Last week</label><div id="sumLastWk">--</div></div>
   <div class="stat"><label>Month to date</label><div id="sumMtd">--</div></div>
   <div class="stat"><label>Last month</label><div id="sumLastMo">--</div></div>
-  <div class="stat"><label>vs last year (MTD)</label><div id="sumYoY">--</div></div>
-  <div class="stat"><label>vs last year (YTD)</label><div id="sumYoYYtd">--</div></div>
+  <div class="stat clickable" id="sumYoYTile"><label>vs last year (MTD)</label><div id="sumYoY">--</div></div>
+  <div class="stat clickable" id="sumYoYYtdTile"><label>vs last year (YTD)</label><div id="sumYoYYtd">--</div></div>
   <div class="stat"><label>Month projection</label><div id="sumProj">--</div></div>
   <div class="stat"><label>Avg use/member 30d</label><div id="sumMemberUse">--</div></div>
   <div class="stat"><label>Retail cash (MTD)</label><div id="sumCash">--</div></div>
@@ -209,8 +209,8 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
   <div class="stat"><label>Last week</label><div id="cpOvLastWk">--</div></div>
   <div class="stat"><label>Month to date</label><div id="cpOvMtd">--</div></div>
   <div class="stat"><label>Last month</label><div id="cpOvLastMo">--</div></div>
-  <div class="stat"><label>vs last year (MTD)</label><div id="cpOvYoY">--</div></div>
-  <div class="stat"><label>vs last year (YTD)</label><div id="cpOvYoYYtd">--</div></div>
+  <div class="stat clickable" id="cpOvYoYTile"><label>vs last year (MTD)</label><div id="cpOvYoY">--</div></div>
+  <div class="stat clickable" id="cpOvYoYYtdTile"><label>vs last year (YTD)</label><div id="cpOvYoYYtd">--</div></div>
   <div class="stat"><label>Month projection</label><div id="cpOvProj">--</div></div>
   <div class="stat"><label>Avg ticket (30d)</label><div id="cpOvAvgTicket">--</div></div>
   <div class="stat" title="Same month projection, but each remaining forecasted day is adjusted using each site's own learned response to rain and temperature, fitted separately for self-serve equipment and the automatic tunnel. Falls back to the plain baseline beyond the forecast horizon or before enough weather history is synced."><label>Weather projection</label><div id="cpOvWeatherProj">--</div></div>
@@ -296,6 +296,17 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 </div>
 
 </main>
+</div>
+<div id="yoyChartModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center">
+  <div style="background:#1a2233;border-radius:12px;padding:24px;max-width:800px;width:95%;max-height:90vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 id="yoyChartTitle" style="margin:0;color:#eaeef5"></h3>
+      <button id="yoyChartClose" style="background:none;border:none;color:#8fa3c0;font-size:22px;cursor:pointer">&times;</button>
+    </div>
+    <div id="yoyChartToggles" style="margin-bottom:8px"></div>
+    <div id="yoyChartViewToggles" style="margin-bottom:12px"></div>
+    <canvas id="yoyChartCanvas" style="width:100%"></canvas>
+  </div>
 </div>
 <div id="detailModal" style="display:none;">
   <div id="detailPanel">

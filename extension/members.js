@@ -682,6 +682,7 @@ function mRenderYoY(){
   html += mTile("Net vs LY (MTD)", (mtd.net >= 0 ? "+" : "") + mtd.net + mYoySpan(netPcMtd) + "<br><small>LY: " + (lyMtd.net >= 0 ? "+" : "") + lyMtd.net + "</small>");
   html += mTile("Net vs LY (YTD)", (ytd.net >= 0 ? "+" : "") + ytd.net + mYoySpan(netPcYtd) + "<br><small>LY: " + (lyYtd.net >= 0 ? "+" : "") + lyYtd.net + "</small>");
 
+  html += '<div style="margin-top:14px"><div id="memYoYToggles" style="margin-bottom:6px"></div><div id="memYoYView" style="margin-bottom:10px"></div><canvas id="memYoYChart" style="width:100%"></canvas></div>';
   // Per-site table
   if (mSites.length > 1){
     html += "<table class=\"via\" style=\"margin-top:12px\"><thead><tr><th>Site</th><th>Rev MTD</th><th>LY</th><th>YoY</th><th>Rev YTD</th><th>LY</th><th>YoY</th><th>New MTD</th><th>LY</th><th>Cancel MTD</th><th>LY</th></tr></thead><tbody>";
@@ -701,6 +702,74 @@ function mRenderYoY(){
     html += "</tbody></table>";
   }
   el.innerHTML = html;
+  // Render YoY chart
+  setTimeout(function(){
+    var cv = M$("memYoYChart");
+    if (!cv || typeof wlYoYChart !== "function") return;
+    var metrics = [
+      {key: "rev", label: "Revenue", extract: function(r){ return r.rev; }, fmt: mMoney0},
+      {key: "news", label: "New Passes", extract: function(r){ return r.news; }, fmt: function(v){ return Math.round(v).toLocaleString(); }},
+      {key: "cancels", label: "Cancels", extract: function(r){ return r.cancels; }, fmt: function(v){ return Math.round(v).toLocaleString(); }},
+      {key: "net", label: "Net", extract: function(r){ return r.net; }, fmt: function(v){ return (v >= 0 ? "+" : "") + Math.round(v).toLocaleString(); }}
+    ];
+    var curM = "rev", curV = "mtd";
+    function memByDay(extractFn){
+      var out = {};
+      for (var si of mFilteredSites()){
+        for (var dt of Object.keys(mHist[si.id] || {})){
+          var r = mHist[si.id][dt];
+          var val = extractFn({
+            rev: (r.newPassAmt||0)+(r.passRenewAmt||0)+(r.newPassOnlineAmt||0)+(r.onlineGiftAmt||0)+(r.viaAddAmt||0),
+            news: (r.newPass||0)+(r.newPassOnline||0),
+            cancels: r.passCancelled||0,
+            net: (r.newPass||0)+(r.newPassOnline||0)-(r.passCancelled||0)
+          });
+          out[dt] = (out[dt]||0) + val;
+        }
+      }
+      return out;
+    }
+    function mtdData(byDay){
+      var today = new Date(), yr = today.getFullYear(), mo = today.getMonth(), dn = today.getDate();
+      var ty = [], ly = [], lb = [];
+      for (var d = 1; d <= dn; d++){
+        ty.push(byDay[mDs(new Date(yr, mo, d))]||0);
+        ly.push(byDay[mDs(new Date(yr-1, mo, d))]||0);
+        lb.push(String(d));
+      }
+      return {tyVals: ty, lyVals: ly, labels: lb};
+    }
+    function mo12Data(byDay){
+      var today = new Date(), ty = [], ly = [], lb = [];
+      for (var i = 11; i >= 0; i--){
+        var mr = new Date(today.getFullYear(), today.getMonth()-i, 1);
+        var me = new Date(mr.getFullYear(), mr.getMonth()+1, 0);
+        var lr = new Date(mr.getFullYear()-1, mr.getMonth(), 1);
+        var le = new Date(lr.getFullYear(), lr.getMonth()+1, 0);
+        if (mr.getFullYear()===today.getFullYear() && mr.getMonth()===today.getMonth()){ me=today; le=new Date(today.getFullYear()-1,today.getMonth(),today.getDate()); }
+        var t=0, l=0;
+        for (var dt of Object.keys(byDay)){ if (dt>=mDs(mr)&&dt<=mDs(me)) t+=byDay[dt]; if (dt>=mDs(lr)&&dt<=mDs(le)) l+=byDay[dt]; }
+        ty.push(t); ly.push(l); lb.push(mr.toLocaleString("en-US",{month:"short"}));
+      }
+      return {tyVals: ty, lyVals: ly, labels: lb};
+    }
+    function draw(){
+      var mf = metrics.find(function(m){ return m.key === curM; });
+      var byDay = memByDay(mf.extract);
+      var data = curV === "mtd" ? mtdData(byDay) : mo12Data(byDay);
+      wlYoYChart(cv, data.tyVals, data.lyVals, data.labels, {fmtFn: mf.fmt});
+    }
+    function btn(l,a){ return '<button style="padding:5px 12px;border-radius:6px;border:1px solid #3a4a63;background:'+(a?'#4da3ff':'#1a2233')+';color:#eaeef5;cursor:pointer;margin-right:5px;font-size:12px">'+l+'</button>'; }
+    function renderT(){
+      var te = M$("memYoYToggles"), ve = M$("memYoYView");
+      if (!te||!ve) return;
+      var mH = ""; for (var m of metrics) mH += btn(m.label, m.key === curM);
+      te.innerHTML = mH; ve.innerHTML = btn("This Month", curV==="mtd") + btn("Last 12 Months", curV==="12mo");
+      var mBs = te.querySelectorAll("button"); for (var i=0;i<mBs.length;i++)(function(idx){mBs[idx].addEventListener("click",function(){curM=metrics[idx].key;renderT();draw();});})(i);
+      var vBs = ve.querySelectorAll("button"); vBs[0].addEventListener("click",function(){curV="mtd";renderT();draw();}); vBs[1].addEventListener("click",function(){curV="12mo";renderT();draw();});
+    }
+    renderT(); draw();
+  }, 50);
 }
 
 async function memRender(){

@@ -75,6 +75,60 @@ function wlLineChart(cv, labels, vals, fmt){
   }
 }
 
+function wlYoYChart(cv, tyVals, lyVals, labels, opts){
+  opts = opts || {};
+  var ctx = cv.getContext("2d");
+  var W = cv.width = cv.clientWidth || 800;
+  var H = cv.height = opts.height || 260;
+  ctx.clearRect(0, 0, W, H);
+  var padL = 60, padB = 30, padT = 26, padR = 14;
+  var all = tyVals.concat(lyVals);
+  var max = 1; for (var i = 0; i < all.length; i++){ if ((all[i]||0) > max) max = all[i]; }
+  var fmt = opts.fmt || wlMoney0;
+  var fmtInt = function(v){ return Math.round(v).toLocaleString("en-US"); };
+  var useFmt = opts.fmtFn || fmt;
+  ctx.strokeStyle = "#3a4a63";
+  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+  ctx.fillStyle = "#8fa3c0"; ctx.font = "11px sans-serif";
+  ctx.fillText(useFmt(max), 4, padT + 10);
+  var n = labels.length;
+  var xw = n > 1 ? (W - padL - padR) / (n - 1) : 0;
+  var step = Math.max(1, Math.ceil(n / 10));
+  for (var i = 0; i < n; i += step){ ctx.fillText(labels[i], padL + i * xw - 10, H - 8); }
+  var yOf = function(v){ return H - padB - ((v||0) / max) * (H - padB - padT); };
+  ctx.save(); ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = opts.lyColor || "#fb923c"; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (var i = 0; i < n; i++){ var x = padL + i * xw; if (i === 0) ctx.moveTo(x, yOf(lyVals[i])); else ctx.lineTo(x, yOf(lyVals[i])); }
+  ctx.stroke(); ctx.restore();
+  ctx.strokeStyle = opts.tyColor || "#4da3ff"; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (var i = 0; i < n; i++){ var x = padL + i * xw; if (i === 0) ctx.moveTo(x, yOf(tyVals[i])); else ctx.lineTo(x, yOf(tyVals[i])); }
+  ctx.stroke();
+  ctx.fillStyle = opts.tyColor || "#4da3ff"; ctx.fillRect(padL + 10, 6, 20, 3);
+  ctx.fillStyle = "#eaeef5"; ctx.font = "11px sans-serif";
+  ctx.fillText(opts.tyLabel || "This year", padL + 34, 11);
+  ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = opts.lyColor || "#fb923c"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(padL + 130, 7); ctx.lineTo(padL + 150, 7); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = "#eaeef5"; ctx.fillText(opts.lyLabel || "Last year", padL + 154, 11);
+  cv._yoy = {tyVals: tyVals, lyVals: lyVals, labels: labels, padL: padL, xw: xw, fmt: useFmt, n: n};
+  if (!cv._yoyBound){
+    cv._yoyBound = true;
+    var tip = document.createElement("div"); tip.className = "chart-tip"; tip.style.display = "none";
+    document.body.appendChild(tip);
+    cv.addEventListener("mousemove", function(e){
+      var st = cv._yoy; if (!st) return;
+      var rect = cv.getBoundingClientRect();
+      var mx = (e.clientX - rect.left) * (cv.width / rect.width);
+      var idx = Math.round((mx - st.padL) / st.xw);
+      if (idx < 0) idx = 0; if (idx >= st.n) idx = st.n - 1;
+      tip.textContent = st.labels[idx] + ": " + st.fmt(st.tyVals[idx]||0) + " (TY) | " + st.fmt(st.lyVals[idx]||0) + " (LY)";
+      tip.style.display = "block"; tip.style.left = (e.pageX + 14) + "px"; tip.style.top = (e.pageY - 34) + "px";
+    });
+    cv.addEventListener("mouseleave", function(){ tip.style.display = "none"; });
+  }
+}
+
 function wlTips(containerId, tips){
   const el = document.getElementById(containerId);
   if (!el) return;

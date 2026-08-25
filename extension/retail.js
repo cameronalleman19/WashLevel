@@ -247,6 +247,81 @@ function rRenderYoY(){
   html += rTile("$/wash vs LY (YTD)", rMoney(ytdPer) + rYoySpan(rYoyPc(ytdPer, lyYtdPer)) + "<br><small>LY: " + rMoney(lyYtdPer) + "</small>");
   el.innerHTML = html;
 
+  html += '<div style="margin-top:14px"><div id="retYoYToggles" style="margin-bottom:6px"></div><div id="retYoYView" style="margin-bottom:10px"></div><canvas id="retYoYChart" style="width:100%"></canvas></div>';
+  el.innerHTML = html;
+  // Render YoY chart
+  setTimeout(function(){
+    var cv = R$("retYoYChart");
+    if (!cv || typeof wlYoYChart !== "function") return;
+    var metrics = [
+      {key: "rev", label: "Revenue", extract: function(r){ return r.revenue; }, fmt: rMoney0},
+      {key: "washes", label: "Washes", extract: function(r){ return r.washes; }, fmt: function(v){ return Math.round(v).toLocaleString(); }},
+      {key: "per", label: "$/wash", extract: function(r){ return r.washes ? r.revenue / r.washes : 0; }, perDay: true, fmt: rMoney}
+    ];
+    var curM = "rev", curV = "mtd";
+    function retByDay(extractFn, perDay){
+      var revOut = {}, washOut = {};
+      for (var si of rFilteredSites()){
+        for (var dt of Object.keys(rHist[si.id] || {})){
+          var rec = rHist[si.id][dt];
+          var rt = rRetail(rec);
+          revOut[dt] = (revOut[dt]||0) + rt.revenue;
+          washOut[dt] = (washOut[dt]||0) + rt.washes;
+        }
+      }
+      if (perDay){
+        var out = {};
+        for (var dt of Object.keys(revOut)){ out[dt] = washOut[dt] ? revOut[dt]/washOut[dt] : 0; }
+        return out;
+      }
+      var out = {};
+      for (var dt of Object.keys(revOut)){ out[dt] = extractFn({revenue: revOut[dt], washes: washOut[dt]}); }
+      return out;
+    }
+    function mtdData(byDay){
+      var today = new Date(), yr = today.getFullYear(), mo = today.getMonth(), dn = today.getDate();
+      var ty = [], ly = [], lb = [];
+      for (var d = 1; d <= dn; d++){
+        ty.push(byDay[rDs(new Date(yr, mo, d))]||0);
+        ly.push(byDay[rDs(new Date(yr-1, mo, d))]||0);
+        lb.push(String(d));
+      }
+      return {tyVals: ty, lyVals: ly, labels: lb};
+    }
+    function mo12Data(byDay){
+      var today = new Date(), ty = [], ly = [], lb = [];
+      for (var i = 11; i >= 0; i--){
+        var mr = new Date(today.getFullYear(), today.getMonth()-i, 1);
+        var me = new Date(mr.getFullYear(), mr.getMonth()+1, 0);
+        var lr = new Date(mr.getFullYear()-1, mr.getMonth(), 1);
+        var le = new Date(lr.getFullYear(), lr.getMonth()+1, 0);
+        if (mr.getFullYear()===today.getFullYear() && mr.getMonth()===today.getMonth()){ me=today; le=new Date(today.getFullYear()-1,today.getMonth(),today.getDate()); }
+        var t=0, l=0, tw=0, lw=0;
+        for (var dt of Object.keys(byDay)){
+          if (dt>=rDs(mr)&&dt<=rDs(me)) t+=byDay[dt];
+          if (dt>=rDs(lr)&&dt<=rDs(le)) l+=byDay[dt];
+        }
+        ty.push(t); ly.push(l); lb.push(mr.toLocaleString("en-US",{month:"short"}));
+      }
+      return {tyVals: ty, lyVals: ly, labels: lb};
+    }
+    function draw(){
+      var mf = metrics.find(function(m){ return m.key === curM; });
+      var byDay = retByDay(mf.extract, mf.perDay);
+      var data = curV === "mtd" ? mtdData(byDay) : mo12Data(byDay);
+      wlYoYChart(cv, data.tyVals, data.lyVals, data.labels, {fmtFn: mf.fmt});
+    }
+    function btn(l,a){ return '<button style="padding:5px 12px;border-radius:6px;border:1px solid #3a4a63;background:'+(a?'#4da3ff':'#1a2233')+';color:#eaeef5;cursor:pointer;margin-right:5px;font-size:12px">'+l+'</button>'; }
+    function renderT(){
+      var te = R$("retYoYToggles"), ve = R$("retYoYView");
+      if (!te||!ve) return;
+      var mH = ""; for (var m of metrics) mH += btn(m.label, m.key === curM);
+      te.innerHTML = mH; ve.innerHTML = btn("This Month", curV==="mtd") + btn("Last 12 Months", curV==="12mo");
+      var mBs = te.querySelectorAll("button"); for (var i=0;i<mBs.length;i++)(function(idx){mBs[idx].addEventListener("click",function(){curM=metrics[idx].key;renderT();draw();});})(i);
+      var vBs = ve.querySelectorAll("button"); vBs[0].addEventListener("click",function(){curV="mtd";renderT();draw();}); vBs[1].addEventListener("click",function(){curV="12mo";renderT();draw();});
+    }
+    renderT(); draw();
+  }, 50);
   // Per-site table
   var siteEl = R$("retYoYSites");
   if (!siteEl) return;

@@ -677,7 +677,7 @@ function cpOvRender(){
   var cpYoyEl = $("cpOvYoY");
   if (cpYoyEl){
     if (cpYoyPct !== null){
-      cpYoyEl.innerHTML = cpMoney(cpLyMtd) + " <span class=\"delta " + (cpYoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (cpYoyPct >= 0 ? "+" : "") + cpYoyPct + "%</span>";
+      cpYoyEl.innerHTML = cpMoney(p.mtd) + " vs " + cpMoney(cpLyMtd) + " <span class=\"delta " + (cpYoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">(" + (cpYoyPct >= 0 ? "+" : "") + cpYoyPct + "%)</span>";
     } else { cpYoyEl.textContent = "no data"; }
   }
   // YoY YTD comparison
@@ -692,7 +692,7 @@ function cpOvRender(){
   var cpYoyYtdEl = $("cpOvYoYYtd");
   if (cpYoyYtdEl){
     if (cpYoyYtdPct !== null){
-      cpYoyYtdEl.innerHTML = cpMoney(cpLyYtdRev) + " <span class=\"delta " + (cpYoyYtdPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (cpYoyYtdPct >= 0 ? "+" : "") + cpYoyYtdPct + "%</span>";
+      cpYoyYtdEl.innerHTML = cpMoney(cpYtdRev) + " vs " + cpMoney(cpLyYtdRev) + " <span class=\"delta " + (cpYoyYtdPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">(" + (cpYoyYtdPct >= 0 ? "+" : "") + cpYoyYtdPct + "%)</span>";
     } else { cpYoyYtdEl.textContent = "no data"; }
   }
   $("cpOvToday").textContent = cpMoney(byDate[todayStr] || 0);
@@ -738,8 +738,7 @@ function cpOvRenderSiteCards(todayStr){
     div.className = "card clickable";
     div.innerHTML = "<h3>" + s.name + "</h3>" +
       "<div class=\"big\" title=\"" + bigHelp + "\">" + cpMoney(r.revenue) + "</div>" +
-      "<div class=\"row\" title=\"" + txHelp + "\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>" +
-      "<div class=\"delta " + (delta >= 0 ? "up" : "down") + "\" title=\"" + deltaHelp + "\">" + (avg ? (delta >= 0 ? "+" : "") + delta + "% vs 4wk avg" : "no history yet") + "</div>";
+      "<div class=\"row\" title=\"" + txHelp + "\"><span>Transactions: " + r.count + "</span><span>Avg ticket (30d): " + cpMoney(cpAvgTicket(t30)) + "</span></div>";
     const projRow = document.createElement("div");
     projRow.className = "row";
     projRow.title = "Projected total for this month: month to date plus an estimate for each remaining day, using this site's average for that weekday over the last 8 weeks. " + conf.note;
@@ -755,7 +754,7 @@ function cpOvRenderSiteCards(todayStr){
     if (cpSYoyPct !== null){
       var cpYDiv = document.createElement("div");
       cpYDiv.className = "delta " + (cpSYoyPct >= 0 ? "up" : "down");
-      cpYDiv.textContent = (cpSYoyPct >= 0 ? "+" : "") + cpSYoyPct + "% vs last year MTD (" + cpMoney(cpSLyMtd.revenue) + ")";
+      cpYDiv.textContent = "MTD: " + cpMoney(cpSCurMtd.revenue) + " vs " + cpMoney(cpSLyMtd.revenue) + " (" + (cpSYoyPct >= 0 ? "+" : "") + cpSYoyPct + "%)";
       div.appendChild(cpYDiv);
     }
     // YTD YoY for this CryptoPay site card
@@ -768,7 +767,7 @@ function cpOvRenderSiteCards(todayStr){
     if (cpSYoyYtdPct !== null){
       var cpYDiv2 = document.createElement("div");
       cpYDiv2.className = "delta " + (cpSYoyYtdPct >= 0 ? "up" : "down");
-      cpYDiv2.textContent = (cpSYoyYtdPct >= 0 ? "+" : "") + cpSYoyYtdPct + "% vs last year YTD (" + cpMoney(cpSLyYtd.revenue) + ")";
+      cpYDiv2.textContent = "YTD: " + cpMoney(cpSYtdCur.revenue) + " vs " + cpMoney(cpSLyYtd.revenue) + " (" + (cpSYoyYtdPct >= 0 ? "+" : "") + cpSYoyYtdPct + "%)";
       div.appendChild(cpYDiv2);
     }
     div.addEventListener("click", () => cpOpenDetail(s));
@@ -962,6 +961,93 @@ function cpDrawMultiLine(canvas, series){
   }
 }
 
+// ── CryptoPay YoY chart helpers ──
+function cpAggByDay(metricFn){
+  var out = {};
+  for (var sid of Object.keys(cpHist)){
+    for (var dt of Object.keys(cpHist[sid])){
+      out[dt] = (out[dt] || 0) + metricFn(cpHist[sid][dt]);
+    }
+  }
+  return out;
+}
+function cpSiteByDayMetric(sid, metricFn){
+  var out = {};
+  for (var dt of Object.keys(cpHist[sid] || {})){
+    out[dt] = (out[dt] || 0) + metricFn(cpHist[sid][dt]);
+  }
+  return out;
+}
+function cpMetricFns(){
+  return [
+    {key: "revenue", label: "Revenue", fn: function(r){ return r.revenue || 0; }, fmt: cpMoney},
+    {key: "count", label: "Transactions", fn: function(r){ return r.count || 0; }, fmt: function(v){ return Math.round(v).toLocaleString(); }}
+  ];
+}
+function cpYoYDailyMTD(byDay){
+  var today = new Date(), yr = today.getFullYear(), mo = today.getMonth();
+  var dayNum = today.getDate();
+  var tyVals = [], lyVals = [], labels = [];
+  for (var d = 1; d <= dayNum; d++){
+    var tyDt = cpDs(new Date(yr, mo, d));
+    var lyDt = cpDs(new Date(yr - 1, mo, d));
+    tyVals.push(byDay[tyDt] || 0); lyVals.push(byDay[lyDt] || 0); labels.push(String(d));
+  }
+  return {tyVals: tyVals, lyVals: lyVals, labels: labels};
+}
+function cpYoYMonthly12(byDay){
+  var today = new Date();
+  var tyVals = [], lyVals = [], labels = [];
+  for (var i = 11; i >= 0; i--){
+    var mRef = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    var mEnd = new Date(mRef.getFullYear(), mRef.getMonth() + 1, 0);
+    var lyRef = new Date(mRef.getFullYear() - 1, mRef.getMonth(), 1);
+    var lyEnd = new Date(lyRef.getFullYear(), lyRef.getMonth() + 1, 0);
+    if (mRef.getFullYear() === today.getFullYear() && mRef.getMonth() === today.getMonth()){
+      mEnd = today; lyEnd = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    }
+    var ty = 0, ly = 0;
+    for (var dt of Object.keys(byDay)){
+      if (dt >= cpDs(mRef) && dt <= cpDs(mEnd)) ty += byDay[dt];
+      if (dt >= cpDs(lyRef) && dt <= cpDs(lyEnd)) ly += byDay[dt];
+    }
+    tyVals.push(ty); lyVals.push(ly);
+    labels.push(mRef.toLocaleString("en-US", {month: "short"}));
+  }
+  return {tyVals: tyVals, lyVals: lyVals, labels: labels};
+}
+function cpOpenYoYChart(title, byDayFn, metrics, defaultView){
+  var modal = $("yoyChartModal");
+  if (!modal) return;
+  $("yoyChartTitle").textContent = title;
+  modal.style.display = "flex";
+  var curMetric = metrics[0].key, curView = defaultView || "mtd";
+  function draw(){
+    var mf = metrics.find(function(m){ return m.key === curMetric; });
+    var byDay = byDayFn(mf.fn);
+    var data = curView === "mtd" ? cpYoYDailyMTD(byDay) : cpYoYMonthly12(byDay);
+    wlYoYChart($("yoyChartCanvas"), data.tyVals, data.lyVals, data.labels, {fmtFn: mf.fmt});
+  }
+  function btn(l, a){ return '<button style="padding:6px 14px;border-radius:6px;border:1px solid #3a4a63;background:' + (a ? '#4da3ff' : '#1a2233') + ';color:#eaeef5;cursor:pointer;margin-right:6px;font-size:13px">' + l + '</button>'; }
+  function renderT(){
+    var mH = ""; for (var m of metrics) mH += btn(m.label, m.key === curMetric);
+    $("yoyChartToggles").innerHTML = mH;
+    $("yoyChartViewToggles").innerHTML = btn("This Month", curView === "mtd") + btn("Last 12 Months", curView === "12mo");
+    var mBs = $("yoyChartToggles").querySelectorAll("button");
+    for (var i = 0; i < mBs.length; i++)(function(idx){ mBs[idx].addEventListener("click", function(){ curMetric = metrics[idx].key; renderT(); draw(); }); })(i);
+    var vBs = $("yoyChartViewToggles").querySelectorAll("button");
+    vBs[0].addEventListener("click", function(){ curView = "mtd"; renderT(); draw(); });
+    vBs[1].addEventListener("click", function(){ curView = "12mo"; renderT(); draw(); });
+  }
+  renderT(); draw();
+}
+// Wire CryptoPay overview tile clicks
+(function(){
+  var mtd = $("cpOvYoYTile"), ytd = $("cpOvYoYYtdTile");
+  if (mtd) mtd.addEventListener("click", function(){ cpOpenYoYChart("CryptoPay YoY \u2014 Month to Date", function(fn){ return cpAggByDay(fn); }, cpMetricFns(), "mtd"); });
+  if (ytd) ytd.addEventListener("click", function(){ cpOpenYoYChart("CryptoPay YoY \u2014 Year to Date", function(fn){ return cpAggByDay(fn); }, cpMetricFns(), "12mo"); });
+})();
+
 function cpRenderWeekdayChart(sid, from, to){
   const canvas = $("cpWkChart");
   if (!canvas) return;
@@ -1005,6 +1091,31 @@ function cpRenderBreakdown(){
   if (custEl) custEl.innerHTML = cpCustomerHtml(cpDetailSite.id, r[0], r[1]);
 }
 
+function cpYoYDetailHtml(site, today, todayStr){
+  function yoyRow(label, from, to){
+    var cur = cpSumRange(site.id, from, to);
+    var lyEnd = new Date(to + "T00:00:00"); lyEnd.setFullYear(lyEnd.getFullYear() - 1);
+    var lyStart = new Date(from + "T00:00:00"); lyStart.setFullYear(lyStart.getFullYear() - 1);
+    var ly = cpSumRange(site.id, cpDs(lyStart), cpDs(lyEnd));
+    var revPct = ly.revenue ? Math.round((cur.revenue - ly.revenue) / ly.revenue * 100) : null;
+    var cntPct = ly.count ? Math.round((cur.count - ly.count) / ly.count * 100) : null;
+    function pc(v){ return v !== null ? " <span class=\"delta " + (v >= 0 ? "up" : "down") + "\">" + (v >= 0 ? "+" : "") + v + "%</span>" : ""; }
+    return "<tr><td>" + label + "</td>" +
+      "<td>" + cpMoney(cur.revenue) + pc(revPct) + "</td><td>" + cpMoney(ly.revenue) + "</td>" +
+      "<td>" + cur.count + pc(cntPct) + "</td><td>" + ly.count + "</td></tr>";
+  }
+  var moStart = todayStr.slice(0,8) + "01";
+  var ytdStart = todayStr.slice(0,4) + "-01-01";
+  var yestD = new Date(today); yestD.setDate(yestD.getDate() - 1);
+  var d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  return "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>LY Revenue</th><th>Transactions</th><th>LY Trans</th></tr></thead><tbody>" +
+    yoyRow("Yesterday", cpDs(yestD), cpDs(yestD)) +
+    yoyRow("MTD", moStart, todayStr) +
+    yoyRow("YTD", ytdStart, todayStr) +
+    yoyRow("Last 30d", cpDs(d30), todayStr) +
+    "</tbody></table>";
+}
+
 function cpOpenDetail(site){
   const today = new Date();
   const todayStr = cpDs(today);
@@ -1043,6 +1154,9 @@ function cpOpenDetail(site){
     "<p style=\"color:#8fa3c0;font-size:13px;margin:0 0 6px\">Month projection: <strong style=\"color:#eaeef5\">" + cpMoney(sProj.projected) + "</strong> &nbsp;(" + cpSiteDataDays(site.id) + " days of history - confidence: " + sConf.label + ". " + sConf.note + ")</p>" +
     "<h3>Period totals</h3>" +
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Transactions</th><th>Avg ticket</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<h3>Year over Year</h3>" +
+    cpYoYDetailHtml(site, today, todayStr) +
+    "<div style=\"margin:12px 0\"><div id=\"cpDetailYoYToggles\"></div><div id=\"cpDetailYoYView\"></div><canvas id=\"cpDetailYoYChart\" style=\"width:100%\"></canvas></div>" +
     "<h3>Breakdown <select id=\"cpDetailPeriod\">" + cpPeriodOptions(site.id) + "</select></h3>" +
     "<div id=\"cpBreakdown\"></div>" +
     "<h3>Activity by day of week &amp; time</h3>" +
@@ -1074,6 +1188,28 @@ function cpOpenDetail(site){
     });
   }
   cpRenderBreakdown();
+  // Wire CryptoPay detail YoY chart
+  (function(sid){
+    var metrics = cpMetricFns();
+    var curM = "revenue", curV = "mtd";
+    function draw(){
+      var mf = metrics.find(function(m){ return m.key === curM; });
+      var byDay = cpSiteByDayMetric(sid, mf.fn);
+      var data = curV === "mtd" ? cpYoYDailyMTD(byDay) : cpYoYMonthly12(byDay);
+      var cv = $("cpDetailYoYChart");
+      if (cv && typeof wlYoYChart === "function") wlYoYChart(cv, data.tyVals, data.lyVals, data.labels, {fmtFn: mf.fmt});
+    }
+    function btn(l, a){ return "<button style=\"padding:5px 12px;border-radius:6px;border:1px solid #3a4a63;background:" + (a ? "#4da3ff" : "#1a2233") + ";color:#eaeef5;cursor:pointer;margin-right:5px;font-size:12px\">" + l + "</button>"; }
+    function renderT(){
+      var te = $("cpDetailYoYToggles"), ve = $("cpDetailYoYView");
+      if (!te||!ve) return;
+      var mH = ""; for (var m of metrics) mH += btn(m.label, m.key === curM);
+      te.innerHTML = mH; ve.innerHTML = btn("This Month", curV === "mtd") + btn("Last 12 Months", curV === "12mo");
+      var mBs = te.querySelectorAll("button"); for (var i = 0; i < mBs.length; i++)(function(idx){ mBs[idx].addEventListener("click", function(){ curM = metrics[idx].key; renderT(); draw(); }); })(i);
+      var vBs = ve.querySelectorAll("button"); vBs[0].addEventListener("click", function(){ curV = "mtd"; renderT(); draw(); }); vBs[1].addEventListener("click", function(){ curV = "12mo"; renderT(); draw(); });
+    }
+    renderT(); draw();
+  })(site.id);
 
   const chartDates = [], vals = [];
   for (let i = 29; i >= 0; i--){
