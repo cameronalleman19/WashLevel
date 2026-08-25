@@ -743,7 +743,7 @@ function openDetail(site){
   const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
   rows += periodRow("Last 30 days", sumRange(site.id, ds(d30), todayStr), members);
   const d90 = new Date(today); d90.setDate(d90.getDate() - 89);
-  rows += periodRow("Last 90 days (monthly avg)", sumRange(site.id, ds(d90), todayStr), members, 3);
+  rows += periodRow("Last 90 days", sumRange(site.id, ds(d90), todayStr), members, 3);
   let hourlyRows = "";
   if (r && r.hourly && r.hourly.length){
     for (const h of r.hourly){
@@ -828,8 +828,6 @@ function openDetail(site){
     "<h3>Activity by day of week &amp; time</h3>" +
     "<div id=\"dcWkToggles\"></div>" +
     "<canvas id=\"dcWkChart\"></canvas>" +
-    "<h3>Today by hour</h3>" +
-    "<table class=\"via\"><thead><tr><th>Hour</th><th>Washes</th></tr></thead><tbody>" + hourlyRows + "</tbody></table>" +
     "<h3>Membership changes by month</h3>" +
     "<table class=\"via\"><thead><tr><th>Month</th><th>New passes</th><th>Cancelled</th><th>Net</th><th>Declines</th><th>Renew failures</th></tr></thead><tbody>" + memberRows + "</tbody></table>" +
     "<h3>Member usage by month</h3>" +
