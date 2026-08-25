@@ -195,10 +195,88 @@ function rRenderAnoms(){
   }
 }
 
+function rSumRangeSite(sid, from, to){
+  var out = {washes: 0, revenue: 0, totalRev: 0, newPasses: 0};
+  var d = new Date(from + "T00:00:00");
+  var end = new Date(to + "T00:00:00");
+  while (d <= end){
+    var dt = rDs(d);
+    var rec = (rHist[sid] || {})[dt];
+    if (rec){
+      var rt = rRetail(rec);
+      out.washes += rt.washes;
+      out.revenue += rt.revenue;
+      out.totalRev += rec.revenue || 0;
+      out.newPasses += (rec.newPass || 0) + (rec.newPassOnline || 0);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function rYoyPc(cur, ly){ return ly ? Math.round((cur - ly) / Math.abs(ly) * 100) : null; }
+function rYoySpan(pct){ if (pct === null) return ""; return " <span class=\"delta " + (pct >= 0 ? "up" : "down") + "\">" + (pct >= 0 ? "+" : "") + pct + "%</span>"; }
+
+function rRenderYoY(){
+  var el = R$("retYoY");
+  if (!el) return;
+  var today = new Date();
+  var todayStr = rDs(today);
+  var moStart = todayStr.slice(0,8) + "01";
+  var ytdStart = todayStr.slice(0,4) + "-01-01";
+  var lyRef = new Date(today); lyRef.setFullYear(lyRef.getFullYear() - 1);
+  var lyMoStart = rDs(lyRef).slice(0,8) + "01", lyMoEnd = rDs(lyRef);
+  var lyYtdStart = rDs(lyRef).slice(0,4) + "-01-01", lyYtdEnd = rDs(lyRef);
+
+  var mtd = rSumRange(moStart, todayStr);
+  var lyMtd = rSumRange(lyMoStart, lyMoEnd);
+  var ytd = rSumRange(ytdStart, todayStr);
+  var lyYtd = rSumRange(lyYtdStart, lyYtdEnd);
+
+  var mtdPer = mtd.washes ? mtd.revenue / mtd.washes : 0;
+  var lyMtdPer = lyMtd.washes ? lyMtd.revenue / lyMtd.washes : 0;
+  var ytdPer = ytd.washes ? ytd.revenue / ytd.washes : 0;
+  var lyYtdPer = lyYtd.washes ? lyYtd.revenue / lyYtd.washes : 0;
+
+  var html = "";
+  html += rTile("Revenue vs LY (MTD)", rMoney0(mtd.revenue) + rYoySpan(rYoyPc(mtd.revenue, lyMtd.revenue)) + "<br><small>LY: " + rMoney0(lyMtd.revenue) + "</small>");
+  html += rTile("Revenue vs LY (YTD)", rMoney0(ytd.revenue) + rYoySpan(rYoyPc(ytd.revenue, lyYtd.revenue)) + "<br><small>LY: " + rMoney0(lyYtd.revenue) + "</small>");
+  html += rTile("Washes vs LY (MTD)", mtd.washes + rYoySpan(rYoyPc(mtd.washes, lyMtd.washes)) + "<br><small>LY: " + lyMtd.washes + "</small>");
+  html += rTile("Washes vs LY (YTD)", ytd.washes + rYoySpan(rYoyPc(ytd.washes, lyYtd.washes)) + "<br><small>LY: " + lyYtd.washes + "</small>");
+  html += rTile("$/wash vs LY (MTD)", rMoney(mtdPer) + rYoySpan(rYoyPc(mtdPer, lyMtdPer)) + "<br><small>LY: " + rMoney(lyMtdPer) + "</small>");
+  html += rTile("$/wash vs LY (YTD)", rMoney(ytdPer) + rYoySpan(rYoyPc(ytdPer, lyYtdPer)) + "<br><small>LY: " + rMoney(lyYtdPer) + "</small>");
+  el.innerHTML = html;
+
+  // Per-site table
+  var siteEl = R$("retYoYSites");
+  if (!siteEl) return;
+  var siteList = rFilteredSites();
+  if (siteList.length <= 1){ siteEl.innerHTML = ""; return; }
+  var thtml = "<table class=\"via\"><thead><tr><th>Site</th><th>Rev MTD</th><th>LY</th><th>YoY</th><th>Rev YTD</th><th>LY</th><th>YoY</th><th>Washes MTD</th><th>LY</th><th>$/wash MTD</th><th>LY</th></tr></thead><tbody>";
+  for (var si of siteList){
+    var sm = rSumRangeSite(si.id, moStart, todayStr);
+    var slm = rSumRangeSite(si.id, lyMoStart, lyMoEnd);
+    var sy = rSumRangeSite(si.id, ytdStart, todayStr);
+    var sly = rSumRangeSite(si.id, lyYtdStart, lyYtdEnd);
+    var smPc = rYoyPc(sm.revenue, slm.revenue);
+    var syPc = rYoyPc(sy.revenue, sly.revenue);
+    var smPer = sm.washes ? rMoney(sm.revenue / sm.washes) : "--";
+    var slmPer = slm.washes ? rMoney(slm.revenue / slm.washes) : "--";
+    thtml += "<tr><td>" + si.name + "</td>" +
+      "<td>" + rMoney0(sm.revenue) + "</td><td>" + rMoney0(slm.revenue) + "</td><td>" + (smPc !== null ? (smPc >= 0 ? "+" : "") + smPc + "%" : "--") + "</td>" +
+      "<td>" + rMoney0(sy.revenue) + "</td><td>" + rMoney0(sly.revenue) + "</td><td>" + (syPc !== null ? (syPc >= 0 ? "+" : "") + syPc + "%" : "--") + "</td>" +
+      "<td>" + sm.washes + "</td><td>" + slm.washes + "</td>" +
+      "<td>" + smPer + "</td><td>" + slmPer + "</td></tr>";
+  }
+  thtml += "</tbody></table>";
+  siteEl.innerHTML = thtml;
+}
+
 async function retRender(){
   R$("retStatus").textContent = "Calculating...";
   await retLoad();
   rRenderTiles();
+  rRenderYoY();
   if (typeof wlTips === "function") wlTips("retTiles", WL_TIP_RETAIL);
   rRenderChart();
   rRenderDow();

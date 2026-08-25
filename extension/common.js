@@ -123,6 +123,7 @@ const WL_TIP_OVERVIEW = {
   "Last month": "Total revenue across all sites for the previous calendar month.",
   "Month projection": "Month to date plus an estimate of the rest of the month. Each remaining day is estimated from the average revenue for that same weekday over the last 8 weeks.",
   "vs last year (MTD)": "Last year's revenue for the same month through the same day of month. The percentage shows how this year's MTD compares.",
+  "vs last year (YTD)": "Last year's revenue from Jan 1 through the same day of year. The percentage shows how this year's YTD compares.",
   "Avg use/member 30d": "Pass Use washes over the last 30 days divided by active member vehicles. How often the average member washes per month."
 };
 
@@ -135,5 +136,6 @@ const WL_TIP_CP_OVERVIEW = {
   "Last month": "All-site CryptoPay totals for the previous calendar month.",
   "Month projection": "Month to date plus an estimate of the rest of the month, using the average for each weekday over the last 8 weeks.",
   "vs last year (MTD)": "Last year's CryptoPay revenue for the same month through the same day of month. The percentage shows how this year's MTD compares.",
+  "vs last year (YTD)": "Last year's CryptoPay revenue from Jan 1 through the same day of year. The percentage shows how this year's YTD compares.",
   "Avg ticket (30d)": "Revenue divided by transaction count across all sites over the last 30 days. Each swipe is one transaction, even if it covers several items."
 };

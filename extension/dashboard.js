@@ -348,6 +348,21 @@ function render(){
       yoyEl.innerHTML = fmtMoney(lyMtd) + " <span class=\"delta " + (yoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (yoyPct >= 0 ? "+" : "") + yoyPct + "%</span>";
     } else { yoyEl.textContent = "no data"; }
   }
+  // YoY YTD comparison
+  var ytdFrom = todayStr.slice(0,4) + "-01-01";
+  var ytdRev = 0;
+  for (var dt3 of Object.keys(byDate)){ if (dt3 >= ytdFrom && dt3 <= todayStr) ytdRev += byDate[dt3]; }
+  var lyYtdEnd = new Date(today); lyYtdEnd.setFullYear(lyYtdEnd.getFullYear() - 1);
+  var lyYtdFrom = ds(lyYtdEnd).slice(0,4) + "-01-01", lyYtdTo = ds(lyYtdEnd);
+  var lyYtdRev = 0;
+  for (var dt4 of Object.keys(byDate)){ if (dt4 >= lyYtdFrom && dt4 <= lyYtdTo) lyYtdRev += byDate[dt4]; }
+  var yoyYtdPct = lyYtdRev ? Math.round((ytdRev - lyYtdRev) / lyYtdRev * 100) : null;
+  var yoyYtdEl = $("sumYoYYtd");
+  if (yoyYtdEl){
+    if (yoyYtdPct !== null){
+      yoyYtdEl.innerHTML = fmtMoney(lyYtdRev) + " <span class=\"delta " + (yoyYtdPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (yoyYtdPct >= 0 ? "+" : "") + yoyYtdPct + "%</span>";
+    } else { yoyYtdEl.textContent = "no data"; }
+  }
   $("sumToday").textContent = fmtMoney(byDate[todayStr] || 0);
   $("sumWtd").textContent = fmtMoney(wtd);
   $("sumMtd").textContent = fmtMoney(p.mtd);
@@ -412,6 +427,19 @@ function renderSiteCards(todayStr, today){
       yDiv.textContent = (sYoyPct >= 0 ? "+" : "") + sYoyPct + "% vs last year MTD (" + fmtMoney(sLyMtd.revenue) + ")";
       div.appendChild(yDiv);
     }
+    // YTD YoY for this site card
+    var sYtdFrom = todayStr.slice(0,4) + "-01-01";
+    var sYtdCur = sumRange(s.id, sYtdFrom, todayStr);
+    var sLyYtdEnd = new Date(today); sLyYtdEnd.setFullYear(sLyYtdEnd.getFullYear() - 1);
+    var sLyYtdFrom = ds(sLyYtdEnd).slice(0,4) + "-01-01", sLyYtdTo = ds(sLyYtdEnd);
+    var sLyYtd = sumRange(s.id, sLyYtdFrom, sLyYtdTo);
+    var sYoyYtdPct = sLyYtd.revenue ? Math.round((sYtdCur.revenue - sLyYtd.revenue) / sLyYtd.revenue * 100) : null;
+    if (sYoyYtdPct !== null){
+      var yDiv2 = document.createElement("div");
+      yDiv2.className = "delta " + (sYoyYtdPct >= 0 ? "up" : "down");
+      yDiv2.textContent = (sYoyYtdPct >= 0 ? "+" : "") + sYoyYtdPct + "% vs last year YTD (" + fmtMoney(sLyYtd.revenue) + ")";
+      div.appendChild(yDiv2);
+    }
     div.addEventListener("click", () => openDetail(s));
     wrap.appendChild(div);
   }
@@ -439,6 +467,34 @@ function periodRow(label, t, members, div){
   const overall = t.washes ? t.revenue / t.washes : 0;
   const mu = members ? (t.passUse / members / (div || 1)).toFixed(1) + "x" : "--";
   return "<tr><td>" + label + "</td><td>" + fmtMoney(t.revenue) + "</td><td>" + t.washes + "</td><td>" + fmtMoney(overall) + "</td><td>" + rt.washes + "</td><td>" + fmtMoney(rt.per) + "</td><td>" + t.passUse + "</td><td>" + mu + "</td></tr>";
+}
+
+function yoyDetailHtml(site, today, todayStr, members){
+  function yoyRow(label, from, to){
+    var cur = sumRange(site.id, from, to);
+    var lyEnd = new Date(to + "T00:00:00"); lyEnd.setFullYear(lyEnd.getFullYear() - 1);
+    var lyStart = new Date(from + "T00:00:00"); lyStart.setFullYear(lyStart.getFullYear() - 1);
+    var ly = sumRange(site.id, ds(lyStart), ds(lyEnd));
+    var pct = ly.revenue ? Math.round((cur.revenue - ly.revenue) / ly.revenue * 100) : null;
+    var rt = retail(cur), lyRt = retail(ly);
+    var rtPct = lyRt.revenue ? Math.round((rt.revenue - lyRt.revenue) / lyRt.revenue * 100) : null;
+    var washPct = ly.washes ? Math.round((cur.washes - ly.washes) / ly.washes * 100) : null;
+    function pc(v){ return v !== null ? " <span class=\"delta " + (v >= 0 ? "up" : "down") + "\">" + (v >= 0 ? "+" : "") + v + "%</span>" : ""; }
+    return "<tr><td>" + label + "</td>" +
+      "<td>" + fmtMoney(cur.revenue) + pc(pct) + "</td><td>" + fmtMoney(ly.revenue) + "</td>" +
+      "<td>" + cur.washes + pc(washPct) + "</td><td>" + ly.washes + "</td>" +
+      "<td>" + fmtMoney(rt.revenue) + pc(rtPct) + "</td><td>" + fmtMoney(lyRt.revenue) + "</td></tr>";
+  }
+  var moStart = todayStr.slice(0,8) + "01";
+  var ytdStart = todayStr.slice(0,4) + "-01-01";
+  var yestD = new Date(today); yestD.setDate(yestD.getDate() - 1);
+  var d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  return "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>LY Revenue</th><th>Washes</th><th>LY Washes</th><th>Retail Rev</th><th>LY Retail</th></tr></thead><tbody>" +
+    yoyRow("Yesterday", ds(yestD), ds(yestD)) +
+    yoyRow("MTD", moStart, todayStr) +
+    yoyRow("YTD", ytdStart, todayStr) +
+    yoyRow("Last 30d", ds(d30), todayStr) +
+    "</tbody></table>";
 }
 
 let dcDetailSite = null;
@@ -662,6 +718,8 @@ function openDetail(site){
     "<h2>" + site.name + " <span class=\"members\">(" + members + " members)</span></h2>" +
     "<h3>Period totals</h3>" +
     "<table class=\"via\"><thead><tr><th>Period</th><th>Revenue</th><th>Washes</th><th>Overall $/wash</th><th>Retail washes</th><th>Retail $/wash</th><th>Pass uses</th><th>Use/member</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<h3>Year over Year</h3>" +
+    yoyDetailHtml(site, today, todayStr, members) +
     "<h3>Breakdown by payment method <select id=\"dcDetailPeriod\">" + dcPeriodOptions(site.id) + "</select></h3>" +
     "<div id=\"dcBreakdown\"></div>" +
     "<h3>Activity by day of week &amp; time</h3>" +

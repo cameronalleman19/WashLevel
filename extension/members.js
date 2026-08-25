@@ -619,10 +619,95 @@ function mRenderVehicles(){
     brkHtml;
 }
 
+function mMemberRangeFull(from, to){
+  var out = {rev: 0, passUse: 0, news: 0, cancels: 0, declined: 0};
+  for (var s of mFilteredSites()){
+    for (var dt of Object.keys(mHist[s.id] || {})){
+      if (dt < from || dt > to) continue;
+      var r = mHist[s.id][dt];
+      out.rev += (r.newPassAmt || 0) + (r.passRenewAmt || 0) + (r.newPassOnlineAmt || 0) + (r.onlineGiftAmt || 0) + (r.viaAddAmt || 0);
+      out.passUse += r.passUse || 0;
+      out.news += (r.newPass || 0) + (r.newPassOnline || 0);
+      out.cancels += r.passCancelled || 0;
+      out.declined += r.declined || 0;
+    }
+  }
+  out.net = out.news - out.cancels;
+  return out;
+}
+
+function mMemberSiteRange(sid, from, to){
+  var out = {rev: 0, passUse: 0, news: 0, cancels: 0, declined: 0};
+  for (var dt of Object.keys(mHist[sid] || {})){
+    if (dt < from || dt > to) continue;
+    var r = mHist[sid][dt];
+    out.rev += (r.newPassAmt || 0) + (r.passRenewAmt || 0) + (r.newPassOnlineAmt || 0) + (r.onlineGiftAmt || 0) + (r.viaAddAmt || 0);
+    out.passUse += r.passUse || 0;
+    out.news += (r.newPass || 0) + (r.newPassOnline || 0);
+    out.cancels += r.passCancelled || 0;
+    out.declined += r.declined || 0;
+  }
+  out.net = out.news - out.cancels;
+  return out;
+}
+
+function mYoyPc(cur, ly){ return ly ? Math.round((cur - ly) / Math.abs(ly) * 100) : null; }
+function mYoySpan(pct){ if (pct === null) return ""; return " <span class=\"delta " + (pct >= 0 ? "up" : "down") + "\">" + (pct >= 0 ? "+" : "") + pct + "%</span>"; }
+
+function mRenderYoY(){
+  var el = M$("memYoY");
+  if (!el) return;
+  var today = new Date();
+  var todayStr = mDs(today);
+  var moStart = todayStr.slice(0,8) + "01";
+  var ytdStart = todayStr.slice(0,4) + "-01-01";
+  var lyRef = new Date(today); lyRef.setFullYear(lyRef.getFullYear() - 1);
+  var lyMoStart = mDs(lyRef).slice(0,8) + "01", lyMoEnd = mDs(lyRef);
+  var lyYtdStart = mDs(lyRef).slice(0,4) + "-01-01", lyYtdEnd = mDs(lyRef);
+
+  var mtd = mMemberRangeFull(moStart, todayStr);
+  var lyMtd = mMemberRangeFull(lyMoStart, lyMoEnd);
+  var ytd = mMemberRangeFull(ytdStart, todayStr);
+  var lyYtd = mMemberRangeFull(lyYtdStart, lyYtdEnd);
+
+  var html = "";
+  html += mTile("Revenue vs LY (MTD)", mMoney0(mtd.rev) + mYoySpan(mYoyPc(mtd.rev, lyMtd.rev)) + "<br><small>LY: " + mMoney0(lyMtd.rev) + "</small>");
+  html += mTile("Revenue vs LY (YTD)", mMoney0(ytd.rev) + mYoySpan(mYoyPc(ytd.rev, lyYtd.rev)) + "<br><small>LY: " + mMoney0(lyYtd.rev) + "</small>");
+  html += mTile("New passes vs LY (MTD)", mtd.news + mYoySpan(mYoyPc(mtd.news, lyMtd.news)) + "<br><small>LY: " + lyMtd.news + "</small>");
+  html += mTile("New passes vs LY (YTD)", ytd.news + mYoySpan(mYoyPc(ytd.news, lyYtd.news)) + "<br><small>LY: " + lyYtd.news + "</small>");
+  html += mTile("Cancels vs LY (MTD)", mtd.cancels + mYoySpan(mYoyPc(mtd.cancels, lyMtd.cancels)) + "<br><small>LY: " + lyMtd.cancels + "</small>");
+  html += mTile("Cancels vs LY (YTD)", ytd.cancels + mYoySpan(mYoyPc(ytd.cancels, lyYtd.cancels)) + "<br><small>LY: " + lyYtd.cancels + "</small>");
+  var netPcMtd = lyMtd.net ? mYoyPc(mtd.net, lyMtd.net) : null;
+  var netPcYtd = lyYtd.net ? mYoyPc(ytd.net, lyYtd.net) : null;
+  html += mTile("Net vs LY (MTD)", (mtd.net >= 0 ? "+" : "") + mtd.net + mYoySpan(netPcMtd) + "<br><small>LY: " + (lyMtd.net >= 0 ? "+" : "") + lyMtd.net + "</small>");
+  html += mTile("Net vs LY (YTD)", (ytd.net >= 0 ? "+" : "") + ytd.net + mYoySpan(netPcYtd) + "<br><small>LY: " + (lyYtd.net >= 0 ? "+" : "") + lyYtd.net + "</small>");
+
+  // Per-site table
+  if (mSites.length > 1){
+    html += "<table class=\"via\" style=\"margin-top:12px\"><thead><tr><th>Site</th><th>Rev MTD</th><th>LY</th><th>YoY</th><th>Rev YTD</th><th>LY</th><th>YoY</th><th>New MTD</th><th>LY</th><th>Cancel MTD</th><th>LY</th></tr></thead><tbody>";
+    for (var si of mFilteredSites()){
+      var sm = mMemberSiteRange(si.id, moStart, todayStr);
+      var slm = mMemberSiteRange(si.id, lyMoStart, lyMoEnd);
+      var sy = mMemberSiteRange(si.id, ytdStart, todayStr);
+      var sly = mMemberSiteRange(si.id, lyYtdStart, lyYtdEnd);
+      var smPc = mYoyPc(sm.rev, slm.rev);
+      var syPc = mYoyPc(sy.rev, sly.rev);
+      html += "<tr><td>" + si.name + "</td>" +
+        "<td>" + mMoney0(sm.rev) + "</td><td>" + mMoney0(slm.rev) + "</td><td>" + (smPc !== null ? (smPc >= 0 ? "+" : "") + smPc + "%" : "--") + "</td>" +
+        "<td>" + mMoney0(sy.rev) + "</td><td>" + mMoney0(sly.rev) + "</td><td>" + (syPc !== null ? (syPc >= 0 ? "+" : "") + syPc + "%" : "--") + "</td>" +
+        "<td>" + sm.news + "</td><td>" + slm.news + "</td>" +
+        "<td>" + sm.cancels + "</td><td>" + slm.cancels + "</td></tr>";
+    }
+    html += "</tbody></table>";
+  }
+  el.innerHTML = html;
+}
+
 async function memRender(){
   M$("memStatus").textContent = "Calculating...";
   await memLoad();
   mRenderTiles();
+  mRenderYoY();
   mRenderEconomics();
   mRenderVehicles();
   mRenderTierBreakdown();

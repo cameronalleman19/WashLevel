@@ -680,6 +680,21 @@ function cpOvRender(){
       cpYoyEl.innerHTML = cpMoney(cpLyMtd) + " <span class=\"delta " + (cpYoyPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (cpYoyPct >= 0 ? "+" : "") + cpYoyPct + "%</span>";
     } else { cpYoyEl.textContent = "no data"; }
   }
+  // YoY YTD comparison
+  var cpYtdFrom = todayStr.slice(0,4) + "-01-01";
+  var cpYtdRev = 0;
+  for (var dt3 of Object.keys(byDate)){ if (dt3 >= cpYtdFrom && dt3 <= todayStr) cpYtdRev += byDate[dt3]; }
+  var cpLyYtdEnd = new Date(today); cpLyYtdEnd.setFullYear(cpLyYtdEnd.getFullYear() - 1);
+  var cpLyYtdFrom = cpDs(cpLyYtdEnd).slice(0,4) + "-01-01", cpLyYtdTo = cpDs(cpLyYtdEnd);
+  var cpLyYtdRev = 0;
+  for (var dt4 of Object.keys(byDate)){ if (dt4 >= cpLyYtdFrom && dt4 <= cpLyYtdTo) cpLyYtdRev += byDate[dt4]; }
+  var cpYoyYtdPct = cpLyYtdRev ? Math.round((cpYtdRev - cpLyYtdRev) / cpLyYtdRev * 100) : null;
+  var cpYoyYtdEl = $("cpOvYoYYtd");
+  if (cpYoyYtdEl){
+    if (cpYoyYtdPct !== null){
+      cpYoyYtdEl.innerHTML = cpMoney(cpLyYtdRev) + " <span class=\"delta " + (cpYoyYtdPct >= 0 ? "up" : "down") + "\" style=\"font-size:14px\">" + (cpYoyYtdPct >= 0 ? "+" : "") + cpYoyYtdPct + "%</span>";
+    } else { cpYoyYtdEl.textContent = "no data"; }
+  }
   $("cpOvToday").textContent = cpMoney(byDate[todayStr] || 0);
   $("cpOvWtd").textContent = cpMoney(wtd);
   $("cpOvMtd").textContent = cpMoney(p.mtd);
@@ -742,6 +757,19 @@ function cpOvRenderSiteCards(todayStr){
       cpYDiv.className = "delta " + (cpSYoyPct >= 0 ? "up" : "down");
       cpYDiv.textContent = (cpSYoyPct >= 0 ? "+" : "") + cpSYoyPct + "% vs last year MTD (" + cpMoney(cpSLyMtd.revenue) + ")";
       div.appendChild(cpYDiv);
+    }
+    // YTD YoY for this CryptoPay site card
+    var cpSYtdFrom = todayStr.slice(0,4) + "-01-01";
+    var cpSYtdCur = cpSumRange(s.id, cpSYtdFrom, todayStr);
+    var cpSLyYtdEnd = new Date(today); cpSLyYtdEnd.setFullYear(cpSLyYtdEnd.getFullYear() - 1);
+    var cpSLyYtdFrom = cpDs(cpSLyYtdEnd).slice(0,4) + "-01-01", cpSLyYtdTo = cpDs(cpSLyYtdEnd);
+    var cpSLyYtd = cpSumRange(s.id, cpSLyYtdFrom, cpSLyYtdTo);
+    var cpSYoyYtdPct = cpSLyYtd.revenue ? Math.round((cpSYtdCur.revenue - cpSLyYtd.revenue) / cpSLyYtd.revenue * 100) : null;
+    if (cpSYoyYtdPct !== null){
+      var cpYDiv2 = document.createElement("div");
+      cpYDiv2.className = "delta " + (cpSYoyYtdPct >= 0 ? "up" : "down");
+      cpYDiv2.textContent = (cpSYoyYtdPct >= 0 ? "+" : "") + cpSYoyYtdPct + "% vs last year YTD (" + cpMoney(cpSLyYtd.revenue) + ")";
+      div.appendChild(cpYDiv2);
     }
     div.addEventListener("click", () => cpOpenDetail(s));
     wrap.appendChild(div);
