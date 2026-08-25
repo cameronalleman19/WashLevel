@@ -892,55 +892,69 @@ function openDetail(site){
   drawLine($("siteChart"), vals, chartDates);
 }
 
-function drawLine(c, vals, dates){
+function drawLinePaint(c, hoverIdx){
+  const st = c.__data;
+  if (!st) return;
   const ctx = c.getContext("2d");
   const W = c.width = c.clientWidth * 2;
   const H = c.height = 360;
   ctx.clearRect(0, 0, W, H);
+  const vals = st.vals, dates = st.dates;
   const max = Math.max.apply(null, vals.concat([1]));
   const padL = 80, padB = 40, padT = 20, padR = 20;
   ctx.strokeStyle = "#3a4a63";
   ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
-  ctx.fillStyle = "#8fa3c0";
-  ctx.font = "20px system-ui";
+  ctx.fillStyle = "#8fa3c0"; ctx.font = "20px system-ui";
   ctx.fillText(fmtMoney(max), 4, padT + 16);
   const xw = (W - padL - padR) / (vals.length - 1);
-  ctx.strokeStyle = "#4da3ff";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  const pts = [];
-  vals.forEach((v, i) => {
+  const yOf = (v) => H - padB - (v / max) * (H - padB - padT);
+  ctx.strokeStyle = "#4da3ff"; ctx.lineWidth = 3; ctx.beginPath();
+  for (let i = 0; i < vals.length; i++){
     const x = padL + i * xw;
-    const yv = H - padB - (v / max) * (H - padB - padT);
-    pts.push(x);
-    if (i === 0) ctx.moveTo(x, yv); else ctx.lineTo(x, yv);
-  });
+    if (i === 0) ctx.moveTo(x, yOf(vals[i])); else ctx.lineTo(x, yOf(vals[i]));
+  }
   ctx.stroke();
-  ctx.fillStyle = "#8fa3c0";
+  ctx.lineTo(padL + (vals.length - 1) * xw, H - padB); ctx.lineTo(padL, H - padB); ctx.closePath();
+  ctx.fillStyle = "rgba(77,163,255,0.15)"; ctx.fill();
+  ctx.fillStyle = "#8fa3c0"; ctx.font = "20px system-ui";
   for (let i = 0; i < dates.length; i += 5){
     const p = dates[i].split("-");
     ctx.fillText(parseInt(p[1], 10) + "/" + parseInt(p[2], 10), padL + i * xw - 20, H - 10);
   }
-  c.__data = {vals: vals, dates: dates, pts: pts};
+  if (hoverIdx >= 0 && hoverIdx < vals.length){
+    const hx = padL + hoverIdx * xw;
+    const hy = yOf(vals[hoverIdx]);
+    ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hx, padT); ctx.lineTo(hx, H - padB); ctx.stroke();
+    ctx.fillStyle = "#4da3ff"; ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI * 2); ctx.fill();
+    const txt = fmtDate(dates[hoverIdx]) + "  " + fmtMoney(vals[hoverIdx]);
+    ctx.font = "16px system-ui";
+    const tw = ctx.measureText(txt).width + 16;
+    let bx = hx - tw / 2;
+    if (bx < padL) bx = padL; if (bx + tw > W - padR) bx = W - padR - tw;
+    const by = padT + 4;
+    ctx.fillStyle = "rgba(20,20,20,0.9)"; ctx.fillRect(bx, by, tw, 24);
+    ctx.strokeStyle = "#4da3ff"; ctx.strokeRect(bx, by, tw, 24);
+    ctx.fillStyle = "#fff"; ctx.fillText(txt, bx + 8, by + 18);
+  }
+}
+
+function drawLine(c, vals, dates){
+  c.__data = {vals: vals, dates: dates};
+  drawLinePaint(c, -1);
   if (!c.__hoverBound){
     c.__hoverBound = true;
-    const tip = document.createElement("div");
-    tip.className = "chart-tip";
-    tip.style.display = "none";
-    document.body.appendChild(tip);
     c.addEventListener("mousemove", (e) => {
-      const d = c.__data;
-      if (!d) return;
+      const st = c.__data; if (!st) return;
       const rect = c.getBoundingClientRect();
       const mx = (e.clientX - rect.left) * (c.width / rect.width);
-      let best = 0, bd = 1e9;
-      d.pts.forEach((px, i) => { const dist = Math.abs(px - mx); if (dist < bd){ bd = dist; best = i; } });
-      tip.textContent = fmtDate(d.dates[best]) + ": " + fmtMoney(d.vals[best]);
-      tip.style.display = "block";
-      tip.style.left = (e.pageX + 14) + "px";
-      tip.style.top = (e.pageY - 34) + "px";
+      const padL = 80, padR = 20;
+      const xw = (c.width - padL - padR) / (st.vals.length - 1);
+      let idx = Math.round((mx - padL) / xw);
+      if (idx < 0) idx = 0; if (idx >= st.vals.length) idx = st.vals.length - 1;
+      drawLinePaint(c, idx);
     });
-    c.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+    c.addEventListener("mouseleave", () => drawLinePaint(c, -1));
   }
 }
 
