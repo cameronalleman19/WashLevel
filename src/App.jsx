@@ -6766,10 +6766,12 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35", marginBottom: 10 }}>Low Stock Items</div>
                 {Object.values(reorderGroups).map((group, gi) => {
                   const allOrdered = group.items.every(it => it.purchaseOrdered);
-                  return (<div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, marginBottom: 8 }}>
+                  const partNums = [...new Set(group.items.map(it => it.partNumber).filter(Boolean))];
+                  return (<div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, marginBottom: 8, cursor: "pointer" }} onClick={() => { const it = group.items[0]; setModalItem(it); setEditData({ name: it.name, partNumber: it.partNumber||"", category: it.category||"chemicals", quantity: it.quantity, unit: it.unit||"gal", costPerUnit: it.costPerUnit||0, lowThreshold: it.lowThreshold||0, reorderAt: it.reorderAt||0, vendorId: it.vendorId||"" }); setShowItemHistory(false); }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{group.name}</div>
+                        {partNums.length > 0 && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>#{partNums.join(", #")}</div>}
                         <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
                           {group.items.map((it, j) => { const need = Math.max((it.reorderAt || 1) - it.quantity, 1); return (<span key={j}>{j > 0 && " · "}<span style={{ fontWeight: 500 }}>{it._locName}:</span> {need} {it.unit}</span>); })}
                         </div>
@@ -6779,7 +6781,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, fontWeight: 600, color: allOrdered ? "#059669" : "#94a3b8" }}>
-                          <input type="checkbox" checked={allOrdered} onChange={() => group.items.forEach(it => handlePurchaseOrdered(it, "reorder"))} style={{ width: 15, height: 15, accentColor: "#059669" }} />
+                          <input type="checkbox" checked={allOrdered} onChange={() => group.items.forEach(it => handlePurchaseOrdered(it, "reorder"))} onClick={e => e.stopPropagation()} style={{ width: 15, height: 15, accentColor: "#059669" }} />
                           Ordered
                         </label>
                         <div style={{ background: "#fee2e2", color: "#dc2626", padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>LOW</div>
@@ -6805,7 +6807,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, fontWeight: 600, color: allOrdered ? "#059669" : "#94a3b8" }}>
-                          <input type="checkbox" checked={allOrdered} onChange={() => group.items.forEach(it => handlePurchaseOrdered(it, "grocery"))} style={{ width: 15, height: 15, accentColor: "#059669" }} />
+                          <input type="checkbox" checked={allOrdered} onChange={() => group.items.forEach(it => handlePurchaseOrdered(it, "grocery"))} onClick={e => e.stopPropagation()} style={{ width: 15, height: 15, accentColor: "#059669" }} />
                           Ordered
                         </label>
                       </div>
