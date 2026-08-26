@@ -348,6 +348,42 @@ function rRenderYoY(){
   siteEl.innerHTML = thtml;
 }
 
+function rInitCollapsible(){
+  const page = document.getElementById("page-retail");
+  if (!page) return;
+  const prefs = JSON.parse(localStorage.getItem("retCollapsed") || "{}");
+  page.querySelectorAll("h2").forEach(h => {
+    const key = h.textContent.trim().replace(/\s*[\u25B6\u25BC]\s*$/, "").trim();
+    let wrap = h.nextElementSibling;
+    if (wrap && wrap.classList.contains("ret-collapse-wrap")) return;
+    const div = document.createElement("div");
+    div.className = "ret-collapse-wrap";
+    let sib = h.nextSibling;
+    while (sib && !(sib.nodeType === 1 && sib.tagName === "H2")){
+      const next = sib.nextSibling;
+      div.appendChild(sib);
+      sib = next;
+    }
+    h.parentNode.insertBefore(div, sib);
+    const arrow = document.createElement("span");
+    arrow.className = "collapse-arrow";
+    arrow.style.cssText = "margin-left:8px;font-size:12px";
+    h.appendChild(arrow);
+    const collapsed = prefs[key] || false;
+    div.style.display = collapsed ? "none" : "";
+    arrow.textContent = collapsed ? "\u25B6" : "\u25BC";
+    h.style.cursor = "pointer";
+    h.addEventListener("click", () => {
+      const isHidden = div.style.display === "none";
+      div.style.display = isHidden ? "" : "none";
+      arrow.textContent = isHidden ? "\u25BC" : "\u25B6";
+      const p = JSON.parse(localStorage.getItem("retCollapsed") || "{}");
+      p[key] = !isHidden;
+      localStorage.setItem("retCollapsed", JSON.stringify(p));
+    });
+  });
+}
+
 async function retRender(){
   R$("retStatus").textContent = "Calculating...";
   await retLoad();
@@ -361,6 +397,7 @@ async function retRender(){
   rRenderAnoms();
   await rRenderPlates();
   R$("retStatus").textContent = "";
+  rInitCollapsible();
 }
 
 function rPlatePeriodRange(){
