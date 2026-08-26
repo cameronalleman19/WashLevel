@@ -225,8 +225,6 @@ function cpRender(){
 async function cpActivate(siteId, deviceId, deviceName){
   const site = cpStatus[siteId];
   const siteName = site ? site.name : siteId;
-  const ok = confirm("Activate " + deviceName + " at " + siteName + "?\n\nThis will immediately start a wash cycle.");
-  if (!ok) return;
   cpSetStatus("Activating " + deviceName + "...");
   try {
     const res = await safeFetch(CP_BASE + "/login/api.php?page=remotestart&siteid=" + siteId + "&deviceid=" + deviceId, {
