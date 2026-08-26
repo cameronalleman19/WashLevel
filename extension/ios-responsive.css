@@ -230,6 +230,18 @@
   }
 }
 
+/* ── Landscape fixes ── */
+.sidecar-iphone .hamburger-btn {
+  display: block !important;
+}
+.sidecar-iphone #sideNav {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.sidecar-iphone .nav-overlay.open {
+  display: block !important;
+}
+
 /* ── General iOS polish ── */
 .sidecar-ios {
   -webkit-tap-highlight-color: transparent;
