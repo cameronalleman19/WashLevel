@@ -6723,16 +6723,20 @@ function Inventory({ locId, locationName, user, locations = [] }) {
         <div>
           {(() => {
             const allReorder = Object.values(purchaseData.reorder).flat();
+            const allGrocery = Object.values(purchaseData.grocery).flat().filter(g => g.received !== true);
             const reorderGroups = {};
             allReorder.forEach(item => {
               const key = item.name.toLowerCase().trim();
+              if (!(key in reorderGroups)) reorderGroups[key] = { name: item.name, unit: item.unit, items: [] };
               reorderGroups[key].items.push(item);
             });
             const groceryGroups = {};
             allGrocery.forEach(item => {
               const key = item.name.toLowerCase().trim();
+              if (!(key in groceryGroups)) groceryGroups[key] = { name: item.name, items: [] };
               groceryGroups[key].items.push(item);
             });
+            if (allReorder.length === 0 && allGrocery.length === 0) return <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No items on the purchase list right now.</div>;
             return (<>
               {Object.values(reorderGroups).length > 0 && (<div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35", marginBottom: 10 }}>Low Stock Items</div>
