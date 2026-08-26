@@ -6592,7 +6592,11 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                   </div>
                 </div>
               ))}
-            </>) : (
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button onClick={() => { setModalItem(null); setEditingId(null); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button onClick={async () => { setSavingEdit(true); const universalFields = { name: editData.name, partNumber: editData.partNumber || "", category: editData.category || "chemicals", unit: editData.unit || "gal", costPerUnit: editData.costPerUnit || 0, vendorId: editData.vendorId || "", updatedAt: new Date().toISOString() }; try { await Promise.all(modalLocItems.map(li => updateDoc(doc(db, "locations", li._locId, "inventory", li.id), universalFields))); setSavingEdit(false); setSavedEdit(true); setTimeout(() => { setSavedEdit(false); setModalItem(null); }, 1000); } catch(e) { console.log("Save error", e); setSavingEdit(false); } }} disabled={savingEdit} style={{ flex: 1, background: savedEdit ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : savedEdit ? "Saved!" : "Save Universal Fields"}</button>
+              </div>
+            </>) : (<>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
@@ -6607,7 +6611,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                   {modalItem.barcode ? (
                     <><div style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>✓ {modalItem.barcode}</div>
                     <button onClick={() => { setAttachingBarcode(modalItem.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Rescan</button>
-                    <button onClick={() => updateDoc(doc(db, "locations", locId, "inventory", modalItem.id), { barcode: null })} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Remove</button>
+                    <button onClick={() => updateDoc(doc(db, "locations", (modalItem._locId || locId), "inventory", modalItem.id), { barcode: null })} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>Remove</button>
                     <button onClick={() => printBarcode(modalItem)} style={{ background: "#f0fdf4", color: "#059669", border: "1px solid #bbf7d0", borderRadius: 5, padding: "3px 7px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>🖨️ Print</button></>
                   ) : (
                     <><button onClick={() => { setAttachingBarcode(modalItem.id); setScanMode("attach"); setShowScanner(true); }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 5, padding: "5px 8px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>📷 Scan Existing</button>
@@ -6621,6 +6625,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
               <button onClick={() => handleSaveEdit(modalItem.id)} disabled={savingEdit} style={{ flex: 1, background: savedEdit ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{savingEdit ? "Saving..." : savedEdit ? "Saved!" : "Save"}</button>
             </div>
             <button onClick={() => { setTransferItem(modalItem); setModalItem(null); setEditingId(null); }} style={{ width: "100%", background: "#ede9fe", color: "#6366f1", border: "1px solid #c4b5fd", borderRadius: 6, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Transfer Stock to Another Location</button>
+            </>)}
           </div>
         </div>
       )}
