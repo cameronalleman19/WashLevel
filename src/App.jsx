@@ -6747,7 +6747,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{group.name}</div>
                         <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
-                          {group.items.map((it, j) => (<span key={j}>{j > 0 && " · "}<span style={{ fontWeight: 500 }}>{it._locName}:</span> {it.quantity}/{it.reorderAt} {it.unit}</span>))}
+                          {group.items.map((it, j) => { const need = Math.max((it.reorderAt || 1) - it.quantity, 1); return (<span key={j}>{j > 0 && " · "}<span style={{ fontWeight: 500 }}>{it._locName}:</span> {need} {it.unit}</span>); })}
                         </div>
                         {allOrdered && group.items[0].purchaseOrderedBy && (
                           <div style={{ fontSize: 11, color: "#059669", marginTop: 3 }}>Ordered by {group.items[0].purchaseOrderedBy} · {new Date(group.items[0].purchaseOrderedAt).toLocaleDateString()}</div>
