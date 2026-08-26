@@ -5909,15 +5909,15 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     const qtyBefore = item?.quantity || 0;
     const qtyAfter = editData.quantity ?? qtyBefore;
     const delta = qtyAfter - qtyBefore;
-    if (delta !== 0) await logInventoryHistory(itemId, delta > 0 ? "add" : "remove", delta, qtyBefore, qtyAfter, "Edited");
+    if (delta !== 0) await logInventoryHistory(itemId, delta > 0 ? "add" : "remove", delta, qtyBefore, qtyAfter, "Edited", saveLocId);
     setSavingEdit(false);
     setSavedEdit(true);
     setTimeout(() => { setSavedEdit(false); setEditingId(null); }, 1000);
   };
 
-  const logInventoryHistory = async (itemId, type, delta, quantityBefore, quantityAfter, note = "") => {
+  const logInventoryHistory = async (itemId, type, delta, quantityBefore, quantityAfter, note = "", overrideLocId = null) => {
     try {
-      await addDoc(collection(db, "locations", locId, "inventory", itemId, "history"), {
+      await addDoc(collection(db, "locations", overrideLocId || locId, "inventory", itemId, "history"), {
         type, delta, quantityBefore, quantityAfter,
         userId: user?.uid || "unknown",
         userName: user?.name || user?.email || "Unknown",
