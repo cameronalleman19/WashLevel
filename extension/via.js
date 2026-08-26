@@ -10,6 +10,28 @@ let viaActiveTab = "open"; // "open" or "auto"
 function vEsc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 function vDays(ts){ return (Date.now() - ts) / 86400000; }
 
+async function cacheImg(url){
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch(e){ return null; }
+}
+
+async function cacheExceptionImgs(d){
+  for (const img of d.imgs){
+    if (img.cached) continue;
+    const data = await cacheImg(img.url);
+    if (data) img.cached = data;
+  }
+}
+
 function htmlToLines(html){
   return html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<[^>]+>/g, "\n").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ")
@@ -214,6 +236,7 @@ async function viaSync(){
       const r2 = await safeFetch(VBASE + "/consumerpassexceptions/" + ids[i] + "/", {credentials: "include"});
       const d = parseDetail(await r2.text(), ids[i]);
       await enrichConsumer(d);
+      await cacheExceptionImgs(d);
       fresh[ids[i]] = d;
       const key = d.consumerPassId || ids[i];
       viaSeen[key] = viaSeen[key] || {};
@@ -326,9 +349,9 @@ function renderViaList(){
     div.className = "via-card";
 
     let photosHtml = "<div class=\"via-photos\">";
-    if (drivers.length) photosHtml += drivers.map(d => "<img src=\"" + d.url + "\" loading=\"lazy\">").join("");
+    if (drivers.length) photosHtml += drivers.map(d => "<img src=\"" + (d.cached || d.url) + "\" loading=\"lazy\">").join("");
     else photosHtml += "<div class=\"noimg\">no photo</div>";
-    if (plateImgs.length) photosHtml += plateImgs.map(p => "<img src=\"" + p.url + "\" loading=\"lazy\">").join("");
+    if (plateImgs.length) photosHtml += plateImgs.map(p => "<img src=\"" + (p.cached || p.url) + "\" loading=\"lazy\">").join("");
     else photosHtml += "<div class=\"noimg\">no plate</div>";
     photosHtml += "</div>";
 
