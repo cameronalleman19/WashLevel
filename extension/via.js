@@ -74,12 +74,6 @@ function parseDetail(html, id){
   const imre = /https:\/\/s3[^"'\s]*payments_(driver|license)\/([0-9a-fA-F-]{36})[^"'\s]*/g;
   let m;
   while ((m = imre.exec(html))){ if (!imgs.some(x => x.kind === m[1] && x.pid === m[2])) imgs.push({kind: m[1], pid: m[2], url: m[0].replace(/&amp;/g, "&")}); }
-  /* Keep only 1 driver + 1 license per exception */
-  const driverImg = imgs.find(x => x.kind === "driver");
-  const plateImg = imgs.find(x => x.kind === "license");
-  imgs.length = 0;
-  if (driverImg) imgs.push(driverImg);
-  if (plateImg) imgs.push(plateImg);
   return {
     id: id,
     firstName: fieldAfter(lines, "First Name"),
