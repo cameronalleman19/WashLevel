@@ -1,4 +1,19 @@
 document.addEventListener("DOMContentLoaded", () => {
+  /* Hamburger toggle */
+  const hBtn = document.getElementById("hamburgerBtn");
+  const sNav = document.getElementById("sideNav");
+  const nOvl = document.getElementById("navOverlay");
+  if (hBtn && sNav && nOvl) {
+    hBtn.addEventListener("click", () => {
+      sNav.classList.toggle("open");
+      nOvl.classList.toggle("open");
+    });
+    nOvl.addEventListener("click", () => {
+      sNav.classList.remove("open");
+      nOvl.classList.remove("open");
+    });
+  }
+
   /* group toggles — just expand/collapse, no navigation */
   document.querySelectorAll(".nav-group-toggle").forEach(g => {
     g.addEventListener("click", () => {
@@ -15,6 +30,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const pg = document.getElementById("page-" + b.dataset.page);
       if (pg) pg.classList.add("active");
       chrome.storage.local.set({ sidecarActiveTab: b.dataset.page });
+      if (sNav) sNav.classList.remove("open");
+      if (nOvl) nOvl.classList.remove("open");
     });
   });
 
