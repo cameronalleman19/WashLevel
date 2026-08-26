@@ -5608,6 +5608,8 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [modalItem, setModalItem] = useState(null);
   const [overviewItems, setOverviewItems] = useState({});
   const [purchaseData, setPurchaseData] = useState({ reorder: {}, grocery: {} });
+  const [purchaseFilters, setPurchaseFilters] = useState({ chemicals: true, parts: true, "vending supplies": true });
+  const [purchaseVendorFilters, setPurchaseVendorFilters] = useState({});
   const [expandedGroups, setExpandedGroups] = useState({});
   const [overviewSearch, setOverviewSearch] = useState("");
   const [globalEditItem, setGlobalEditItem] = useState(null);
@@ -6721,8 +6723,30 @@ function Inventory({ locId, locationName, user, locations = [] }) {
 
       {activeTab === "purchase" && (
         <div>
+          <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Category:</div>
+            {["chemicals", "parts", "vending supplies"].map(cat => (
+              <label key={cat} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 12, color: "#334155" }}>
+                <input type="checkbox" checked={purchaseFilters[cat] !== false} onChange={e => setPurchaseFilters(p => ({ ...p, [cat]: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#0f1f35" }} />
+                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </label>
+            ))}
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginLeft: 8 }}>Vendor:</div>
+            {vendors.map(v => (
+              <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 12, color: "#334155" }}>
+                <input type="checkbox" checked={purchaseVendorFilters[v.id] !== false} onChange={e => setPurchaseVendorFilters(p => ({ ...p, [v.id]: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#0f1f35" }} />
+                {v.name}
+              </label>
+            ))}
+            <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 12, color: "#94a3b8" }}>
+              <input type="checkbox" checked={purchaseVendorFilters._none !== false} onChange={e => setPurchaseVendorFilters(p => ({ ...p, _none: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#0f1f35" }} />
+              No Vendor
+            </label>
+          </div>
           {(() => {
-            const allReorder = Object.values(purchaseData.reorder).flat();
+            const catFilter = it => purchaseFilters[it.category || "chemicals"] !== false;
+            const vendorFilter = it => { const vid = it.vendorId || "_none"; return purchaseVendorFilters[vid === "" ? "_none" : vid] !== false; };
+            const allReorder = Object.values(purchaseData.reorder).flat().filter(it => catFilter(it) && vendorFilter(it));
             const allGrocery = Object.values(purchaseData.grocery).flat().filter(g => g.received !== true);
             const reorderGroups = {};
             allReorder.forEach(item => {
