@@ -342,11 +342,24 @@ function renderViaList(){
     const div = document.createElement("div");
     div.className = "via-card";
 
+    const maxShow = 2;
+    const visDrivers = drivers.slice(0, maxShow);
+    const hidDrivers = drivers.slice(maxShow);
+    const visPlates = plateImgs.slice(0, maxShow);
+    const hidPlates = plateImgs.slice(maxShow);
+    const hidCount = hidDrivers.length + hidPlates.length;
     let photosHtml = "<div class=\"via-photos\">";
-    if (drivers.length) photosHtml += drivers.map(d => "<img src=\"" + (d.cached || d.url) + "\" loading=\"lazy\">").join("");
+    if (visDrivers.length) photosHtml += visDrivers.map(d => "<img src=\"" + (d.cached || d.url) + "\" loading=\"lazy\">").join("");
     else photosHtml += "<div class=\"noimg\">no photo</div>";
-    if (plateImgs.length) photosHtml += plateImgs.map(p => "<img src=\"" + (p.cached || p.url) + "\" loading=\"lazy\">").join("");
+    if (visPlates.length) photosHtml += visPlates.map(p => "<img src=\"" + (p.cached || p.url) + "\" loading=\"lazy\">").join("");
     else photosHtml += "<div class=\"noimg\">no plate</div>";
+    if (hidCount > 0){
+      photosHtml += "<div class=\"via-photos-more\" style=\"display:none\">";
+      photosHtml += hidDrivers.map(d => "<img src=\"" + (d.cached || d.url) + "\" loading=\"lazy\">").join("");
+      photosHtml += hidPlates.map(p => "<img src=\"" + (p.cached || p.url) + "\" loading=\"lazy\">").join("");
+      photosHtml += "</div>";
+      photosHtml += "<button class=\"via-expand-photos\">" + hidCount + " more photo" + (hidCount > 1 ? "s" : "") + "</button>";
+    }
     photosHtml += "</div>";
 
     /* Instance count badge */
@@ -389,6 +402,20 @@ function renderViaList(){
   }
 
   bindZoom();
+
+  wrap.querySelectorAll(".via-expand-photos").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const more = btn.previousElementSibling;
+      if (more && more.style.display === "none"){
+        more.style.display = "";
+        btn.textContent = "Hide photos";
+      } else if (more){
+        more.style.display = "none";
+        const ct = more.querySelectorAll("img").length;
+        btn.textContent = ct + " more photo" + (ct > 1 ? "s" : "");
+      }
+    });
+  });
 
   wrap.querySelectorAll(".via-note").forEach(t => {
     t.addEventListener("change", async () => { viaNotes[t.dataset.id] = t.value; await viaSave(); });
@@ -774,6 +801,9 @@ async function renderViaHistory(){
       ".via-tab-bar{display:flex;gap:4px;margin-bottom:12px}" +
       ".via-tab{padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#1e293b;color:#8fa3c0;cursor:pointer;font-size:13px;font-weight:600}" +
       ".via-tab.active{background:#182640;color:#fff}" +
+      ".via-expand-photos{background:#1e293b;color:#60a5fa;border:1px solid #334155;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;margin-top:4px;width:100%}" +
+      ".via-expand-photos:hover{background:#334155}" +
+      ".via-photos-more img{margin-top:4px}" +
       ".via-instance-badge{background:#3b82f6;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700}" +
       /* Decision history styles */
       ".dh-wrap{background:#0f172a;border-radius:10px;padding:16px;margin-top:8px}" +
