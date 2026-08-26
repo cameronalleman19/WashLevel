@@ -5610,6 +5610,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [purchaseData, setPurchaseData] = useState({ reorder: {}, grocery: {} });
   const [purchaseFilters, setPurchaseFilters] = useState({ chemicals: true, parts: true, "vending supplies": true });
   const [purchaseVendorFilters, setPurchaseVendorFilters] = useState({});
+  const [modalLocItems, setModalLocItems] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [overviewSearch, setOverviewSearch] = useState("");
   const [globalEditItem, setGlobalEditItem] = useState(null);
@@ -5838,7 +5839,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const handleUpdate = async (itemId, qty) => {
     const val = parseFloat(qty);
     if (isNaN(val)) return;
-    const item = items.find(i => i.id === itemId);
+    const item = modalItem || items.find(i => i.id === itemId);
     const qtyBefore = item?.quantity || 0;
     const delta = val - qtyBefore;
     const updates = { quantity: val, updatedAt: new Date().toISOString() };
@@ -5905,7 +5906,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
         if (n > 0) { setPropagateMsg("Updated at " + (n + 1) + " locations"); setTimeout(() => setPropagateMsg(""), 2500); }
       }
     } catch (e) { console.log("Propagate error:", e.message); }
-    const item = items.find(i => i.id === itemId);
+    const item = modalItem || items.find(i => i.id === itemId);
     const qtyBefore = item?.quantity || 0;
     const qtyAfter = editData.quantity ?? qtyBefore;
     const delta = qtyAfter - qtyBefore;
@@ -6570,6 +6571,28 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                 ))}
               </div>
             )}
+            {modalItem._fromPurchase ? (<>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Universal Fields</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 14 }}>
+                <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
+                <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Category</label><select value={editData.category || "chemicals"} onChange={e => setEditData(p => ({...p, category: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}><option value="chemicals">Chemicals</option><option value="parts">Parts</option><option value="vending supplies">Vending Supplies</option></select></div>
+                <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Unit</label><select value={editData.unit || "gal"} onChange={e => setEditData(p => ({...p, unit: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}>{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+                <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Vendor</label><select value={editData.vendorId || ""} onChange={e => setEditData(p => ({...p, vendorId: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }}><option value="">No vendor</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Stock by Location</div>
+              {modalLocItems.map((li, idx) => (
+                <div key={li._locId + li.id} style={{ background: "#f8fafc", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0f1f35", marginBottom: 6 }}>{li._locName}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 6, alignItems: "end" }}>
+                    <div><label style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>Qty</label><input type="number" value={li.quantity ?? 0} onChange={e => setModalLocItems(p => p.map((x, i) => i === idx ? { ...x, quantity: parseFloat(e.target.value) || 0 } : x))} style={{ ...inp, fontSize: 12, padding: "5px 6px", width: "100%" }} /></div>
+                    <div><label style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>Reorder At</label><input type="number" value={li.reorderAt ?? ""} onChange={e => setModalLocItems(p => p.map((x, i) => i === idx ? { ...x, reorderAt: e.target.value === "" ? "" : parseFloat(e.target.value) ?? 0 } : x))} style={{ ...inp, fontSize: 12, padding: "5px 6px", width: "100%" }} /></div>
+                    <div><label style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>Low Alert</label><input type="number" value={li.lowThreshold ?? 0} onChange={e => setModalLocItems(p => p.map((x, i) => i === idx ? { ...x, lowThreshold: parseFloat(e.target.value) || 0 } : x))} style={{ ...inp, fontSize: 12, padding: "5px 6px", width: "100%" }} /></div>
+                    <button onClick={async () => { const u = { quantity: li.quantity, reorderAt: li.reorderAt, lowThreshold: li.lowThreshold, updatedAt: new Date().toISOString() }; await updateDoc(doc(db, "locations", li._locId, "inventory", li.id), u); setModalLocItems(p => p.map((x, i) => i === idx ? { ...x, _saved: true } : x)); setTimeout(() => setModalLocItems(p => p.map((x, i) => i === idx ? { ...x, _saved: false } : x)), 1200); }} style={{ background: li._saved ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", height: 28 }}>{li._saved ? "Saved" : "Save"}</button>
+                  </div>
+                </div>
+              ))}
+            </>) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</label><input value={editData.name || ""} onChange={e => setEditData(p => ({...p, name: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
               <div><label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Part Number</label><input value={editData.partNumber || ""} onChange={e => setEditData(p => ({...p, partNumber: e.target.value}))} style={{ ...inp, fontSize: 12, padding: "6px 8px" }} /></div>
@@ -6767,7 +6790,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
                 {Object.values(reorderGroups).map((group, gi) => {
                   const allOrdered = group.items.every(it => it.purchaseOrdered);
                   const partNums = [...new Set(group.items.map(it => it.partNumber).filter(Boolean))];
-                  return (<div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, marginBottom: 8, cursor: "pointer" }} onClick={() => { const it = group.items[0]; setModalItem(it); setEditData({ name: it.name, partNumber: it.partNumber||"", category: it.category||"chemicals", quantity: it.quantity, unit: it.unit||"gal", costPerUnit: it.costPerUnit||0, lowThreshold: it.lowThreshold||0, reorderAt: it.reorderAt||0, vendorId: it.vendorId||"" }); setShowItemHistory(false); }}>
+                  return (<div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, marginBottom: 8, cursor: "pointer" }} onClick={() => { const it = group.items[0]; setModalItem({ ...it, _fromPurchase: true }); setEditData({ name: it.name, partNumber: it.partNumber||"", category: it.category||"chemicals", unit: it.unit||"gal", costPerUnit: it.costPerUnit||0, vendorId: it.vendorId||"" }); setModalLocItems(group.items.map(gi => ({ ...gi }))); setShowItemHistory(false); }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{group.name}</div>
