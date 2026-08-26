@@ -5607,6 +5607,7 @@ function Inventory({ locId, locationName, user, locations = [] }) {
   const [transferItem, setTransferItem] = useState(null);
   const [modalItem, setModalItem] = useState(null);
   const [overviewItems, setOverviewItems] = useState({});
+  const [purchaseData, setPurchaseData] = useState({ reorder: {}, grocery: {} });
   const [expandedGroups, setExpandedGroups] = useState({});
   const [overviewSearch, setOverviewSearch] = useState("");
   const [globalEditItem, setGlobalEditItem] = useState(null);
@@ -5624,6 +5625,36 @@ function Inventory({ locId, locationName, user, locations = [] }) {
     }));
     return () => unsubs.forEach(u => u());
   }, [activeTab, locations]);
+
+  useEffect(() => {
+    const unsubs = [];
+    locations.forEach(l => {
+      unsubs.push(onSnapshot(collection(db, "locations", l.id, "inventory"), snap => {
+        setPurchaseData(prev => ({ ...prev, reorder: { ...prev.reorder, [l.id]: snap.docs.map(d => ({ id: d.id, ...d.data(), _locId: l.id, _locName: l.name })).filter(i => (i.reorderAt != null && i.reorderAt !== "" && i.quantity <= i.reorderAt) || i.manualReorder) } }));
+      }));
+      unsubs.push(onSnapshot(collection(db, "locations", l.id, "groceryList"), snap => {
+        setPurchaseData(prev => ({ ...prev, grocery: { ...prev.grocery, [l.id]: snap.docs.map(d => ({ id: d.id, ...d.data(), _locId: l.id, _locName: l.name })) } }));
+      }));
+    });
+    return () => unsubs.forEach(u => u());
+  }, [activeTab, locations]);
+
+  const handlePurchaseOrdered = async (item, type) => {
+    const ref = type === "reorder"
+      ? doc(db, "locations", item._locId, "inventory", item.id)
+      : doc(db, "locations", item._locId, "groceryList", item.id);
+    if (type === "reorder") {
+      await updateDoc(ref, item.purchaseOrdered
+        ? { purchaseOrdered: false, purchaseOrderedBy: null, purchaseOrderedAt: null }
+        : { purchaseOrdered: true, purchaseOrderedBy: user?.name || user?.email || "Someone", purchaseOrderedAt: new Date().toISOString() }
+      );
+    } else {
+      await updateDoc(ref, item.ordered
+        ? { ordered: false, orderedBy: null, orderedAt: null }
+        : { ordered: true, orderedBy: user?.name || user?.email || "Someone", orderedAt: new Date().toISOString() }
+      );
+    }
+  };
 
   const groupKeyOf = (it) => {
     const bc = (it.barcode || "").toString().trim();
@@ -5950,7 +5981,8 @@ function Inventory({ locId, locationName, user, locations = [] }) {
           <div style={{ fontSize: 20, fontWeight: 700, color: "#0f1f35" }}>Inventory</div>
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{locationName}</div>
         </div>
-        {activeTab === "vendors" && (user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAddVendor(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
+
+      {activeTab === "vendors" && (user?.role === "manager" || user?.role === "owner") && <button onClick={() => setShowAddVendor(true)} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Vendor</button>}
         {activeTab === "inventory" && (user?.role === "manager" || user?.role === "owner") && <div style={{ display: "flex", gap: 8 }}><button onClick={() => { (() => {
                     const cur = getScanLoc();
                     if (!cur) { setPendingScanMode("inventory"); setScanMode("inventory"); setShowLocPrompt(true); }
@@ -5959,12 +5991,12 @@ function Inventory({ locId, locationName, user, locations = [] }) {
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {["inventory", "overview", "reorder", "vendors"].map(tab => (
+        {["inventory", "overview", "reorder", "vendors", "purchase"].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
             background: activeTab === tab ? "#0f1f35" : "#f1f5f9",
             color: activeTab === tab ? "#fff" : "#64748b" }}>
-            {tab === "inventory" ? "All Items" : tab === "overview" ? "Overview" : tab === "reorder" ? "Reorder List" : "Vendors"}
+            {tab === "inventory" ? "All Items" : tab === "overview" ? "Overview" : tab === "reorder" ? "Reorder List" : tab === "vendors" ? "Vendors" : "Purchase List"}
           </button>
         ))}
       </div>
@@ -6685,6 +6717,77 @@ function Inventory({ locId, locationName, user, locations = [] }) {
 
       {globalScanOpen && (
         <BarcodeScanner onScan={(barcode) => { setGlobalEditData(p => ({...p, barcode})); setGlobalScanOpen(false); }} onClose={() => setGlobalScanOpen(false)} scanLocName="Attach Barcode" />
+      )}
+
+      {activeTab === "purchase" && (
+        <div>
+          {(() => {
+            const allReorder = Object.values(purchaseData.reorder).flat();
+            const reorderGroups = {};
+            allReorder.forEach(item => {
+              const key = item.name.toLowerCase().trim();
+              reorderGroups[key].items.push(item);
+            });
+            const groceryGroups = {};
+            allGrocery.forEach(item => {
+              const key = item.name.toLowerCase().trim();
+              groceryGroups[key].items.push(item);
+            });
+            return (<>
+              {Object.values(reorderGroups).length > 0 && (<div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35", marginBottom: 10 }}>Low Stock Items</div>
+                {Object.values(reorderGroups).map((group, gi) => {
+                  const allOrdered = group.items.every(it => it.purchaseOrdered);
+                  return (<div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{group.name}</div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                          {group.items.map((it, j) => (<span key={j}>{j > 0 && " · "}<span style={{ fontWeight: 500 }}>{it._locName}:</span> {it.quantity}/{it.reorderAt} {it.unit}</span>))}
+                        </div>
+                        {allOrdered && group.items[0].purchaseOrderedBy && (
+                          <div style={{ fontSize: 11, color: "#059669", marginTop: 3 }}>Ordered by {group.items[0].purchaseOrderedBy} · {new Date(group.items[0].purchaseOrderedAt).toLocaleDateString()}</div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, fontWeight: 600, color: allOrdered ? "#059669" : "#94a3b8" }}>
+                          <input type="checkbox" checked={allOrdered} onChange={() => group.items.forEach(it => handlePurchaseOrdered(it, "reorder"))} style={{ width: 15, height: 15, accentColor: "#059669" }} />
+                          Ordered
+                        </label>
+                        <div style={{ background: "#fee2e2", color: "#dc2626", padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>LOW</div>
+                      </div>
+                    </div>
+                  </div>);
+                })}
+              </div>)}
+              {Object.values(groceryGroups).length > 0 && (<div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1f35", marginBottom: 10 }}>Grocery Items</div>
+                {Object.values(groceryGroups).map((group, gi) => {
+                  const allOrdered = group.items.every(it => it.ordered);
+                  return (<div key={gi} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#0f1f35" }}>{group.name}</div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                          {group.items.map((it, j) => (<span key={j}>{j > 0 && " · "}<span style={{ fontWeight: 500 }}>{it._locName}</span>{it.addedBy ? " (" + it.addedBy + ")" : ""}</span>))}
+                        </div>
+                        {allOrdered && group.items[0].orderedBy && (
+                          <div style={{ fontSize: 11, color: "#059669", marginTop: 3 }}>Ordered by {group.items[0].orderedBy} · {new Date(group.items[0].orderedAt).toLocaleDateString()}</div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, fontWeight: 600, color: allOrdered ? "#059669" : "#94a3b8" }}>
+                          <input type="checkbox" checked={allOrdered} onChange={() => group.items.forEach(it => handlePurchaseOrdered(it, "grocery"))} style={{ width: 15, height: 15, accentColor: "#059669" }} />
+                          Ordered
+                        </label>
+                      </div>
+                    </div>
+                  </div>);
+                })}
+              </div>)}
+            </>);
+          })()}
+        </div>
       )}
 
       {activeTab === "vendors" && (
