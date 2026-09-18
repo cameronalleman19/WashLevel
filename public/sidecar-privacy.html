@@ -65,25 +65,26 @@
 <div class="wrap">
   <p class="eyebrow">Privacy</p>
   <h1>Sidecar Privacy Policy</h1>
-  <p class="eff">Effective August 9, 2026</p>
+  <p class="eff">Effective September 17, 2026</p>
 
   <div class="callout">
     <span class="lbl">In plain English</span>
-    <p>Sidecar reads your Dencar reports in your own browser and keeps the results there. Nothing about your wash — sales, members, consumers, VIA exceptions — is ever uploaded to WashLevel. The only things our servers ever see are your license key and, if you subscribe, the billing details you hand directly to Stripe.</p>
+    <p>Sidecar reads your Dencar and CryptoPay data in your own browser and keeps the results there. Nothing about your wash — sales, members, consumers, VIA exceptions, device status — is ever uploaded to WashLevel. The only things our servers ever see are your license key and, if you subscribe, the billing details you hand directly to Stripe.</p>
   </div>
 
   <h2>What Sidecar Is</h2>
-  <p>WashLevel Sidecar ("Sidecar") is a browser extension built by WashLevel that reads a car wash operator's own data from Dencar (admin.dencar.sancsoft.net) and displays it as dashboards — sales summaries, retail performance, membership health, and VIA Guard exception review — inside your browser. This policy covers the Sidecar extension and the washlevel.com/sidecar pages used to purchase and manage it. It does not cover Dencar or Sanc Soft, which are operated independently — see their own privacy policy for how they handle your data.</p>
+  <p>WashLevel Sidecar ("Sidecar") is a browser extension built by WashLevel that reads a car wash operator's own data from Dencar (admin.dencar.sancsoft.net) and CryptoPay (mycryptopay.com) and displays it as dashboards — sales summaries, retail performance, membership health, device status, and VIA Guard exception review — inside your browser. This policy covers the Sidecar extension and the washlevel.com/sidecar pages used to purchase and manage it. It does not cover Dencar, Sanc Soft, or CryptoPay, which are operated independently — see their own privacy policies for how they handle your data.</p>
 
   <h2>Data That Stays On Your Device</h2>
-  <p>When you click Sync, Sidecar reads report pages, VIA exceptions, consumer records, and payment history from Dencar using your own already-open, already-authenticated Dencar session — the same session your browser already has from logging in normally. The results are stored using <strong>chrome.storage.local</strong>, a storage area built into your browser and tied to your device. This can include:</p>
+  <p>When you click Sync, Sidecar reads report pages, VIA exceptions, consumer records, and payment history from Dencar and/or CryptoPay using your own already-open, already-authenticated sessions — the same sessions your browser already has from logging in normally. The results are stored using <strong>chrome.storage.local</strong>, a storage area built into your browser and tied to your device. This can include:</p>
   <ul>
     <li>Daily site reports, revenue figures, and wash counts</li>
     <li>Consumer and member records visible in your own Dencar account, including names and vehicle/plate information</li>
     <li>Payment history and membership billing events shown in Dencar's own reports</li>
     <li>VIA Guard exceptions, your notes on them, and your past decisions</li>
+    <li>CryptoPay device status, transaction data, and site revenue</li>
   </ul>
-  <p><strong>None of this is transmitted to WashLevel's servers.</strong> It never leaves your browser except when your browser itself talks to Dencar to fetch it. If you uninstall Sidecar or clear your browser's extension storage, this data is deleted with it.</p>
+  <p><strong>None of this is transmitted to WashLevel's servers.</strong> It never leaves your browser except when your browser itself talks to Dencar or CryptoPay to fetch it. If you uninstall Sidecar or clear your browser's extension storage, this data is deleted with it.</p>
 
   <h2>Data We Do Receive</h2>
   <p>A small, separate set of data does reach WashLevel's servers, used only to run the license and billing side of Sidecar:</p>
@@ -94,8 +95,8 @@
     <tr><td>Payment details</td><td>Entered by you directly into Stripe's checkout form</td><td>Processing your subscription. WashLevel never sees or stores your full card number — Stripe handles that directly.</td></tr>
   </table>
 
-  <h2>How Sidecar Accesses Dencar</h2>
-  <p>Sidecar requests browser permission to read pages on admin.dencar.sancsoft.net. This permission is used only to fetch the reports, exceptions, and records described above, using the Dencar session your browser already has open. <strong>Sidecar never asks for, reads, or stores your Dencar username or password</strong> — it rides on your existing login the same way any tab you already have open would.</p>
+  <h2>How Sidecar Accesses Dencar & CryptoPay</h2>
+  <p>Sidecar requests browser permission to read pages on admin.dencar.sancsoft.net and mycryptopay.com. These permissions are used only to fetch the reports, exceptions, and records described above, using the sessions your browser already has open. <strong>Sidecar never asks for, reads, or stores your Dencar or CryptoPay username or password</strong> — it rides on your existing logins the same way any tab you already have open would.</p>
 
   <h2>Service Providers</h2>
   <p>WashLevel uses a small number of processors to run Sidecar's licensing and billing, each limited to what it needs to do its job:</p>
@@ -107,7 +108,7 @@
   <p>None of these providers are permitted to use your data for their own purposes, and none of them receive your Dencar data, since that data never reaches WashLevel to begin with.</p>
 
   <h2>How We Use Data, and What We Don't Do</h2>
-  <p>Data that does reach WashLevel (your license key, email, and subscription status) is used solely to operate Sidecar's licensing and billing — confirming an active subscription and sending you your key and receipts. We do not use it for advertising, we do not build ad-targeting profiles, we do not sell or rent it to third parties, and we do not run analytics or tracking scripts inside the extension. Sidecar's own service-worker code makes no outbound network requests beyond Dencar (to sync your data) and washlevel.com (to check your license and, if you ask, open the billing portal).</p>
+  <p>Data that does reach WashLevel (your license key, email, and subscription status) is used solely to operate Sidecar's licensing and billing — confirming an active subscription and sending you your key and receipts. We do not use it for advertising, we do not build ad-targeting profiles, we do not sell or rent it to third parties, and we do not run analytics or tracking scripts inside the extension. Sidecar's own service-worker code makes no outbound network requests beyond Dencar and CryptoPay (to sync your data) and washlevel.com (to check your license and, if you ask, open the billing portal).</p>
 
   <h2>Data Retention & Deletion</h2>
   <p>Data stored locally in your browser (chrome.storage.local) stays until you uninstall Sidecar or clear it yourself. License and subscription records are kept for as long as your subscription is active plus a reasonable period for billing records, then may be deleted on request. To request deletion of your license/subscription record, or ask any question about your data, contact us using the details below.</p>
@@ -131,7 +132,7 @@
   <strong>Address:</strong> 90 Cumberland Parkway, Mechanicsburg, PA</p>
 
   <footer>
-    <p>WashLevel Sidecar is an independent tool and isn't affiliated with or endorsed by Dencar or Sanc Soft. See also the <a href="/privacy">WashLevel platform Privacy Policy</a> for the main WashLevel product.</p>
+    <p>WashLevel Sidecar is an independent tool and isn't affiliated with or endorsed by Dencar, Sanc Soft, or CryptoPay. See also the <a href="/privacy">WashLevel platform Privacy Policy</a> for the main WashLevel product.</p>
   </footer>
 </div>
 </body>
