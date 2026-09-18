@@ -11,6 +11,7 @@
   ],
   "host_permissions": [
     "https://admin.dencar.sancsoft.net/*",
+    "https://admin.staging.dencar.sancsoft.net/*",
     "https://washlevel.com/*",
     "https://www.mycryptopay.com/*",
     "https://geocoding-api.open-meteo.com/*",
@@ -41,6 +42,7 @@
     {
       "matches": [
         "https://admin.dencar.sancsoft.net/*",
+        "https://admin.staging.dencar.sancsoft.net/*",
         "https://www.mycryptopay.com/*"
       ],
       "js": [
