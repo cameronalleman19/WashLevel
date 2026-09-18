@@ -22,8 +22,7 @@ exports.sendInviteEmail = onCall({ secrets: [RESEND_API_KEY] }, async (request) 
     html: `
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f8fafc;">
         <div style="background: #1a3352; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
-          <h1 style="color: #fff; margin: 0; font-size: 24px; font-weight: 700;">WashLevel</h1>
-          <p style="color: #94a3b8; margin: 4px 0 0; font-size: 12px; letter-spacing: 2px;">CAR WASH OPERATIONS</p>
+          <img src="https://washlevel.com/email-logo-dark.png" alt="WashLevel" width="203" height="24" style="display:block;margin:0 auto;border:0;" />
         </div>
         <div style="background: #fff; border-radius: 12px; padding: 28px; margin-bottom: 16px;">
           <h2 style="color: #111827; font-size: 20px; margin: 0 0 8px;">You've been invited!</h2>
@@ -63,8 +62,7 @@ exports.sendWelcomeEmail = onDocumentCreated({ document: "users/{uid}", secrets:
     html: `
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f8fafc;">
         <div style="background: #1a3352; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
-          <h1 style="color: #fff; margin: 0; font-size: 24px; font-weight: 700;">WashLevel</h1>
-          <p style="color: #94a3b8; margin: 4px 0 0; font-size: 12px; letter-spacing: 2px;">CAR WASH OPERATIONS</p>
+          <img src="https://washlevel.com/email-logo-dark.png" alt="WashLevel" width="203" height="24" style="display:block;margin:0 auto;border:0;" />
         </div>
         <div style="background: #fff; border-radius: 12px; padding: 28px;">
           <h2 style="color: #111827; font-size: 20px; margin: 0 0 8px;">Welcome!</h2>
@@ -98,8 +96,7 @@ exports.sendPasswordResetEmail = onCall({ secrets: [RESEND_API_KEY] }, async (re
       html: `
         <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f8fafc;">
           <div style="background: #1a3352; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
-            <h1 style="color: #fff; margin: 0; font-size: 24px; font-weight: 700;">WashLevel</h1>
-            <p style="color: #94a3b8; margin: 4px 0 0; font-size: 12px; letter-spacing: 2px;">CAR WASH OPERATIONS</p>
+            <img src="https://washlevel.com/email-logo-dark.png" alt="WashLevel" width="203" height="24" style="display:block;margin:0 auto;border:0;" />
           </div>
           <div style="background: #fff; border-radius: 12px; padding: 28px; margin-bottom: 16px;">
             <h2 style="color: #111827; font-size: 20px; margin: 0 0 8px;">Reset your password</h2>
@@ -175,7 +172,8 @@ exports.sendDailySummary = onCall({ secrets: ["RESEND_API_KEY"] }, async (reques
   let html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: #1a3352; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-        <h1 style="color: #fff; margin: 0; font-size: 22px;">WashLevel Daily Summary</h1>
+        <img src="https://washlevel.com/email-logo-dark.png" alt="WashLevel" width="203" height="24" style="display:block;margin:0 auto;border:0;" />
+        <p style="color: #fff; margin: 10px 0 0; font-size: 18px; font-weight: 600;">Daily Summary</p>
         <p style="color: #94a3b8; margin: 6px 0 0;">${displayDate}</p>
       </div>
       <div style="background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
@@ -391,7 +389,8 @@ exports.scheduledDailySummary = onSchedule({ schedule: "0 * * * *", timeZone: "A
 
       let html = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: #1a3352; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: #fff; margin: 0; font-size: 22px;">WashLevel Daily Summary</h1>
+          <img src="https://washlevel.com/email-logo-dark.png" alt="WashLevel" width="203" height="24" style="display:block;margin:0 auto;border:0;" />
+          <p style="color: #fff; margin: 10px 0 0; font-size: 18px; font-weight: 600;">Daily Summary</p>
           <p style="color: #94a3b8; margin: 6px 0 0;">${displayDate}</p>
         </div>
         <div style="background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">`;
