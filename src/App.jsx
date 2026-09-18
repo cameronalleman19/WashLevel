@@ -300,7 +300,7 @@ const LandingLink = ({ href, children }) => (
 function LandingFooter() {
   return (
     <div style={{ background: "#0f1f35", color: "#94a3b8", padding: "32px 24px", textAlign: "center", fontSize: 13 }}>
-      <div style={{ marginBottom: 10 }}><img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 28 }} /></div>
+      <div style={{ marginBottom: 10 }}><img src="/lockup-dark-bg.svg" alt="WashLevel" style={{ height: 28 }} /></div>
       <div style={{ marginBottom: 6 }}>90 Cumberland Parkway, Mechanicsburg, PA</div>
       <div style={{ marginBottom: 6 }}>(717) 966-1794 &nbsp;|&nbsp; support@washlevel.com</div>
       <div style={{ marginTop: 14, display: "flex", gap: 18, justifyContent: "center" }}>
@@ -324,7 +324,7 @@ function LandingPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "inherit" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, background: "#fff", zIndex: 10 }}>
-        <div><img src="/lockup-light.svg" alt="WashLevel" style={{ height: 32 }} /></div>
+        <div><img src="/lockup-light-bg.svg" alt="WashLevel" style={{ height: 32 }} /></div>
         <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
           <LandingLink href="#about">About</LandingLink>
           <LandingLink href="#features">Features</LandingLink>
@@ -430,7 +430,7 @@ function LegalShell({ title, children }) {
   return (
     <div style={{ minHeight: "100vh", background: "#fff" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
-        <a href="/" style={{ textDecoration: "none" }}><img src="/lockup-light.svg" alt="WashLevel" style={{ height: 28 }} /></a>
+        <a href="/" style={{ textDecoration: "none" }}><img src="/lockup-light-bg.svg" alt="WashLevel" style={{ height: 28 }} /></a>
         <a href="/?login=1" style={{ background: "#0f1f35", color: "#fff", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Log In</a>
       </div>
       <div style={{ maxWidth: 780, margin: "0 auto", padding: "48px 24px", fontSize: 14.5, color: "#334155", lineHeight: 1.7 }}>
@@ -687,8 +687,8 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "", inviteBi
       <div style={{ width: "100%", maxWidth: 440, padding: "0 16px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#0f1f35", borderRadius: 14, padding: "10px 22px" }}>
-            <img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 32 }} />
-            <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
+            <img src="/lockup-dark-bg.svg" alt="WashLevel" style={{ height: 32 }} />
+            
           </div>
           <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 8 }}>Car Wash Operations Platform</div>
         </div>
@@ -853,8 +853,8 @@ boxShadow: open ? "6px 0 32px rgba(0,0,0,0.3)" : "none"
 }}>
 <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-<img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 28 }} />
-<span style={{ background: "#00d4aa", color: "#0f1f35", fontSize: 9, fontWeight: 800, borderRadius: 4, padding: "2px 6px", letterSpacing: "0.05em" }}>PRO</span>
+<img src="/lockup-dark-bg.svg" alt="WashLevel" style={{ height: 28 }} />
+
 </div>
 </div>
 <div style={{ padding: "14px 12px 8px" }}>
@@ -8878,8 +8878,8 @@ function SetupWizard({ user, logout }) {
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#0f1f35", borderRadius: 14, padding: "10px 22px", marginBottom: 12 }}>
-            <img src="/lockup-dark.svg" alt="WashLevel" style={{ height: 32 }} />
-            <span style={{ background: "#0ea5e9", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>PRO</span>
+            <img src="/lockup-dark-bg.svg" alt="WashLevel" style={{ height: 32 }} />
+            
           </div>
           {/* Step indicator */}
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 16 }}>
@@ -9919,7 +9919,7 @@ return (
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
             <div style={{ width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
           </button>
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}><span style={{ color: "#fff", fontWeight: 800, fontSize: 16, letterSpacing: "-0.3px" }}>WashLevel</span><span style={{ background: "#00d4aa", color: "#0f1f35", fontSize: 9, fontWeight: 800, borderRadius: 4, padding: "2px 6px", letterSpacing: "0.05em" }}>PRO</span></div><button onClick={() => setView("alerts")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 8, position: "relative" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>{unreadCount > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 10, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}</button>
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}><img src="/lockup-dark-bg.svg" alt="WashLevel" style={{ height: 18, display: "block" }} /></div><button onClick={() => setView("alerts")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 8, position: "relative" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>{unreadCount > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 10, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}</button>
         </div>
       )}
 {locId === "all" && <AllLocations locations={locations} tasks={tasks} setLocId={setLocId} setView={setView} />}

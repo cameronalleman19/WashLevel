@@ -1,4 +1,3 @@
-const VBASE = "https://admin.dencar.sancsoft.net";
 const V$ = (id) => document.getElementById(id);
 let viaData = {};
 let viaNotes = {};
@@ -212,7 +211,7 @@ async function viaSync(){
     const viaFilters = "High=true&Medium=true&Low=true&Noted=true";
     for (let pg = 1; pg <= 50; pg++){
       V$("viaStatus").textContent = "Loading exception list page " + pg + "...";
-      const url = VBASE + "/consumerpassexceptions/?CurrentPage=" + pg + "&" + viaFilters;
+      const url = DENCAR_BASE + "/consumerpassexceptions/?CurrentPage=" + pg + "&" + viaFilters;
       const res = await safeFetch(url, {credentials: "include"});
       const html = await res.text();
       if (/type="password"/i.test(html)){ V$("viaStatus").textContent = "Not logged into Dencar."; V$("viaSyncBtn").disabled = false; return; }
@@ -227,7 +226,7 @@ async function viaSync(){
     const fresh = {};
     for (let i = 0; i < ids.length; i++){
       V$("viaStatus").textContent = "Loading exception " + (i + 1) + " / " + ids.length;
-      const r2 = await safeFetch(VBASE + "/consumerpassexceptions/" + ids[i] + "/", {credentials: "include"});
+      const r2 = await safeFetch(DENCAR_BASE + "/consumerpassexceptions/" + ids[i] + "/", {credentials: "include"});
       const d = parseDetail(await r2.text(), ids[i]);
       await enrichConsumer(d);
       await cacheExceptionImgs(d);
@@ -263,7 +262,7 @@ async function runAutoDismiss(){
     const ar = autoCloseReason(e);
     if (!ar || !e.closeId) continue;
     try {
-      const res = await safeFetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
+      const res = await safeFetch(DENCAR_BASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
       if (res.ok){
         viaAutoClosed.push({
           ts: Date.now(),
@@ -393,7 +392,7 @@ function renderViaList(){
 
     /* Dencar links for each instance */
     for (const {id: eid} of entries){
-      infoHtml += "<a class=\"via-open\" href=\"" + VBASE + "/consumerpassexceptions/" + eid + "/\" target=\"_blank\">Open in Dencar" + (entries.length > 1 ? " (" + eid.slice(0,6) + ")" : "") + "</a>";
+      infoHtml += "<a class=\"via-open\" href=\"" + DENCAR_BASE + "/consumerpassexceptions/" + eid + "/\" target=\"_blank\">Open in Dencar" + (entries.length > 1 ? " (" + eid.slice(0,6) + ")" : "") + "</a>";
     }
 
     infoHtml += "</div></div>";
@@ -612,7 +611,7 @@ async function viaAction(id, kind, btn){
   try {
     const path = kind === "trigger" ? "trigger" : "closeexception";
     const method = kind === "trigger" ? "POST" : "DELETE";
-    const res = await safeFetch(VBASE + "/consumerpassexceptions/" + path + "/" + actionId + "/", {method: method, credentials: "include"});
+    const res = await safeFetch(DENCAR_BASE + "/consumerpassexceptions/" + path + "/" + actionId + "/", {method: method, credentials: "include"});
     if (res.ok){
       viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] " + (kind === "trigger" ? "Triggered" : "Closed") + " via Sidecar" + (overrideReason ? " (reason: " + overrideReason + ")" : "")).trim();
       try { await viaHistLog(e, kind === "trigger" ? "trigger" : "close", overrideReason); } catch(_){}
@@ -660,7 +659,7 @@ async function viaCloseGroup(ids, btn){
     const e = viaData[id];
     if (!e || !e.closeId) continue;
     try {
-      const res = await safeFetch(VBASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
+      const res = await safeFetch(DENCAR_BASE + "/consumerpassexceptions/closeexception/" + e.closeId + "/", {method: "DELETE", credentials: "include"});
       if (res.ok){
         viaNotes[id] = ((viaNotes[id] || "") + "\n[" + new Date().toLocaleString() + "] Closed via Sidecar" + (overrideReason ? " (reason: " + overrideReason + ")" : "")).trim();
         try { await viaHistLog(e, "close", overrideReason); } catch(_){}
@@ -709,7 +708,7 @@ async function enrichConsumer(d){
   try {
     const end = new Date();
     const body = "currentPage=1&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=2015-01-01&EndDate=" + end.toLocaleDateString("en-CA") + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=" + d.consumerId;
-    const res = await safeFetch(VBASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
+    const res = await safeFetch(DENCAR_BASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
     if (!res.ok) return;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     const rows = Array.from(doc.querySelectorAll("tr"));

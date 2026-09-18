@@ -51,7 +51,7 @@ function cCopyCode(code,btn){
 /* ── resolve CustomerId from Dencar session ── */
 async function cEnsureCustId(){
   if(CUST_ID) return CUST_ID;
-  var resp = await safeFetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true',{credentials:'include'});
+  var resp = await safeFetch(DENCAR_BASE + '/bulkwashcodes/?nonAdmin=true',{credentials:'include'});
   var html = await resp.text();
   var doc = new DOMParser().parseFromString(html,'text/html');
   doc.querySelectorAll('input[name="CustomerId"]').forEach(function(el){ if(el.value) CUST_ID = el.value; });
@@ -107,7 +107,7 @@ async function cFetchPage(page, extraParams){
   };
   if(extraParams && extraParams.GroupName) filters.GroupName = extraParams.GroupName;
   if(extraParams && extraParams.PassCode) filters.PassCode = extraParams.PassCode;
-  var resp = await safeFetch('https://admin.dencar.sancsoft.net/BulkWashCodes/IndexFilterTable', {
+  var resp = await safeFetch(DENCAR_BASE + '/BulkWashCodes/IndexFilterTable', {
     method: 'POST', credentials: 'include',
     headers: {'Content-Type':'application/x-www-form-urlencoded'},
     body: Object.keys(filters).map(function(k){return k+'='+encodeURIComponent(filters[k])}).join('&')
@@ -150,7 +150,7 @@ async function cFullSync(statusCb){
 
 /* ── get CSRF token ── */
 async function cGetCsrf(){
-  var resp = await safeFetch('https://admin.dencar.sancsoft.net/bulkwashcodes/?nonAdmin=true', {credentials:'include'});
+  var resp = await safeFetch(DENCAR_BASE + '/bulkwashcodes/?nonAdmin=true', {credentials:'include'});
   var html = await resp.text();
   var doc = new DOMParser().parseFromString(html,'text/html');
   var createForm = doc.querySelector('form[action*="create"]');
@@ -176,7 +176,7 @@ async function cCreateCode(opts){
     +'&WashCodeState=0&ProductTemplateId='+encodeURIComponent(opts.tierId)
     +'&UpgradePrompt=false&UpgradeAmount=0'
     +'&__RequestVerificationToken='+encodeURIComponent(token);
-  await safeFetch('https://admin.dencar.sancsoft.net/bulkwashcodes/create/', {
+  await safeFetch(DENCAR_BASE + '/bulkwashcodes/create/', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body: params

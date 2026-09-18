@@ -1,4 +1,4 @@
-const BASE = "https://admin.dencar.sancsoft.net";
+/* BASE -> DENCAR_BASE from common.js */
 const SCHEMA = 7;
 const REPORT_PATHS = ["/", "/Home", "/Home/Index", "/DailyReports", "/Home/DailyReports", "/Reports/DailyReports", "/DailyReport"];
 const $ = (id) => document.getElementById(id);
@@ -55,7 +55,7 @@ async function discoverSites(){
   const re = /<option[^>]*value="([0-9a-fA-F-]{36})"[^>]*>\s*([^<]+?)\s*<\/option>/g;
   for (const p of REPORT_PATHS){
     try {
-      const res = await safeFetch(BASE + p, {credentials: "include"});
+      const res = await safeFetch(DENCAR_BASE + p, {credentials: "include"});
       const html = await res.text();
       if (/login/i.test(res.url) || /type="password"/i.test(html)) continue;
       const found = [];
@@ -69,7 +69,7 @@ async function discoverSites(){
 
 async function fetchDay(siteId, date){
   try {
-    const res = await safeFetch(BASE + "/IndexFilterTableDaily", {
+    const res = await safeFetch(DENCAR_BASE + "/IndexFilterTableDaily", {
       method: "POST",
       credentials: "include",
       headers: {"Content-Type": "application/x-www-form-urlencoded"},
@@ -141,7 +141,7 @@ function parseReport(html, siteId, date){
 
 async function fetchSiteAddresses(siteList){
   try {
-    const res = await safeFetch("https://admin.dencar.sancsoft.net/Sites", {credentials: "include"});
+    const res = await safeFetch(DENCAR_BASE + "/Sites", {credentials: "include"});
     if (!res.ok) return;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     for (const site of siteList){
@@ -160,6 +160,7 @@ async function fetchSiteAddresses(siteList){
 }
 
 async function sync(){
+  await getDencarBase();
   $("syncBtn").disabled = true;
   setStatus("Discovering sites...");
   const found = await discoverSites();
@@ -167,7 +168,7 @@ async function sync(){
   setStatus("Fetching site addresses...");
   await fetchSiteAddresses(sites);
   if (!sites.length){
-    setStatus("Not logged in or site detection failed. Log into admin.dencar.sancsoft.net in this browser, then press Sync again.");
+    setStatus("Not logged in or site detection failed. Log into " + DENCAR_BASE.replace("https://","") + " in this browser, then press Sync again.");
     $("syncBtn").disabled = false;
     return;
   }

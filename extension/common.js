@@ -1,3 +1,19 @@
+let DENCAR_BASE = "https://admin.dencar.sancsoft.net";
+(async function(){
+  try {
+    var tabs = await chrome.tabs.query({url: "https://admin.staging.dencar.sancsoft.net/*"});
+    if (tabs && tabs.length > 0) DENCAR_BASE = "https://admin.staging.dencar.sancsoft.net";
+  } catch(e){}
+})();
+async function getDencarBase(){
+  if (getDencarBase._done) return DENCAR_BASE;
+  try {
+    var tabs = await chrome.tabs.query({url: "https://admin.staging.dencar.sancsoft.net/*"});
+    if (tabs && tabs.length > 0) DENCAR_BASE = "https://admin.staging.dencar.sancsoft.net";
+  } catch(e){}
+  getDencarBase._done = true;
+  return DENCAR_BASE;
+}
 const safeFetch = window.safeFetch || fetch;
 function wlMoney0(n){ return "$" + Math.round(n || 0).toLocaleString("en-US"); }
 

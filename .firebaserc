@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "washlevel-c16d9"
-  }
+  },
+  "targets": {
+    "washlevel-c16d9": {
+      "hosting": {
+        "washlevel": [
+          "washlevel-c16d9"
+        ],
+        "washboard": [
+          "washboard-washlevel"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

@@ -1,6 +1,6 @@
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const { Resend } = require("resend");
@@ -1318,9 +1318,10 @@ exports.stripeWebhook = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_
 
 // ── Telnyx SMS ────────────────────────────────────────────────────────────────
 const TELNYX_API_KEY = defineSecret("TELNYX_API_KEY");
-const TELNYX_FROM_NUMBER = "+17175500089";
+const TELNYX_FROM_NUMBER = "+17175500089"; // WashBoard/paystation
+const TELNYX_FROM_WASHLEVEL = defineSecret("TELNYX_FROM_NUMBER"); // WashLevel alerts
 
-async function sendSms(toNumber, message, apiKey) {
+async function sendSms(toNumber, message, apiKey, fromNumber = TELNYX_FROM_NUMBER) {
   const response = await fetch("https://api.telnyx.com/v2/messages", {
     method: "POST",
     headers: {
@@ -1328,22 +1329,480 @@ async function sendSms(toNumber, message, apiKey) {
       "Authorization": `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      from: TELNYX_FROM_NUMBER,
+      from: fromNumber,
       to: toNumber,
       text: message
     })
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(JSON.stringify(data.errors));
+  if (!response.ok) {
+    console.error("Telnyx send failed:", response.status, JSON.stringify(data.errors));
+    throw new Error(JSON.stringify(data.errors));
+  }
+  console.log("Telnyx queued:", data.data?.id, "from", fromNumber, "to", toNumber);
   return data;
 }
 
-exports.sendAlertSms = onCall({ secrets: [TELNYX_API_KEY] }, async (request) => {
+exports.sendAlertSms = onCall({ secrets: [TELNYX_API_KEY, TELNYX_FROM_WASHLEVEL] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
   const { phone, message } = request.data;
   if (!phone || !message) throw new HttpsError("invalid-argument", "Phone and message required");
-  await sendSms(phone, message, TELNYX_API_KEY.value());
+  await sendSms(phone, message, TELNYX_API_KEY.value(), TELNYX_FROM_WASHLEVEL.value());
   return { success: true };
+});
+
+// -- WashLevel: Auto-SMS on alert notifications --
+// Fires when a notification doc is created for a user; texts them if their
+// owner subscription is active, master + matching type toggle on, phone saved.
+const SMS_TYPE_MAP = {
+  sensor_alert: "sensorAlerts",
+  equipment_failure: "equipmentFailures",
+  chemical_low: "chemicalLevels",
+  inspection_failed: "failedInspections",
+};
+exports.sendNotificationSms = onDocumentCreated(
+  { document: "users/{uid}/notifications/{notifId}", secrets: [TELNYX_API_KEY, TELNYX_FROM_WASHLEVEL] },
+  async (event) => {
+    try {
+      const notif = event.data && event.data.data();
+      if (!notif) return;
+      const uid = event.params.uid;
+      const toggleKey = SMS_TYPE_MAP[notif.type];
+      if (!toggleKey) return;
+      const userDoc = await db.collection("users").doc(uid).get();
+      if (!userDoc.exists) return;
+      const u = userDoc.data();
+      const prefs = u.smsPrefs || {};
+      if (prefs.smsEnabled === false) return;
+      if (!prefs[toggleKey]) return;
+      if (!u.phone) return;
+      const ownerId = u.ownerId || uid;
+      const subDoc = await db.collection("subscriptions").doc(ownerId).get();
+      const sub = subDoc.exists ? subDoc.data() : null;
+      if (!sub || !sub.smsEnabled || !sub.smsEnabledUntil || new Date(sub.smsEnabledUntil) <= new Date()) return;
+      const clean = (str) => (str || "").replace(/[^\x00-\x7F]/g, "").trim();
+      let msg = "WashLevel: " + (clean(notif.title) || "Alert");
+      const body = clean(notif.body);
+      if (body) msg += "\n" + body;
+      msg += "\nReply STOP to opt out.";
+      const phone = u.phone.startsWith("+") ? u.phone : "+1" + u.phone.replace(/\D/g, "");
+      try {
+        await sendSms(phone, msg, TELNYX_API_KEY.value(), TELNYX_FROM_WASHLEVEL.value());
+      } catch (e) {
+        console.error("Notification SMS failed:", uid, e.message);
+      }
+    } catch (e) {
+      console.error("sendNotificationSms error:", e);
+    }
+  }
+);
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── WashBoard Cloud Functions ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── WashBoard: Send Receipt (SMS or Email) ────────────────────────────────────
+exports.sendWashBoardReceipt = onRequest({ cors: true, secrets: [RESEND_API_KEY, TELNYX_API_KEY] }, async (req, res) => {
+  if (req.method === "OPTIONS") { res.set("Access-Control-Allow-Origin", "*"); res.set("Access-Control-Allow-Methods", "POST, OPTIONS"); res.set("Access-Control-Allow-Headers", "Content-Type"); return res.status(204).send(""); }
+
+  try {
+    const { method, destination, sessionData } = req.body;
+    // method: "sms" or "email"
+    // destination: phone number or email address
+    // sessionData: { washName, bayName, date, duration, subtotal, salesTax, total, functions: [{name, time}], transferCode, promoDiscount, promoCredit, logoUrl }
+
+    if (!method || !destination || !sessionData) {
+      return res.status(400).json({ error: "method, destination, and sessionData required" });
+    }
+
+    const { washName, bayName, date, duration, subtotal, salesTax, total, functions, transferCode, promoDiscount, promoCredit, logoUrl } = sessionData;
+
+    if (method === "sms") {
+      let msg = `${washName || "Self-Serve Wash"} — ${bayName || "Bay"}\n`;
+      msg += `Date: ${date}\n`;
+      msg += `Time: ${duration}\n`;
+      msg += `Subtotal: $${(subtotal || 0).toFixed(2)}\n`;
+      if (salesTax > 0) msg += `Tax: $${salesTax.toFixed(2)}\n`;
+      msg += `Total: $${(total || 0).toFixed(2)}\n`;
+      if (promoDiscount > 0) msg += `Promo: ${promoDiscount}% off\n`;
+      if (promoCredit > 0) msg += `Promo credit: $${promoCredit.toFixed(2)}\n`;
+      if (transferCode) msg += `Transfer code: ${transferCode}\n`;
+      msg += `\nThank you for your wash!\n\nReply STOP to opt out.`;
+
+      await sendSms(destination, msg, TELNYX_API_KEY.value());
+      return res.json({ success: true, method: "sms" });
+    }
+
+    if (method === "email") {
+      const resend = new Resend(RESEND_API_KEY.value());
+
+      let fnRows = "";
+      if (functions && functions.length > 0) {
+        fnRows = functions.map(f =>
+          `<tr><td style="padding: 8px 0; color: #cbd5e1; font-size: 13px; border-bottom: 1px solid #1e3a5f;">${f.name}</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace; border-bottom: 1px solid #1e3a5f;">${f.time}</td></tr>`
+        ).join("");
+      }
+
+      let promoLine = "";
+      if (promoDiscount > 0) promoLine = `<tr><td style="padding: 8px 0; color: #00d4aa; font-size: 13px;">Promo Discount</td><td style="padding: 8px 0; color: #00d4aa; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">${promoDiscount}% OFF</td></tr>`;
+      if (promoCredit > 0) promoLine = `<tr><td style="padding: 8px 0; color: #00d4aa; font-size: 13px;">Promo Credit</td><td style="padding: 8px 0; color: #00d4aa; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">$${promoCredit.toFixed(2)}</td></tr>`;
+
+      let transferLine = "";
+      if (transferCode) transferLine = `<div style="background: #0a1a10; border: 2px solid #00ff88; border-radius: 10px; padding: 16px; text-align: center; margin-top: 16px;"><div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-bottom: 6px;">TRANSFER CODE</div><div style="color: #00ff88; font-size: 28px; font-family: 'SF Mono', monospace; letter-spacing: 6px;">${transferCode}</div><div style="color: #f59e0b; font-size: 11px; margin-top: 6px;">Valid until 11:59 PM today</div></div>`;
+
+      const logoSection = logoUrl ? `<img src="${logoUrl}" alt="${washName || 'Wash'}" style="max-width: 200px; max-height: 80px; width: auto; height: auto; margin-bottom: 12px;" />` : "";
+
+      await resend.emails.send({
+        from: "WashBoard <receipts@washboard.washlevel.com>",
+        to: destination,
+        subject: `Your wash receipt — ${washName || "Self-Serve Wash"}`,
+        html: `
+          <div style="font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #070e1a;">
+            <div style="background: #0b1628; border-radius: 14px; padding: 28px; border: 1px solid #1e3a5f;">
+              <div style="text-align: center; margin-bottom: 20px;">
+                ${logoSection}
+                <h1 style="color: #e2e8f0; margin: 0; font-size: 20px; font-weight: 700;">${washName || "Self-Serve Wash"}</h1>
+                <p style="color: #6b7a8d; margin: 4px 0 0; font-size: 12px; letter-spacing: 2px;">${bayName || "Bay"}</p>
+              </div>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Date</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">${date}</td></tr>
+                <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px; border-bottom: 1px solid #1e3a5f;">Total Time</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace; border-bottom: 1px solid #1e3a5f;">${duration}</td></tr>
+                ${fnRows}
+                ${promoLine}
+                <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Subtotal</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">$${(subtotal || 0).toFixed(2)}</td></tr>
+                ${salesTax > 0 ? `<tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Sales Tax</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">$${salesTax.toFixed(2)}</td></tr>` : ""}
+                <tr><td style="padding: 12px 0; color: #e2e8f0; font-size: 16px; font-weight: 700; border-top: 2px solid #1e3a5f;">Total</td><td style="padding: 12px 0; color: #ffaa22; font-size: 22px; font-weight: 700; text-align: right; font-family: 'SF Mono', monospace; border-top: 2px solid #1e3a5f;">$${(total || 0).toFixed(2)}</td></tr>
+              </table>
+              ${transferLine}
+            </div>
+            <p style="color: #4a5568; font-size: 10px; text-align: center; margin-top: 16px;">Powered by WashBoard &middot; washlevel.com</p>
+          </div>
+        `
+      });
+      return res.json({ success: true, method: "email" });
+    }
+
+    return res.status(400).json({ error: "method must be 'sms' or 'email'" });
+  } catch (err) {
+    console.error("sendWashBoardReceipt error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── WashBoard: Notify Operator of Issue ───────────────────────────────────────
+exports.notifyOperatorIssue = onDocumentCreated({ document: "issues/{issueId}", secrets: [RESEND_API_KEY, TELNYX_API_KEY] }, async (event) => {
+  try {
+    const issue = event.data.data();
+    const { ownerId, bayId, type, affectedFunction, callbackPhone, transferCode } = issue;
+    if (!ownerId) return;
+
+    // Look up bay config for bay name and attendant phone
+    const bayDoc = await db.collection("bays").doc(bayId).get();
+    const bay = bayDoc.exists ? bayDoc.data() : {};
+    const bayName = bay.displayName || bay.washName || "Bay";
+    const attendantPhone = bay.attendantPhone;
+
+    // Look up owner for email
+    const ownerDoc = await db.collection("users").doc(ownerId).get();
+    const owner = ownerDoc.exists ? ownerDoc.data() : {};
+    const ownerEmail = owner.email;
+
+    const issueTypes = { functionNotWorking: "Function Not Working", leakingFitting: "Leaking Fitting", other: "Other Issue" };
+    const issueLabel = issueTypes[type] || type || "Issue Reported";
+    const fnLabel = affectedFunction != null ? ` — Function ${affectedFunction}` : "";
+
+    // SMS to attendant phone
+    if (attendantPhone && attendantPhone.length >= 10) {
+      let msg = `⚠ WashBoard Issue — ${bayName}\n`;
+      msg += `Type: ${issueLabel}${fnLabel}\n`;
+      if (callbackPhone) msg += `Customer phone: ${callbackPhone}\n`;
+      if (transferCode) msg += `Transfer code: ${transferCode}\n`;
+      msg += `Time: ${new Date().toLocaleString("en-CA", { timeZone: "America/New_York" })}`;
+
+      const phone = attendantPhone.startsWith("+") ? attendantPhone : `+1${attendantPhone.replace(/\D/g, "")}`;
+      try { await sendSms(phone, msg, TELNYX_API_KEY.value()); } catch (e) { console.error("Issue SMS failed:", e); }
+    }
+
+    // Email to owner
+    if (ownerEmail) {
+      const resend = new Resend(RESEND_API_KEY.value());
+      try {
+        await resend.emails.send({
+          from: "WashBoard <alerts@washboard.washlevel.com>",
+          to: ownerEmail,
+          subject: `Issue reported — ${bayName}`,
+          html: `
+            <div style="font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #070e1a;">
+              <div style="background: #0b1628; border-radius: 14px; padding: 28px; border: 1px solid #1e3a5f;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                  <div style="width: 36px; height: 36px; background: #f59e0b22; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 18px;">⚠</div>
+                  <div><h2 style="color: #e2e8f0; margin: 0; font-size: 18px;">Issue Reported</h2><p style="color: #6b7a8d; margin: 0; font-size: 12px;">${bayName}</p></div>
+                </div>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Type</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right;">${issueLabel}${fnLabel}</td></tr>
+                  ${callbackPhone ? `<tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Customer Phone</td><td style="padding: 8px 0; color: #00d4aa; font-size: 13px; text-align: right; font-family: monospace;">${callbackPhone}</td></tr>` : ""}
+                  ${transferCode ? `<tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Transfer Code</td><td style="padding: 8px 0; color: #00ff88; font-size: 15px; text-align: right; font-family: monospace; letter-spacing: 3px;">${transferCode}</td></tr>` : ""}
+                  <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Time</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right;">${new Date().toLocaleString("en-CA", { timeZone: "America/New_York" })}</td></tr>
+                </table>
+                <a href="https://washboard.washlevel.com" style="display: block; background: #00d4aa; color: #070e1a; text-decoration: none; text-align: center; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 14px; margin-top: 20px;">Open Dashboard</a>
+              </div>
+            </div>
+          `
+        });
+      } catch (e) { console.error("Issue email failed:", e); }
+    }
+  } catch (err) {
+    console.error("notifyOperatorIssue error:", err);
+  }
+});
+
+// ── WashBoard: Daily Summary Email ────────────────────────────────────────────
+exports.washBoardDailySummary = onSchedule({ schedule: "0 7 * * *", timeZone: "America/New_York", secrets: [RESEND_API_KEY] }, async () => {
+  try {
+    // Find all owners who have bays (and therefore use WashBoard)
+    const baysSnap = await db.collection("bays").get();
+    const ownerBays = {};
+    baysSnap.forEach(doc => {
+      const d = doc.data();
+      if (!d.ownerId) return;
+      if (!ownerBays[d.ownerId]) ownerBays[d.ownerId] = [];
+      ownerBays[d.ownerId].push({ id: doc.id, ...d });
+    });
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const resend = new Resend(RESEND_API_KEY.value());
+
+    for (const [ownerId, bays] of Object.entries(ownerBays)) {
+      // Check if owner wants daily summary
+      const ownerDoc = await db.collection("users").doc(ownerId).get();
+      const owner = ownerDoc.exists ? ownerDoc.data() : null;
+      if (!owner || !owner.email) continue;
+
+      // Check preference (default to true for WashBoard users)
+      const prefs = owner.washBoardPrefs || {};
+      if (prefs.dailySummary === false) continue;
+
+      // Fetch yesterday's sessions for this owner
+      const sessionsSnap = await db.collection("sessions")
+        .where("ownerId", "==", ownerId)
+        .where("startedAt", ">=", admin.firestore.Timestamp.fromDate(yesterday))
+        .where("startedAt", "<", admin.firestore.Timestamp.fromDate(today))
+        .get();
+
+      const sessions = [];
+      sessionsSnap.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
+
+      // Fetch yesterday's issues
+      const issuesSnap = await db.collection("issues")
+        .where("ownerId", "==", ownerId)
+        .where("reportedAt", ">=", admin.firestore.Timestamp.fromDate(yesterday))
+        .where("reportedAt", "<", admin.firestore.Timestamp.fromDate(today))
+        .get();
+
+      const issues = [];
+      issuesSnap.forEach(doc => issues.push({ id: doc.id, ...doc.data() }));
+
+      const totalRevenue = sessions.reduce((sum, s) => sum + (s.totalCharge || 0), 0);
+      const totalSessions = sessions.length;
+      const totalIssues = issues.length;
+      const avgDuration = totalSessions > 0
+        ? sessions.reduce((sum, s) => {
+            if (s.startedAt && s.endedAt) {
+              return sum + (s.endedAt.toDate() - s.startedAt.toDate()) / 1000;
+            }
+            return sum;
+          }, 0) / totalSessions
+        : 0;
+      const avgMins = Math.floor(avgDuration / 60);
+      const avgSecs = Math.floor(avgDuration % 60);
+
+      // Per-bay breakdown
+      const bayStats = {};
+      bays.forEach(b => { bayStats[b.id] = { name: b.displayName || b.washName || b.id, sessions: 0, revenue: 0 }; });
+      sessions.forEach(s => {
+        if (bayStats[s.bayId]) {
+          bayStats[s.bayId].sessions++;
+          bayStats[s.bayId].revenue += (s.totalCharge || 0);
+        }
+      });
+
+      let bayRows = Object.values(bayStats).map(b =>
+        `<tr><td style="padding: 6px 0; color: #cbd5e1; font-size: 13px; border-bottom: 1px solid #1e3a5f;">${b.name}</td><td style="padding: 6px 0; color: #e2e8f0; font-size: 13px; text-align: center; font-family: monospace; border-bottom: 1px solid #1e3a5f;">${b.sessions}</td><td style="padding: 6px 0; color: #00d4aa; font-size: 13px; text-align: right; font-family: monospace; border-bottom: 1px solid #1e3a5f;">$${b.revenue.toFixed(2)}</td></tr>`
+      ).join("");
+
+      const dateStr = yesterday.toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+
+      // Skip if no activity and no issues
+      if (totalSessions === 0 && totalIssues === 0) continue;
+
+      await resend.emails.send({
+        from: "WashBoard <reports@washboard.washlevel.com>",
+        to: owner.email,
+        subject: `Daily Summary — ${dateStr} — $${totalRevenue.toFixed(2)} from ${totalSessions} washes`,
+        html: `
+          <div style="font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; background: #070e1a;">
+            <div style="background: #0b1628; border-radius: 14px; padding: 28px; border: 1px solid #1e3a5f; margin-bottom: 16px;">
+              <h1 style="color: #e2e8f0; margin: 0 0 4px; font-size: 18px;">Daily Summary</h1>
+              <p style="color: #6b7a8d; margin: 0 0 20px; font-size: 13px;">${dateStr}</p>
+
+              <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <div style="flex: 1; background: #112240; border-radius: 10px; padding: 16px; text-align: center;">
+                  <div style="color: #00d4aa; font-size: 26px; font-weight: 700; font-family: monospace;">$${totalRevenue.toFixed(2)}</div>
+                  <div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-top: 4px;">REVENUE</div>
+                </div>
+                <div style="flex: 1; background: #112240; border-radius: 10px; padding: 16px; text-align: center;">
+                  <div style="color: #e2e8f0; font-size: 26px; font-weight: 700; font-family: monospace;">${totalSessions}</div>
+                  <div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-top: 4px;">WASHES</div>
+                </div>
+                <div style="flex: 1; background: #112240; border-radius: 10px; padding: 16px; text-align: center;">
+                  <div style="color: #e2e8f0; font-size: 26px; font-weight: 700; font-family: monospace;">${avgMins}:${String(avgSecs).padStart(2, "0")}</div>
+                  <div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-top: 4px;">AVG TIME</div>
+                </div>
+              </div>
+
+              ${totalIssues > 0 ? `<div style="background: #f59e0b11; border: 1px solid #f59e0b33; border-radius: 8px; padding: 12px; margin-bottom: 20px;"><span style="color: #f59e0b; font-weight: 600; font-size: 13px;">${totalIssues} issue${totalIssues > 1 ? "s" : ""} reported</span></div>` : ""}
+
+              ${bays.length > 1 ? `
+              <h3 style="color: #6b7a8d; font-size: 11px; letter-spacing: 2px; margin: 0 0 10px;">BY BAY</h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 6px 0; color: #4a5568; font-size: 10px; letter-spacing: 1px;">BAY</td><td style="padding: 6px 0; color: #4a5568; font-size: 10px; letter-spacing: 1px; text-align: center;">WASHES</td><td style="padding: 6px 0; color: #4a5568; font-size: 10px; letter-spacing: 1px; text-align: right;">REVENUE</td></tr>
+                ${bayRows}
+              </table>` : ""}
+
+              <a href="https://washboard.washlevel.com" style="display: block; background: #00d4aa; color: #070e1a; text-decoration: none; text-align: center; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 14px; margin-top: 24px;">Open Dashboard</a>
+            </div>
+            <p style="color: #4a5568; font-size: 10px; text-align: center;">You're receiving this because daily summaries are enabled. Manage in WashBoard settings.</p>
+          </div>
+        `
+      });
+
+      console.log(`[WashBoard] Daily summary sent to ${owner.email}: $${totalRevenue.toFixed(2)} / ${totalSessions} sessions`);
+    }
+  } catch (err) {
+    console.error("washBoardDailySummary error:", err);
+  }
+});
+
+// ── WashBoard: Stripe Terminal — Create PaymentIntent ─────────────────────────
+exports.createWashBoardPaymentIntent = onRequest({ cors: true, secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  if (req.method === "OPTIONS") { res.set("Access-Control-Allow-Origin", "*"); res.set("Access-Control-Allow-Methods", "POST, OPTIONS"); res.set("Access-Control-Allow-Headers", "Content-Type"); return res.status(204).send(""); }
+
+  try {
+    const { amount } = req.body;  // Initial hold in cents (e.g. 500 = $5.00)
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+
+    const paymentIntent = await stripeClient.paymentIntents.create({
+      amount: amount || 500,
+      currency: "usd",
+      payment_method_types: ["card_present"],
+      capture_method: "manual",
+      payment_method_options: {
+        card_present: {
+          request_incremental_authorization_support: true,
+          request_extended_authorization: true,
+        }
+      }
+    });
+
+    return res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      incrementalAuthSupported: true  // Will be confirmed after card is presented
+    });
+  } catch (err) {
+    console.error("createWashBoardPaymentIntent error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── WashBoard: Stripe Terminal — Connection Token ─────────────────────────────
+exports.createWashBoardConnectionToken = onRequest({ cors: true, secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  if (req.method === "OPTIONS") { res.set("Access-Control-Allow-Origin", "*"); res.set("Access-Control-Allow-Methods", "POST, OPTIONS"); res.set("Access-Control-Allow-Headers", "Content-Type"); return res.status(204).send(""); }
+
+  try {
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+    const token = await stripeClient.terminal.connectionTokens.create();
+    return res.json({ secret: token.secret });
+  } catch (err) {
+    console.error("createWashBoardConnectionToken error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── WashBoard: Stripe Terminal — Increment Authorization ──────────────────────
+exports.incrementWashBoardAuthorization = onRequest({ cors: true, secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  if (req.method === "OPTIONS") { res.set("Access-Control-Allow-Origin", "*"); res.set("Access-Control-Allow-Methods", "POST, OPTIONS"); res.set("Access-Control-Allow-Headers", "Content-Type"); return res.status(204).send(""); }
+
+  try {
+    const { paymentIntentId, newAmount } = req.body;  // newAmount in cents
+    if (!paymentIntentId || !newAmount) return res.status(400).json({ error: "paymentIntentId and newAmount required" });
+
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+    const updated = await stripeClient.paymentIntents.incrementAuthorization(paymentIntentId, {
+      amount: newAmount
+    });
+
+    return res.json({
+      paymentIntentId: updated.id,
+      amount: updated.amount,
+      status: updated.status
+    });
+  } catch (err) {
+    // If incremental auth not supported, return gracefully so iPad can handle
+    console.error("incrementWashBoardAuthorization error:", err);
+    return res.status(err.statusCode || 500).json({ error: err.message, code: err.code });
+  }
+});
+
+// ── WashBoard: Stripe Terminal — Capture Payment ──────────────────────────────
+exports.captureWashBoardPayment = onRequest({ cors: true, secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  if (req.method === "OPTIONS") { res.set("Access-Control-Allow-Origin", "*"); res.set("Access-Control-Allow-Methods", "POST, OPTIONS"); res.set("Access-Control-Allow-Headers", "Content-Type"); return res.status(204).send(""); }
+
+  try {
+    const { paymentIntentId, finalAmount, amountToCapture } = req.body;  // amount in cents
+    const captureAmount = amountToCapture != null ? amountToCapture : finalAmount;
+    if (!paymentIntentId) return res.status(400).json({ error: "paymentIntentId required" });
+
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+
+    const captureParams = {};
+    if (captureAmount != null) captureParams.amount_to_capture = captureAmount;
+
+    const captured = await stripeClient.paymentIntents.capture(paymentIntentId, captureParams);
+
+    return res.json({
+      paymentIntentId: captured.id,
+      amount: captured.amount_received,
+      status: captured.status
+    });
+  } catch (err) {
+    console.error("captureWashBoardPayment error:", err);
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// ── WashBoard: Cancel uncaptured PaymentIntent ────────────────────────────────
+exports.cancelWashBoardPayment = onRequest({ cors: true, secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  if (req.method === "OPTIONS") { res.set("Access-Control-Allow-Origin", "*"); res.set("Access-Control-Allow-Methods", "POST, OPTIONS"); res.set("Access-Control-Allow-Headers", "Content-Type"); return res.status(204).send(""); }
+
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) return res.status(400).json({ error: "paymentIntentId required" });
+
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+    const cancelled = await stripeClient.paymentIntents.cancel(paymentIntentId);
+
+    return res.json({ paymentIntentId: cancelled.id, status: cancelled.status });
+  } catch (err) {
+    console.error("cancelWashBoardPayment error:", err);
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
 });
 
 // ── WashLevel Sidecar ─────────────────────────────────────────────────────────
@@ -1576,3 +2035,216 @@ exports.createSidecarPortalSession = onRequest({ secrets: [STRIPE_SECRET_KEY] },
     res.status(500).json({ error: e.message });
   }
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── WashBoard Device & Bay Alerts ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Two entry points:
+//   notifyWashBoardDeviceHealth — onDocumentWritten on bays/{bayId}. Catches
+//     conditions the iPad reports: power unplugged, low battery, overheating.
+//   sweepWashBoardBayHealth — onSchedule every 5 min. Catches conditions defined
+//     by ABSENCE of writes: stale heartbeat, unreachable relay.
+//
+// Dedupe state lives in washboardAlertState/{bayId}, NOT on the bay doc, so the
+// alert write never re-triggers the bay listener.
+
+const ALERT_DEFAULTS = {
+  issueReported:   { sms: true,  email: false },
+  relayDown:       { sms: true,  email: false },
+  bayOffline:      { sms: true,  email: false },
+  powerUnplugged:  { sms: true,  email: false },
+  batteryLow:      { sms: false, email: true  },
+  thermalCritical: { sms: true,  email: false },
+};
+
+const ALERT_LABELS = {
+  relayDown:       "Relay unreachable",
+  bayOffline:      "Bay offline",
+  powerUnplugged:  "Power disconnected",
+  batteryLow:      "Battery low",
+  thermalCritical: "Device overheating",
+};
+
+async function wbLoadAlertContext(bay) {
+  let location = null;
+  if (bay.locationId) {
+    const locDoc = await db.collection("washboardLocations").doc(bay.locationId).get();
+    if (locDoc.exists) location = locDoc.data();
+  }
+  if (!location && bay.ownerId) {
+    const locSnap = await db.collection("washboardLocations")
+      .where("ownerId", "==", bay.ownerId).limit(1).get();
+    if (!locSnap.empty) location = locSnap.docs[0].data();
+  }
+  if (!location) {
+    console.error(`wbLoadAlertContext FOUND NO LOCATION - locationId=${bay.locationId || "unset"} ownerId=${bay.ownerId || "unset"}`);
+    location = {};
+  }
+  const settings = location.alertSettings || {};
+  return {
+    location,
+    phones: (location.alertPhones || []).filter(x => x && x.replace(/\D/g, "").length >= 10),
+    emails: (location.alertEmails || []).filter(x => x && x.includes("@")),
+    consent: location.smsConsent === true,
+    threshold: typeof location.batteryAlertThreshold === "number" ? location.batteryAlertThreshold : 50,
+    timezone: location.timezone || "America/New_York",
+    settingFor: key => settings[key] || ALERT_DEFAULTS[key] || { sms: false, email: false },
+  };
+}
+
+function wbAlertEmailHtml(title, bayName, rows, accent) {
+  const cells = rows.map(r =>
+    `<tr><td style="padding:8px 0;color:#6b7a8d;font-size:13px;">${r[0]}</td>` +
+    `<td style="padding:8px 0;color:#e2e8f0;font-size:13px;text-align:right;">${r[1]}</td></tr>`
+  ).join("");
+  return `
+    <div style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#070e1a;">
+      <div style="background:#0b1628;border-radius:14px;padding:28px;border:1px solid #1e3a5f;">
+        <h2 style="color:${accent};margin:0 0 2px;font-size:18px;">${title}</h2>
+        <p style="color:#6b7a8d;margin:0 0 16px;font-size:12px;">${bayName}</p>
+        <table style="width:100%;border-collapse:collapse;">${cells}</table>
+        <a href="https://washboard.washlevel.com/#devices" style="display:block;background:#00d4aa;color:#070e1a;text-decoration:none;text-align:center;padding:12px;border-radius:8px;font-weight:700;font-size:14px;margin-top:20px;">Open Dashboard</a>
+      </div>
+    </div>`;
+}
+
+/**
+ * Fires or resolves one condition, deduped against washboardAlertState.
+ * Returns true if anything was sent.
+ */
+async function wbHandleCondition(bayId, bay, ctx, key, isActive, detail) {
+  const stateRef = db.collection("washboardAlertState").doc(bayId);
+  const stateDoc = await stateRef.get();
+  const state = stateDoc.exists ? stateDoc.data() : {};
+  const wasActive = state[key]?.active === true;
+
+  if (isActive === wasActive) return false;
+
+  await stateRef.set({
+    [key]: { active: isActive, changedAt: admin.firestore.FieldValue.serverTimestamp() },
+    ownerId: bay.ownerId || null,
+  }, { merge: true });
+
+  const route = ctx.settingFor(key);
+  console.log(`wbDebug ${bayId} ${key} active=${isActive} was=${wasActive} ` +
+    `sms=${route.sms} email=${route.email} phones=${ctx.phones.length} emails=${ctx.emails.length} consent=${ctx.consent}`);
+  if (!route.sms && !route.email) return false;
+
+  const bayName = bay.displayName || bay.washName || bayId;
+  const label = ALERT_LABELS[key] || key;
+  const when = new Date().toLocaleString("en-CA", { timeZone: ctx.timezone });
+  const title = isActive ? label : label + " - resolved";
+  const accent = isActive ? "#ef4444" : "#22c55e";
+
+  if (route.sms && ctx.consent && ctx.phones.length > 0) {
+    let msg = `WashBoard - ${bayName}\n${title}\n`;
+    if (detail) msg += `${detail}\n`;
+    msg += when;
+    for (const raw of ctx.phones) {
+      const phone = raw.startsWith("+") ? raw : "+1" + raw.replace(/\D/g, "");
+      try { await sendSms(phone, msg, TELNYX_API_KEY.value()); }
+      catch (e) { console.error(`Alert SMS failed (${key}, ${phone}):`, e.message); }
+    }
+  }
+
+  if (route.email && ctx.emails.length > 0) {
+    const resend = new Resend(RESEND_API_KEY.value());
+    const rows = [["Condition", label], ["Status", isActive ? "Active" : "Resolved"]];
+    if (detail) rows.push(["Detail", detail]);
+    rows.push(["Time", when]);
+    try {
+      await resend.emails.send({
+        from: "WashBoard <alerts@washboard.washlevel.com>",
+        to: ctx.emails,
+        subject: `${title} - ${bayName}`,
+        html: wbAlertEmailHtml(title, bayName, rows, accent),
+      });
+    } catch (e) { console.error(`Alert email failed (${key}):`, e.message); }
+  }
+
+  console.log(`[WashBoard] ${bayId} ${key} -> ${isActive ? "ACTIVE" : "resolved"}`);
+  return true;
+}
+
+// ── Device health conditions reported by the iPad ─────────────────────────────
+exports.notifyWashBoardDeviceHealth = onDocumentWritten(
+  { document: "bays/{bayId}", secrets: [RESEND_API_KEY, TELNYX_API_KEY] },
+  async (event) => {
+    const after = event.data?.after?.data();
+    if (!after) return;
+
+    const before = event.data?.before?.data() || {};
+    const watched = ["thermalState", "powerState", "batteryLevel"];
+    const changed = watched.filter(f => before[f] !== after[f]);
+    if (changed.length === 0) return;
+    console.log(`wbDebug ${event.params.bayId} changed=[${changed.join(",")}] ` +
+      `power=${before.powerState}->${after.powerState} ` +
+      `battery=${before.batteryLevel}->${after.batteryLevel} ` +
+      `thermal=${before.thermalState}->${after.thermalState}`);
+
+    try {
+      const bayId = event.params.bayId;
+      const ctx = await wbLoadAlertContext(after);
+      console.log(`wbDebug ctx locationId=${after.locationId || "NONE"} ownerId=${after.ownerId || "NONE"} ` +
+        `phones=${ctx.phones.length} emails=${ctx.emails.length} consent=${ctx.consent} threshold=${ctx.threshold}`);
+
+      await wbHandleCondition(bayId, after, ctx, "thermalCritical",
+        after.thermalState === "critical",
+        after.thermalState ? `Thermal state: ${after.thermalState}` : null);
+
+      await wbHandleCondition(bayId, after, ctx, "powerUnplugged",
+        after.powerState === "unplugged",
+        typeof after.batteryLevel === "number" ? `Battery at ${after.batteryLevel}%` : null);
+
+      const low = typeof after.batteryLevel === "number"
+        && after.batteryLevel >= 0
+        && after.batteryLevel < ctx.threshold;
+      await wbHandleCondition(bayId, after, ctx, "batteryLow", low,
+        typeof after.batteryLevel === "number"
+          ? `Battery at ${after.batteryLevel}% (threshold ${ctx.threshold}%)` : null);
+
+    } catch (e) {
+      console.error("notifyWashBoardDeviceHealth failed:", e);
+    }
+  }
+);
+
+// ── Conditions defined by absence: stale heartbeat, unreachable relay ─────────
+exports.sweepWashBoardBayHealth = onSchedule(
+  { schedule: "*/5 * * * *", timeZone: "America/New_York", secrets: [RESEND_API_KEY, TELNYX_API_KEY] },
+  async () => {
+    const baysSnap = await db.collection("bays").get();
+    const now = Date.now();
+    const ctxCache = new Map();
+
+    for (const bayDoc of baysSnap.docs) {
+      const bay = bayDoc.data();
+      if (!bay.deviceId) continue;
+
+      try {
+        const cacheKey = bay.locationId || bay.ownerId || "none";
+        if (!ctxCache.has(cacheKey)) ctxCache.set(cacheKey, await wbLoadAlertContext(bay));
+        const ctx = ctxCache.get(cacheKey);
+
+        const hb = bay.lastHeartbeat?.toMillis ? bay.lastHeartbeat.toMillis() : 0;
+        const interval = typeof bay.heartbeatInterval === "number" ? bay.heartbeatInterval : 30;
+        const ageSec = hb ? Math.round((now - hb) / 1000) : null;
+        const offline = hb ? (now - hb) > (interval * 3000) : true;
+
+        await wbHandleCondition(bayDoc.id, bay, ctx, "bayOffline", offline,
+          ageSec !== null ? `No heartbeat for ${Math.round(ageSec / 60)} min` : "Never reported in");
+
+        // relayConnected is not written yet; skip until the iPad reports it
+        if (typeof bay.relayConnected === "boolean" && !offline) {
+          await wbHandleCondition(bayDoc.id, bay, ctx, "relayDown", !bay.relayConnected,
+            bay.relayHost ? `Relay at ${bay.relayHost}` : null);
+        }
+
+      } catch (e) {
+        console.error(`sweepWashBoardBayHealth failed for ${bayDoc.id}:`, e);
+      }
+    }
+  }
+);
