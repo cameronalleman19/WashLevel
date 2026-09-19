@@ -8128,10 +8128,14 @@ return (
 }
 
 function CarCounts({ locations }) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA");
   const [selectedDate, setSelectedDate] = useState(today);
   const [counts, setCounts] = useState({});
   const [eqCounts, setEqCounts] = useState({});
+  const [eqPkgs, setEqPkgs] = useState({});
+  const [pkgLabels, setPkgLabels] = useState({});
+  const [openPkg, setOpenPkg] = useState({});
+  const [editLabel, setEditLabel] = useState(null);
   const [saved, setSaved] = useState({});
   const [saving, setSaving] = useState({});
   const [loaded, setLoaded] = useState({});
@@ -8154,6 +8158,7 @@ function CarCounts({ locations }) {
       ]);
       const eqs = eqSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.tracksCarCount);
       if (eqs.length) setLocEquipment(p => ({ ...p, [loc.id]: eqs }));
+      eqs.forEach(eq => { if (eq.pkgLabels) setPkgLabels(p => ({ ...p, [loc.id + "_" + eq.id]: eq.pkgLabels })); });
 
       const data = daySnap.exists() ? daySnap.data() : {};
       const cars = data.carsWashed ?? "";
@@ -8164,6 +8169,7 @@ function CarCounts({ locations }) {
       if (hasEqData) {
         Object.entries(eqData).forEach(([eqId, d]) => {
           setEqCounts(p => ({ ...p, [loc.id + "_" + eqId]: d.carsWashed ?? "" }));
+          if (d.packages) setEqPkgs(p => ({ ...p, [loc.id + "_" + eqId]: d.packages }));
         });
       }
       if (!hasEqData && eqs.length === 1 && cars !== "") {
@@ -8340,6 +8346,14 @@ function CarCounts({ locations }) {
     d.setDate(d.getDate() + offset);
     setSelectedDate(d.toISOString().split("T")[0]);
   };
+  const defaultLabel = (k, pkg) => pkg && pkg.price != null ? ("$" + pkg.price) : ("Wash " + k.replace("pkg", ""));
+  const saveLabel = async (locId, eqId, key, val) => {
+    const mk = locId + "_" + eqId;
+    const next = { ...(pkgLabels[mk] || {}), [key]: val };
+    setPkgLabels(p => ({ ...p, [mk]: next }));
+    await updateDoc(doc(db, "locations", locId, "equipment", eqId), { pkgLabels: next });
+  };
+
   const displayDate = new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const isToday = selectedDate === today;
 
@@ -8413,6 +8427,39 @@ function CarCounts({ locations }) {
                         style={{ width: "100%", marginTop: 8, background: saved[key] ? "#10b981" : "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                         {saving[key] ? "Saving..." : saved[key] ? "Saved!" : "Save " + eq.name + " Count"}
                       </button>
+                      {eqPkgs[key] && Object.keys(eqPkgs[key]).length > 0 && (
+                        <>
+                          <div onClick={() => setOpenPkg(p => ({ ...p, [key]: p[key] ? false : true }))}
+                            style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: "#0369a1", cursor: "pointer" }}>
+                            {openPkg[key] ? "Hide" : "Show"} package breakdown
+                          </div>
+                          {openPkg[key] && (
+                            <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: 10 }}>
+                              {Object.entries(eqPkgs[key]).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([pk, pv]) => {
+                                const lbl = (pkgLabels[key] || {})[pk] || defaultLabel(pk, pv);
+                                const tot = Object.values(eqPkgs[key]).reduce((x, y) => x + (y.count || 0), 0);
+                                const pct = tot > 0 ? Math.round((pv.count || 0) / tot * 100) : 0;
+                                const ek = key + "_" + pk;
+                                return (
+                                  <div key={pk} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+                                    {editLabel === ek ? (
+                                      <input autoFocus defaultValue={lbl}
+                                        onBlur={e => { saveLabel(loc.id, eq.id, pk, e.target.value.trim() || lbl); setEditLabel(null); }}
+                                        onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                                        style={{ flex: 1, padding: "4px 6px", border: "1.5px solid #0369a1", borderRadius: 6, fontSize: 12, color: "#0f1f35", background: "#fff" }} />
+                                    ) : (
+                                      <span onClick={() => setEditLabel(ek)} style={{ flex: 1, fontSize: 12, color: "#334155", cursor: "pointer" }}>{lbl}</span>
+                                    )}
+                                    <span style={{ fontSize: 11, color: "#94a3b8", width: 34, textAlign: "right" }}>{pct}%</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35", width: 34, textAlign: "right" }}>{pv.count || 0}</span>
+                                  </div>
+                                );
+                              })}
+                              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6 }}>Tap a name to rename</div>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   );
                 })}
