@@ -978,6 +978,26 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
       }
     }
     if (count === null) { console.log("No count in body:", body.slice(0,200)); res.status(200).send("No count found"); return; }
+    // Package breakdown capture — keyed by row position (pkg1..N), forward only
+    if (extraData.packages === undefined) {
+      const pkgs = {};
+      let pi = 0;
+      if (/PACKAGE RUNNING TODAY/i.test(body)) {
+        for (const m of body.matchAll(/^[ \t]*(?:PACKAGE)?\d+[ \t]+[\d#]+[ \t]+(\d+)[ \t]*$/gim)) {
+          pi++; pkgs["pkg" + pi] = { count: parseInt(m[1]) || 0 };
+        }
+      } else if (/WASH[ \t]*\d+[ \t]*=/i.test(body)) {
+        for (const m of body.matchAll(/WASH[ \t]*\d+[ \t]*=[ \t]*(\d+)/gi)) {
+          pi++; pkgs["pkg" + pi] = { count: parseInt(m[1]) || 0 };
+        }
+      } else if (/Washes Delivered Today/i.test(body)) {
+        for (const m of body.matchAll(/^[ \t]*(\d+\.\d{2})[ \t]+(\d+)[ \t]*$/gim)) {
+          pi++; pkgs["pkg" + pi] = { count: parseInt(m[2]) || 0, price: parseFloat(m[1]) };
+        }
+      }
+      if (pi > 0) extraData = { ...extraData, packages: pkgs };
+    }
+
     
     // Use yesterday's date
     const yesterday = new Date();
@@ -1046,20 +1066,21 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
         [`equipment.${foundEqId}.date`]: dateStr,
         [`equipment.${foundEqId}.source`]: "email",
         [`equipment.${foundEqId}.updatedAt`]: nowStr,
+        ...(extraData.packages ? { ['equipment.' + foundEqId + '.packages']: extraData.packages } : {}),
         carsWashed: newLocCount,
         date: dateStr,
         updatedAt: nowStr,
-        ...(Object.keys(extraData).length ? extraData : {}),
+        ...(Object.fromEntries(Object.entries(extraData).filter(([k]) => k !== 'packages'))),
       });
     } else {
       await eqSummaryRef.set({
         equipment: {
-          [foundEqId]: { carsWashed: newEqCount, date: dateStr, source: "email", updatedAt: nowStr },
+          [foundEqId]: { carsWashed: newEqCount, date: dateStr, source: "email", updatedAt: nowStr, ...(extraData.packages ? { packages: extraData.packages } : {}) },
         },
         carsWashed: newLocCount,
         date: dateStr,
         updatedAt: nowStr,
-        ...(Object.keys(extraData).length ? extraData : {}),
+        ...(Object.fromEntries(Object.entries(extraData).filter(([k]) => k !== 'packages'))),
       });
     }
 
