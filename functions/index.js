@@ -977,6 +977,65 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
         if (Object.keys(packages).length > 0) extraData = { packages };
       }
     }
+    // Fault / non-count email handling
+    if (count === null) {
+      const nl = String.fromCharCode(10);
+      const firstLine = (body.split(nl).map(l => l.trim()).filter(l => l.length > 0)[0] || "").slice(0, 160);
+      const isCleared = /No Fault Present|FAULT CLEARED|FAULT CODE[ ]*=[ ]*255|Back In Service|BIS:/i.test(body);
+      const isOE = /^OE[ ]*[0-9]+/i.test(firstLine);
+      let fLoc = null, fEq = null, eqName = "Equipment";
+      const faultLocs = await db.collection("locations").get();
+      for (const locDoc of faultLocs.docs) {
+        const fs = await db.collection("locations").doc(locDoc.id).collection("equipment").where("emailCode", "==", locationCode).get();
+        if (fs.empty === false) { fLoc = locDoc; fEq = fs.docs[0]; eqName = fs.docs[0].data().name || "Equipment"; break; }
+      }
+      if (fLoc === null) { console.log("Non-count email, no equipment for code:", locationCode); res.status(200).send("No count found"); return; }
+      const fOwner = fLoc.data().ownerId;
+      const ts = new Date().toLocaleString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
+      let ntype = "equipment_failure", title = "", msg = "";
+      if (isCleared) {
+        title = "Back In Service - " + eqName;
+        msg = "Fault cleared - " + ts;
+      } else if (isOE) {
+        ntype = "equipment_event";
+        title = "Equipment Event - " + eqName;
+        msg = firstLine.replace(/[ ][ ]+/g, " ") + " - " + ts;
+      } else {
+        title = "Equipment Fault - " + eqName;
+        const head = firstLine.split(/[ ][ ]+/)[0] || firstLine;
+        const ww = head.match(/^([0-9]+)-[ ]*(.+)/);
+        const fc = body.match(/FAULT CODE[ ]*=[ ]*([0-9]+)/i);
+        if (ww) {
+          const tail = firstLine.slice(head.length).trim();
+          msg = "Code " + ww[1] + ": " + ww[2].trim() + " - " + ts + (tail ? " (" + tail.replace(/[ ][ ]+/g, " ") + ")" : "");
+        } else if (fc) {
+          const trues = [...body.matchAll(/True[ ]*=[ ]*(.+)/gi)].map(m => m[1].trim()).join(", ");
+          msg = "Code " + fc[1] + (trues ? ": " + trues : "") + " - " + ts;
+        } else {
+          msg = firstLine + " - " + ts;
+        }
+      }
+      try {
+        await db.collection("locations").doc(fLoc.id).collection("equipment").doc(fEq.id)
+          .update({ faultActive: isCleared ? false : true, lastFault: msg, lastFaultAt: new Date().toISOString() });
+      } catch (e) { console.error("fault eq update failed:", e.message); }
+      if (fOwner) {
+        const uSnap = await db.collection("users").where("ownerId", "==", fOwner).get();
+        const oSnap = await db.collection("users").doc(fOwner).get();
+        for (const uDoc of [...uSnap.docs, oSnap]) {
+          if (uDoc.exists === false) continue;
+          const nid = "notif" + Date.now() + uDoc.id;
+          await db.collection("users").doc(uDoc.id).collection("notifications").doc(nid).set({
+            id: nid, type: ntype, title: title, body: msg,
+            locationId: fLoc.id, equipmentId: fEq.id,
+            createdAt: new Date().toISOString(), read: false,
+          });
+        }
+      }
+      console.log("Fault notification sent:", ntype, eqName, msg);
+      res.status(200).send("Fault logged");
+      return;
+    }
     if (count === null) { console.log("No count in body:", body.slice(0,200)); res.status(200).send("No count found"); return; }
     // Package breakdown capture — keyed by row position (pkg1..N), forward only
     if (extraData.packages === undefined) {
