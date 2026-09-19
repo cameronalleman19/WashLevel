@@ -1575,6 +1575,7 @@ function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSen
                     onMouseLeave={e => e.currentTarget.style.background = eq.status !== "ok" ? (EQS[eq.status] || EQS.ok).bg + "80" : "#fafafa"}>
                     
                     <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#334155" }}>{eq.name}</span>
+                    {eq.faultActive && <span style={{ fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 4, padding: "2px 6px" }}>FAULT</span>}
                     <span style={{ fontSize: 11, color: "#94a3b8" }}>{eq.nextService}</span>
                     <Pill label={s.label} bg={s.bg} color={s.color} />
                   </div>
@@ -2689,7 +2690,28 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{eq.name}</div>
                     <Pill label={s.label} bg={s.bg} color={s.color} />
+                    {eq.faultActive && <Pill label="FAULT" bg="#fef2f2" color="#dc2626" />}
                   </div>
+                  {eq.faultActive && (
+                    <div onClick={e => e.stopPropagation()} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 3 }}>Active Fault</div>
+                      <div style={{ fontSize: 12, color: "#334155", marginBottom: 8 }}>{eq.lastFault || "Fault reported"}</div>
+                      <button onClick={async () => {
+                        await updateDoc(doc(db, "locations", locId, "equipment", eq.id), { faultActive: false });
+                        const hid = "h" + Date.now();
+                        await setDoc(doc(db, "locations", locId, "equipment", eq.id, "history", hid), {
+                          date: new Date().toLocaleDateString("en-CA"),
+                          note: "Back in service: manually cleared",
+                          type: "clear",
+                          createdAt: new Date().toISOString(),
+                        });
+                        setHistories(p => ({ ...p, [eq.id]: null }));
+                      }}
+                        style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        Mark Back In Service
+                      </button>
+                    </div>
+                  )}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6, fontSize: 12, color: "#64748b" }}>
                     <div style={{ background: "#f4f6f8", borderRadius: 6, padding: "6px 10px" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Last Service</div>
@@ -2792,10 +2814,10 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
                       <div style={{ fontSize: 12, color: "#94a3b8" }}>No history yet. History is recorded automatically when you update service dates, car counts, or complete linked tasks.</div>
                     ) : eqHistory.map(h => (
                       <div key={h.id} onClick={() => h.type === "task" ? setSelectedHistoryEntry(h) : null}
-                        style={{ padding: "8px 10px", background: h.type === "task" ? "#f0f9ff" : "#f4f6f8", borderRadius: 7, marginBottom: 6, fontSize: 12, cursor: h.type === "task" ? "pointer" : "default", border: h.type === "task" ? "1px solid #bae6fd" : "1px solid transparent" }}>
+                        style={{ padding: "8px 10px", background: h.type === "task" ? "#f0f9ff" : h.type === "fault" ? "#fef2f2" : h.type === "clear" ? "#f0fdf4" : "#f4f6f8", borderRadius: 7, marginBottom: 6, fontSize: 12, cursor: h.type === "task" ? "pointer" : "default", border: h.type === "task" ? "1px solid #bae6fd" : h.type === "fault" ? "1px solid #fecaca" : h.type === "clear" ? "1px solid #bbf7d0" : "1px solid transparent" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2, alignItems: "center" }}>
                           <span style={{ fontWeight: 600, color: "#334155" }}>
-                            {h.type === "task" ? (h.taskTitle || "Task") : h.type === "inspection" ? "Inspection" : "Service"} — {h.date || (h.completedAt ? new Date(h.completedAt).toLocaleDateString() : "")}
+                            {h.type === "task" ? (h.taskTitle || "Task") : h.type === "inspection" ? "Inspection" : h.type === "fault" ? "Fault" : h.type === "clear" ? "Back In Service" : h.type === "event" ? "Event" : "Service"} {"\u2014"} {h.date ? new Date(h.date + "T12:00:00").toLocaleDateString("en-US") : (h.completedAt ? new Date(h.completedAt).toLocaleDateString("en-US") : "")}
                           </span>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             {h.type === "task" && <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 6px", fontWeight: 600 }}>{h.category || "task"}</span>}
