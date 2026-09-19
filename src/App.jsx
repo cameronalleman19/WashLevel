@@ -27,6 +27,7 @@ query,
 where,
 orderBy,
 limit,
+documentId,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -8146,6 +8147,7 @@ function CarCounts({ locations }) {
   const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7));
   const [selectedYear, setSelectedYear] = useState(today.slice(0, 4));
   const [monthlyLoaded, setMonthlyLoaded] = useState(false);
+  const [pkgCache, setPkgCache] = useState({});
   const [yearlyLoaded, setYearlyLoaded] = useState(false);
 
   useEffect(() => {
@@ -8172,6 +8174,9 @@ function CarCounts({ locations }) {
           if (d.packages) setEqPkgs(p => ({ ...p, [loc.id + "_" + eqId]: d.packages }));
         });
       }
+      if (data.packages && eqs.length === 1) {
+        setEqPkgs(p => ({ ...p, [loc.id + "_" + eqs[0].id]: data.packages }));
+      }
       if (!hasEqData && eqs.length === 1 && cars !== "") {
         // Location total set (e.g. from email) but no per-equipment breakdown — assign to the single tracking piece
         setEqCounts(p => ({ ...p, [loc.id + "_" + eqs[0].id]: parseInt(cars) || 0 }));
@@ -8184,16 +8189,18 @@ function CarCounts({ locations }) {
 
   useEffect(() => {
     if (activeTab !== "monthly" || !locations.length || !selectedMonth) return;
+    if (pkgCache["m" + selectedMonth]) { setMonthlyData(pkgCache["m" + selectedMonth]); setMonthlyLoaded(true); return; }
     setMonthlyLoaded(false);
     const loadMonthly = async () => {
       const [year, month] = selectedMonth.split("-");
       const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
       const result = {};
       for (const loc of locations) {
-        const snaps = await getDocs(collection(db, "locations", loc.id, "daySummaries"));
+        const snaps = await getDocs(query(collection(db, "locations", loc.id, "daySummaries"), where(documentId(), ">=", selectedMonth + "-01"), where(documentId(), "<=", selectedMonth + "-31")));
         const dataMap = {};
         const eqMap = {};
-        snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; const eq = d.data().equipment || {}; Object.entries(eq).forEach(([eqId, v]) => { eqMap[eqId] = eqMap[eqId] || {}; eqMap[eqId][d.id] = v.carsWashed || 0; }); });
+        const pkgMap = {};
+        snaps.docs.forEach(d => { const dd = d.data(); dataMap[d.id] = dd.carsWashed || 0; const eq = dd.equipment || {}; Object.entries(eq).forEach(([eqId, v]) => { eqMap[eqId] = eqMap[eqId] || {}; eqMap[eqId][d.id] = v.carsWashed || 0; if (v.packages) { pkgMap[eqId] = pkgMap[eqId] || {}; pkgMap[eqId][d.id] = v.packages; } }); if (dd.packages) { pkgMap["__loc"] = pkgMap["__loc"] || {}; pkgMap["__loc"][d.id] = dd.packages; } });
         const days = [];
         let total = 0;
         for (let d = 1; d <= daysInMonth; d++) {
@@ -8202,9 +8209,10 @@ function CarCounts({ locations }) {
           days.push({ date: ds, cars });
           total += cars;
         }
-        result[loc.id] = { total, days, eqMap };
+        result[loc.id] = { total, days, eqMap, pkgMap };
       }
       setMonthlyData(result);
+      setPkgCache(pc => ({ ...pc, ["m" + selectedMonth]: result }));
       setMonthlyLoaded(true);
     };
     loadMonthly();
@@ -8212,16 +8220,18 @@ function CarCounts({ locations }) {
 
   useEffect(() => {
     if (activeTab !== "yearly" || !locations.length || !selectedYear || yearlyLoaded) return;
+    if (pkgCache["y" + selectedYear]) { setYearlyData(pkgCache["y" + selectedYear]); setYearlyLoaded(true); return; }
     setYearlyLoaded(false);
     const loadYearly = async () => {
       const mn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
       const result = {};
       for (const loc of locations) {
-        const snaps = await getDocs(collection(db, "locations", loc.id, "daySummaries"));
+        const snaps = await getDocs(query(collection(db, "locations", loc.id, "daySummaries"), where(documentId(), ">=", selectedYear + "-01-01"), where(documentId(), "<=", selectedYear + "-12-31")));
         const dataMap = {};
         snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; });
         const eqMapY = {};
-        snaps.docs.forEach(d => { dataMap[d.id] = d.data().carsWashed || 0; const eq = d.data().equipment || {}; Object.entries(eq).forEach(([eqId, v]) => { eqMapY[eqId] = eqMapY[eqId] || {}; eqMapY[eqId][d.id] = v.carsWashed || 0; }); });
+        const pkgMapY = {};
+        snaps.docs.forEach(d => { const dd = d.data(); dataMap[d.id] = dd.carsWashed || 0; const eq = dd.equipment || {}; Object.entries(eq).forEach(([eqId, v]) => { eqMapY[eqId] = eqMapY[eqId] || {}; eqMapY[eqId][d.id] = v.carsWashed || 0; if (v.packages) { pkgMapY[eqId] = pkgMapY[eqId] || {}; pkgMapY[eqId][d.id] = v.packages; } }); if (dd.packages) { pkgMapY["__loc"] = pkgMapY["__loc"] || {}; pkgMapY["__loc"][d.id] = dd.packages; } });
         const months = [];
         let yearTotal = 0;
         for (let m = 1; m <= 12; m++) {
@@ -8234,9 +8244,10 @@ function CarCounts({ locations }) {
           months.push({ month: ms, label: mn[m-1], cars: mt });
           yearTotal += mt;
         }
-        result[loc.id] = { total: yearTotal, months, eqMap: eqMapY };
+        result[loc.id] = { total: yearTotal, months, eqMap: eqMapY, pkgMap: pkgMapY };
       }
       setYearlyData(result);
+      setPkgCache(pc => ({ ...pc, ["y" + selectedYear]: result }));
       setYearlyLoaded(true);
     };
     loadYearly();
@@ -8249,6 +8260,7 @@ function CarCounts({ locations }) {
     await setDoc(doc(db, "locations", locId, "daySummaries", selectedDate), {
       carsWashed: val, date: selectedDate, updatedAt: new Date().toISOString(),
     }, { merge: true });
+    setPkgCache(pc => { const n = { ...pc }; delete n["m" + selectedDate.slice(0,7)]; delete n["y" + selectedDate.slice(0,4)]; return n; });
     setSaving(p => ({ ...p, [locId]: false }));
     setSaved(p => ({ ...p, [locId]: true }));
     setTimeout(() => setSaved(p => ({ ...p, [locId]: false })), 2000);
@@ -8335,6 +8347,7 @@ function CarCounts({ locations }) {
       }
     }
 
+    setPkgCache(pc => { const n = { ...pc }; delete n["m" + selectedDate.slice(0,7)]; delete n["y" + selectedDate.slice(0,4)]; return n; });
     setSaving(p => ({ ...p, [key]: false }));
     setSaved(p => ({ ...p, [key]: true }));
     setTimeout(() => setSaved(p => ({ ...p, [key]: false })), 2000);
@@ -8345,6 +8358,37 @@ function CarCounts({ locations }) {
     const d = new Date(selectedDate + "T12:00:00");
     d.setDate(d.getDate() + offset);
     setSelectedDate(d.toISOString().split("T")[0]);
+  };
+  const sumPkgs = (pm, eqId, prefix) => {
+    const src = (pm || {})[eqId] || {};
+    const out = {};
+    Object.entries(src).forEach(([ds, pkgs]) => {
+      if (prefix && ds.startsWith(prefix) === false) return;
+      Object.entries(pkgs || {}).forEach(([pk, pv]) => {
+        out[pk] = out[pk] || { count: 0, price: pv.price };
+        out[pk].count += pv.count || 0;
+      });
+    });
+    return out;
+  };
+  const PkgList = ({ pkgs, mk }) => {
+    const tot = Object.values(pkgs).reduce((x, y) => x + (y.count || 0), 0);
+    if (tot === 0) return null;
+    return (
+      <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: 10 }}>
+        {Object.entries(pkgs).sort((a, b) => (b[1].count || 0) - (a[1].count || 0)).map(([pk, pv]) => {
+          const lbl = (pkgLabels[mk] || {})[pk] || defaultLabel(pk, pv);
+          const pct = Math.round((pv.count || 0) / tot * 100);
+          return (
+            <div key={pk} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+              <span style={{ flex: 1, fontSize: 12, color: "#334155" }}>{lbl}</span>
+              <span style={{ fontSize: 11, color: "#94a3b8", width: 34, textAlign: "right" }}>{pct}%</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f1f35", width: 46, textAlign: "right" }}>{(pv.count || 0).toLocaleString()}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
   const defaultLabel = (k, pkg) => pkg && pkg.price != null ? ("$" + pkg.price) : ("Wash " + k.replace("pkg", ""));
   const saveLabel = async (locId, eqId, key, val) => {
@@ -8518,6 +8562,21 @@ function CarCounts({ locations }) {
                       <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc.name}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#0f1f35" }}>{d.total.toLocaleString()}</div>
                     </div>
+                    <div onClick={() => setOpenPkg(pp => ({ ...pp, ["m_" + loc.id]: pp["m_" + loc.id] ? false : true }))}
+                      style={{ fontSize: 12, fontWeight: 600, color: "#0369a1", cursor: "pointer", marginBottom: 8 }}>
+                      {openPkg["m_" + loc.id] ? "Hide" : "Show"} package totals
+                    </div>
+                    {openPkg["m_" + loc.id] && (locEquipment[loc.id] || [{ id: "__loc", name: loc.name }]).map(eq => {
+                      const tot = sumPkgs(d.pkgMap, eq.id, selectedMonth);
+                      const alt = Object.keys(tot).length === 0 ? sumPkgs(d.pkgMap, "__loc", selectedMonth) : tot;
+                      if (Object.keys(alt).length === 0) return null;
+                      return (
+                        <div key={eq.id} style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>{eq.name}</div>
+                          <PkgList pkgs={alt} mk={loc.id + "_" + eq.id} />
+                        </div>
+                      );
+                    })}
                     {locEquipment[loc.id] && locEquipment[loc.id].length > 1 ? (
                       // Multiple equipment - show one calendar per equipment
                       locEquipment[loc.id].map(eq => {
@@ -8527,9 +8586,11 @@ function CarCounts({ locations }) {
                             <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>{eq.name}</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))", gap: 6 }}>
                               {eqDays.map(day => (
-                                <div key={day.date} style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                                <div key={day.date} onClick={() => setOpenPkg(pp => ({ ...pp, ["d_" + eq.id + day.date]: pp["d_" + eq.id + day.date] ? false : true }))}
+                                  style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center", cursor: day.cars > 0 ? "pointer" : "default", gridColumn: openPkg["d_" + eq.id + day.date] ? "1 / -1" : "auto" }}>
                                   <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(day.date + "T12:00:00").getDate()}</div>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: day.cars > 0 ? "#0f1f35" : "#d1d5db" }}>{day.cars > 0 ? day.cars : "-"}</div>
+                                  {openPkg["d_" + eq.id + day.date] && <PkgList pkgs={sumPkgs(d.pkgMap, eq.id, day.date)} mk={loc.id + "_" + eq.id} />}
                                 </div>
                               ))}
                             </div>
@@ -8540,9 +8601,11 @@ function CarCounts({ locations }) {
                       // Single equipment or no equipment - show location total calendar
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))", gap: 6 }}>
                         {d.days.map(day => (
-                          <div key={day.date} style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                          <div key={day.date} onClick={() => setOpenPkg(pp => ({ ...pp, ["d_" + loc.id + day.date]: pp["d_" + loc.id + day.date] ? false : true }))}
+                            style={{ background: day.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px", textAlign: "center", cursor: day.cars > 0 ? "pointer" : "default", gridColumn: openPkg["d_" + loc.id + day.date] ? "1 / -1" : "auto" }}>
                             <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(day.date + "T12:00:00").getDate()}</div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: day.cars > 0 ? "#0f1f35" : "#d1d5db" }}>{day.cars > 0 ? day.cars : "-"}</div>
+                            {openPkg["d_" + loc.id + day.date] && (() => { const e0 = (locEquipment[loc.id] || [])[0]; const pk = e0 ? sumPkgs(d.pkgMap, e0.id, day.date) : {}; const use = Object.keys(pk).length ? pk : sumPkgs(d.pkgMap, "__loc", day.date); return <PkgList pkgs={use} mk={loc.id + "_" + (e0 ? e0.id : "")} />; })()}
                           </div>
                         ))}
                       </div>
@@ -8584,6 +8647,21 @@ function CarCounts({ locations }) {
                       <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>{loc.name}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#0f1f35" }}>{d.total.toLocaleString()}</div>
                     </div>
+                    <div onClick={() => setOpenPkg(pp => ({ ...pp, ["y_" + loc.id]: pp["y_" + loc.id] ? false : true }))}
+                      style={{ fontSize: 12, fontWeight: 600, color: "#0369a1", cursor: "pointer", marginBottom: 8 }}>
+                      {openPkg["y_" + loc.id] ? "Hide" : "Show"} year package totals
+                    </div>
+                    {openPkg["y_" + loc.id] && (locEquipment[loc.id] || [{ id: "__loc", name: loc.name }]).map(eq => {
+                      const tot = sumPkgs(d.pkgMap, eq.id, selectedYear);
+                      const alt = Object.keys(tot).length === 0 ? sumPkgs(d.pkgMap, "__loc", selectedYear) : tot;
+                      if (Object.keys(alt).length === 0) return null;
+                      return (
+                        <div key={eq.id} style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>{eq.name}</div>
+                          <PkgList pkgs={alt} mk={loc.id + "_" + eq.id} />
+                        </div>
+                      );
+                    })}
                     {locEquipment[loc.id] && locEquipment[loc.id].length > 1 ? (
                       locEquipment[loc.id].map(eq => {
                         const eqMonths = d.months.map(m => ({
@@ -8595,9 +8673,11 @@ function CarCounts({ locations }) {
                             <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>{eq.name}</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
                               {eqMonths.map(m => (
-                                <div key={m.month} style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+                                <div key={m.month} onClick={() => setOpenPkg(pp => ({ ...pp, ["ym_" + eq.id + m.month]: pp["ym_" + eq.id + m.month] ? false : true }))}
+                                  style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center", cursor: m.cars > 0 ? "pointer" : "default", gridColumn: openPkg["ym_" + eq.id + m.month] ? "1 / -1" : "auto" }}>
                                   <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{m.label}</div>
                                   <div style={{ fontSize: 16, fontWeight: 700, color: m.cars > 0 ? "#0f1f35" : "#d1d5db", marginTop: 4 }}>{m.cars > 0 ? m.cars.toLocaleString() : "-"}</div>
+                                  {openPkg["ym_" + eq.id + m.month] && <PkgList pkgs={sumPkgs(d.pkgMap, eq.id, m.month)} mk={loc.id + "_" + eq.id} />}
                                 </div>
                               ))}
                             </div>
@@ -8607,9 +8687,11 @@ function CarCounts({ locations }) {
                     ) : (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
                         {d.months.map(m => (
-                          <div key={m.month} style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+                          <div key={m.month} onClick={() => setOpenPkg(pp => ({ ...pp, ["ym_" + loc.id + m.month]: pp["ym_" + loc.id + m.month] ? false : true }))}
+                            style={{ background: m.cars > 0 ? "#f0f9ff" : "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 8px", textAlign: "center", cursor: m.cars > 0 ? "pointer" : "default", gridColumn: openPkg["ym_" + loc.id + m.month] ? "1 / -1" : "auto" }}>
                             <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{m.label}</div>
                             <div style={{ fontSize: 16, fontWeight: 700, color: m.cars > 0 ? "#0f1f35" : "#d1d5db", marginTop: 4 }}>{m.cars > 0 ? m.cars.toLocaleString() : "-"}</div>
+                            {openPkg["ym_" + loc.id + m.month] && (() => { const e0 = (locEquipment[loc.id] || [])[0]; const pk = e0 ? sumPkgs(d.pkgMap, e0.id, m.month) : {}; const use = Object.keys(pk).length ? pk : sumPkgs(d.pkgMap, "__loc", m.month); return <PkgList pkgs={use} mk={loc.id + "_" + (e0 ? e0.id : "")} />; })()}
                           </div>
                         ))}
                       </div>
