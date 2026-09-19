@@ -1453,7 +1453,8 @@ exports.sendNotificationSms = onDocumentCreated(
       const u = userDoc.data();
       const prefs = u.smsPrefs || {};
       if (prefs.smsEnabled === false) return;
-      if (!prefs[toggleKey]) return;
+      const defaultOn = toggleKey === "equipmentFailures";
+      if (prefs[toggleKey] === undefined ? !defaultOn : !prefs[toggleKey]) return;
       if (!u.phone) return;
       const ownerId = u.ownerId || uid;
       const subDoc = await db.collection("subscriptions").doc(ownerId).get();

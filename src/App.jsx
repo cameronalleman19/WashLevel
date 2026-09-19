@@ -9436,9 +9436,9 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
                     <div style={{ fontSize: 12, color: "#94a3b8" }}>{desc}</div>
                   </div>
                   <div
-                    onClick={() => updateSmsUser(u.id, key, !(u.smsPrefs?.[key] ?? false))}
-                    style={{ width: 44, height: 24, borderRadius: 12, background: u.smsPrefs?.[key] ? "#0f1f35" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                    <div style={{ position: "absolute", top: 3, left: u.smsPrefs?.[key] ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                    onClick={() => updateSmsUser(u.id, key, !(u.smsPrefs?.[key] ?? (key === "equipmentFailures")))}
+                    style={{ width: 44, height: 24, borderRadius: 12, background: (u.smsPrefs?.[key] ?? (key === "equipmentFailures")) ? "#0f1f35" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                    <div style={{ position: "absolute", top: 3, left: (u.smsPrefs?.[key] ?? (key === "equipmentFailures")) ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                   </div>
                 </div>
               ))}
