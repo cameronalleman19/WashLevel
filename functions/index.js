@@ -1464,7 +1464,7 @@ exports.sendNotificationSms = onDocumentCreated(
       let msg = "WashLevel: " + (clean(notif.title) || "Alert");
       const body = clean(notif.body);
       if (body) msg += "\n" + body;
-      msg += "\nReply STOP to opt out.";
+
       const phone = u.phone.startsWith("+") ? u.phone : "+1" + u.phone.replace(/\D/g, "");
       try {
         await sendSms(phone, msg, TELNYX_API_KEY.value(), TELNYX_FROM_WASHLEVEL.value());

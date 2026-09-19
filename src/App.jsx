@@ -9414,7 +9414,7 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
                       if (!u.phone) { alert("Save a phone number first."); return; }
                       try {
                         const fn = httpsCallable(functions, "sendAlertSms");
-                        await fn({ phone: u.phone, message: "WashLevel: Test message — your text alerts are working!" });
+                        await fn({ phone: u.phone, message: "WashLevel: Test message - your text alerts are working. Msg and data rates may apply. Reply STOP to opt out, HELP for help." });
                         alert("Test text sent!");
                       } catch(e) { alert("Error: " + e.message); }
                     }}
