@@ -1000,6 +1000,20 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
         ntype = "equipment_event";
         title = "Equipment Event - " + eqName;
         msg = firstLine.replace(/[ ][ ]+/g, " ") + " - " + ts;
+      } else if (/Laserwash[ ]*:/i.test(subject) || /Laserwash[ ]*:/i.test(firstLine)) {
+        const subjSrc = /Laserwash[ ]*:/i.test(subject) ? subject : firstLine;
+        const pm = subjSrc.match(/Laserwash[ ]*:[ ]*(T[EI]?)[ ]*:?[ ]*(.+)/i);
+        const ptype = pm ? pm[1].toUpperCase() : "TE";
+        let pdesc = pm ? pm[2].trim() : subjSrc.trim();
+        const errLine = body.match(/^[ ]*Error[ ]*:[ ]*(.+)$/im);
+        if (errLine && errLine[1].trim().length > 0) pdesc = errLine[1].trim();
+        if (ptype === "TE") {
+          title = "Equipment Fault - " + eqName;
+        } else {
+          ntype = "equipment_event";
+          title = "Equipment Event - " + eqName;
+        }
+        msg = pdesc.replace(/[ ][ ]+/g, " ").slice(0, 140) + " - " + ts;
       } else {
         title = "Equipment Fault - " + eqName;
         const head = firstLine.split(/[ ][ ]+/)[0] || firstLine;
@@ -1019,6 +1033,16 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
         await db.collection("locations").doc(fLoc.id).collection("equipment").doc(fEq.id)
           .update({ faultActive: isCleared ? false : true, lastFault: msg, lastFaultAt: new Date().toISOString() });
       } catch (e) { console.error("fault eq update failed:", e.message); }
+      try {
+        const hid = "h" + Date.now();
+        await db.collection("locations").doc(fLoc.id).collection("equipment").doc(fEq.id)
+          .collection("history").doc(hid).set({
+            date: new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+            note: (isCleared ? "Back in service: " : (ntype === "equipment_event" ? "Event: " : "Fault: ")) + msg,
+            type: isCleared ? "clear" : (ntype === "equipment_event" ? "event" : "fault"),
+            createdAt: new Date().toISOString(),
+          });
+      } catch (e) { console.error("fault history failed:", e.message); }
       if (fOwner) {
         const uSnap = await db.collection("users").where("ownerId", "==", fOwner).get();
         const oSnap = await db.collection("users").doc(fOwner).get();
