@@ -3645,12 +3645,17 @@ function TimeClock({ locId, locationName, allLocations }) {
     getDocs(query(collection(db, "users"), where("ownerId", "==", managerUid))).then(membersSnap => {
       const allUids = [managerUid, ...membersSnap.docs.map(d => d.id)];
       const uids = [...new Set([...allUids, user.uid])];
-      unsubClock = onSnapshot(
-        query(collection(db, "timeclock"), where("uid", "in", uids.slice(0, 30))),
+      const chunks = [];
+      for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+      const partials = chunks.map(() => []);
+      const unsubs = chunks.map((chunk, idx) => onSnapshot(
+        query(collection(db, "timeclock"), where("uid", "in", chunk)),
         snap => {
-setTeamHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date > a.date ? 1 : -1));
+          partials[idx] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setTeamHistory(partials.flat().sort((a, b) => b.date > a.date ? 1 : -1));
         }
-      );
+      ));
+      unsubClock = () => unsubs.forEach(u => u());
     });
     return () => unsubClock();
   }, [user?.uid, isManager]);
