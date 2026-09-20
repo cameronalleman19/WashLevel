@@ -3611,7 +3611,7 @@ function TimeClock({ locId, locationName, allLocations }) {
   const [showBilling, setShowBilling] = useState(false);
 
   const isManager = user?.role === "manager" || user?.role === "owner" || !user?.isTeamMember;
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA");
   const clockDocId = user?.uid + "_" + today;
   const [clockNote, setClockNote] = useState("");
   const [editingNoteIdx, setEditingNoteIdx] = useState(null);
