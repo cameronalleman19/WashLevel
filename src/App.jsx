@@ -1458,7 +1458,7 @@ function SensorTilesPanel({ locId, uid, onNavigate, onSensorNavigate }) {
 
 function Overview({ location, tasks, sensors, equipment, onNavigate, user, onSensorNavigate }) {
   const isManager = user?.role === "manager" || user?.role === "owner";
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toLocaleDateString("en-CA");
   const todayTasks = tasks.filter(t => !t.archived && t.due && t.due <= todayStr);
   const totalToday = todayTasks.length;
   const done = todayTasks.filter(t => t.status === "done").length;
@@ -1792,6 +1792,7 @@ useEffect(() => {
    }, 200);
  }
 }, [highlightTaskId]);
+const [busy, setBusy] = useState(false);
 const [note, setNote] = useState(task.note || "");
 const [showHistory, setShowHistory] = useState(false);
 const [history, setHistory] = useState([]);
@@ -2005,20 +2006,25 @@ return (
 </div>
 </div>
 <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "50%" }}>
-          <button onClick={(e) => {
+          <button disabled={busy} onClick={(e) => {
   e.stopPropagation();
+  if (busy) return;
   if ((task.type === "inspection" || task.category === "inspection") && task.status !== "done" && task.checklist?.length > 0 && onStartInspection) {
     onStartInspection(task);
   } else if (next === "done" && task.requirePhoto && !(task.mediaUrls?.length) && !(task.attachments?.length)) {
     alert("A photo is required to complete this task. Please use the Complete button inside the task to upload a photo first.");
-  } else { handleStatus(e); }
+  } else { setBusy(true); Promise.resolve(handleStatus(e)).finally(() => setBusy(false)); }
 }} style={{ background: task.type === "inspection" && task.status !== "done" ? "#15803d" : btnC, color: "#fff", border: "none", borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
   {task.type === "inspection" && task.status !== "done" ? "Inspect" : nextLabel}
 </button>
 {(user?.role === "manager" || user?.role === "owner") && task.status === "done" && !task.archived && (
-  <button onClick={async (e) => {
+  <button disabled={busy} onClick={async (e) => {
     e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
     await updateDoc(doc(db, "locations", locId, "tasks", task.id), { archived: true, archivedAt: new Date().toISOString() });
+    } finally { setBusy(false); }
   }} style={{ background: "#d1fae5", color: "#065f46", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Approve</button>
 )}
 {(user?.role === "manager" || user?.role === "owner") && (
@@ -2271,7 +2277,7 @@ if (t.archived && !showArchived) return false;
 // Hide completed tasks older than 7 days unless showArchived
 if (t.status === "done" && !showArchived && t.completedAt && t.completedAt < sevenDaysAgo) return false;
 if (fStatus === "overdue") {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA");
   if (t.status === "done") return false;
   if (!t.due || !t.due.includes("-") || t.due >= today) return false;
 } else if (fStatus === "monitor") {
@@ -2290,7 +2296,7 @@ const filteredSorted = [...filtered].sort((a, b) => {
 const upcomingDaysThreshold = user?.upcomingDaysThreshold ?? 30;
 const upcomingCarsThreshold = user?.upcomingCarsThreshold ?? 1000;
 
-const today2 = new Date().toISOString().split("T")[0];
+const today2 = new Date().toLocaleDateString("en-CA");
 
 const isUpcoming = (t) => {
   if (t.status === "done" || t.archived) return false;
@@ -2538,7 +2544,7 @@ function Equipment({ equipment, locationName, locId, allTasks, onCreateTask, onN
     if (changed.length) {
       const histId = "h" + Date.now();
       await setDoc(doc(db, "locations", locId, "equipment", eqId, "history", histId), {
-        date: new Date().toISOString().split("T")[0],
+        date: new Date().toLocaleDateString("en-CA"),
         note: changed.join(" | "),
         type: "edit",
         createdAt: new Date().toISOString(),
@@ -4467,7 +4473,7 @@ function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
  const [loadingDetail, setLoadingDetail] = useState(false);
   const [dayPopup, setDayPopup] = useState(null);
 
- const today = new Date().toISOString().split("T")[0];
+ const today = new Date().toLocaleDateString("en-CA");
  const PRI_COLOR = { high: "#dc2626", medium: "#f59e0b", low: "#10b981" };
 
  const estimateDueDate = (task) => {
@@ -4481,7 +4487,7 @@ function TaskScheduleModal({ tasks, locId, equipment, locationName, onClose }) {
    const daysOut = Math.ceil(carsRemaining / 150);
    const est = new Date();
    est.setDate(est.getDate() + daysOut);
-   return { date: est.toISOString().split("T")[0], isEstimated: true };
+   return { date: est.toLocaleDateString("en-CA"), isEstimated: true };
  };
 
  const scheduledTasks = tasks
@@ -5154,7 +5160,7 @@ const [title, setTitle] = useState(editTask?.title || "");
 const [category, setCategory] = useState(editTask?.category || "cleaning");
 const [priority, setPriority] = useState(editTask?.priority || "medium");
 const [shift, setShift] = useState(editTask?.shift || "everyone");
-const [due, setDue] = useState(editTask?.due || new Date().toISOString().split("T")[0]);
+const [due, setDue] = useState(editTask?.due || new Date().toLocaleDateString("en-CA"));
 const [saving, setSaving] = useState(false);
   const [requirePhoto, setRequirePhoto] = useState(editTask?.requirePhoto || false);
   const [equipmentId, setEquipmentId] = useState(editTask?.equipmentId || preset?.id || "");
@@ -7173,7 +7179,7 @@ const [savingNote, setSavingNote] = useState(false);
 
 const year = currentDate.getFullYear();
 const month = currentDate.getMonth();
-const today = new Date().toISOString().split("T")[0];
+const today = new Date().toLocaleDateString("en-CA");
 
 useEffect(() => {
 if (!locId) return;
@@ -7195,7 +7201,7 @@ const fetchWeather = async (dateStr) => {
       if (!geoData.places?.length) return;
       const latitude = parseFloat(geoData.places[0].latitude);
       const longitude = parseFloat(geoData.places[0].longitude);
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date().toLocaleDateString("en-CA");
       const isPast = dateStr < today;
       const endpoint = isPast
         ? "https://archive-api.open-meteo.com/v1/archive?latitude=" + latitude + "&longitude=" + longitude + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,rain_sum,snowfall_sum&hourly=weathercode,precipitation&timezone=America/New_York&start_date=" + dateStr + "&end_date=" + dateStr
@@ -8349,7 +8355,7 @@ function CarCounts({ locations }) {
 
         if (newCarsCount >= t.nextCarsDue) {
           await updateDoc(doc(db, "locations", locId, "tasks", t.id), {
-            due: new Date().toISOString().split("T")[0],
+            due: new Date().toLocaleDateString("en-CA"),
             updatedAt: new Date().toISOString(),
           });
           // Notify if enabled
@@ -8380,7 +8386,7 @@ function CarCounts({ locations }) {
   const goDay = (offset) => {
     const d = new Date(selectedDate + "T12:00:00");
     d.setDate(d.getDate() + offset);
-    setSelectedDate(d.toISOString().split("T")[0]);
+    setSelectedDate(d.toLocaleDateString("en-CA"));
   };
   const sumPkgs = (pm, eqId, prefix) => {
     const src = (pm || {})[eqId] || {};
@@ -9788,8 +9794,8 @@ function AlertSettings({ locId, locations, user, setView, setLocId }) {
 }
 
 function AllLocations({ locations, tasks, setLocId, setView }) {
-  const today = new Date().toISOString().split("T")[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA");
+  const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("en-CA");
   const [daySummaries, setDaySummaries] = useState({});
 
   useEffect(() => {
