@@ -997,8 +997,7 @@ exports.receiveCountEmail = onRequest({ secrets: [RESEND_API_KEY] }, async (req,
         title = "Back In Service - " + eqName;
         msg = "Fault cleared - " + ts;
       } else if (isOE) {
-        ntype = "equipment_event";
-        title = "Equipment Event - " + eqName;
+        title = "Equipment Fault - " + eqName;
         msg = firstLine.replace(/[ ][ ]+/g, " ") + " - " + ts;
       } else if (/Laserwash[ ]*:/i.test(subject) || /Laserwash[ ]*:/i.test(firstLine)) {
         const subjSrc = /Laserwash[ ]*:/i.test(subject) ? subject : firstLine;
@@ -1601,60 +1600,67 @@ exports.notifyOperatorIssue = onDocumentCreated({ document: "issues/{issueId}", 
     const { ownerId, bayId, type, affectedFunction, callbackPhone, transferCode } = issue;
     if (!ownerId) return;
 
-    // Look up bay config for bay name and attendant phone
+    // One alert per session - a second report in the same session stays silent.
+    // No-op if issue docs carry no sessionId.
+    if (issue.sessionId) {
+      const sib = await db.collection("issues").where("sessionId", "==", issue.sessionId).get();
+      const mine = issue.reportedAt && issue.reportedAt.toMillis ? issue.reportedAt.toMillis() : 0;
+      const hasEarlier = sib.docs
+        .filter(d => d.id !== event.params.issueId)
+        .some(d => {
+          const t = d.data().reportedAt;
+          return t && t.toMillis && t.toMillis() < mine;
+        });
+      if (hasEarlier) {
+        console.log(`notifyOperatorIssue: duplicate for session ${issue.sessionId} - suppressed`);
+        return;
+      }
+    }
+
     const bayDoc = await db.collection("bays").doc(bayId).get();
     const bay = bayDoc.exists ? bayDoc.data() : {};
     const bayName = bay.displayName || bay.washName || "Bay";
-    const attendantPhone = bay.attendantPhone;
 
-    // Look up owner for email
-    const ownerDoc = await db.collection("users").doc(ownerId).get();
-    const owner = ownerDoc.exists ? ownerDoc.data() : {};
-    const ownerEmail = owner.email;
+    // Recipients come from the location Alerts tab, same path as device health
+    const ctx = await wbLoadAlertContext({ ...bay, ownerId: bay.ownerId || ownerId });
+    const route = ctx.settingFor("issueReported");
+    if (!route.sms && !route.email) return;
 
     const issueTypes = { functionNotWorking: "Function Not Working", leakingFitting: "Leaking Fitting", other: "Other Issue" };
     const issueLabel = issueTypes[type] || type || "Issue Reported";
-    const fnLabel = affectedFunction != null ? ` — Function ${affectedFunction}` : "";
+    const fnLabel = affectedFunction != null ? ` - Function ${affectedFunction}` : "";
+    const when = new Date().toLocaleString("en-CA", { timeZone: ctx.timezone });
 
-    // SMS to attendant phone
-    if (attendantPhone && attendantPhone.length >= 10) {
-      let msg = `⚠ WashBoard Issue — ${bayName}\n`;
+    if (route.sms && ctx.consent && ctx.phones.length > 0) {
+      let msg = `WashBoard Issue - ${bayName}\n`;
       msg += `Type: ${issueLabel}${fnLabel}\n`;
       if (callbackPhone) msg += `Customer phone: ${callbackPhone}\n`;
       if (transferCode) msg += `Transfer code: ${transferCode}\n`;
-      msg += `Time: ${new Date().toLocaleString("en-CA", { timeZone: "America/New_York" })}`;
+      msg += `Time: ${when}`;
 
-      const phone = attendantPhone.startsWith("+") ? attendantPhone : `+1${attendantPhone.replace(/\D/g, "")}`;
-      try { await sendSms(phone, msg, TELNYX_API_KEY.value()); } catch (e) { console.error("Issue SMS failed:", e); }
+      for (const raw of ctx.phones) {
+        const phone = raw.startsWith("+") ? raw : `+1${raw.replace(/\D/g, "")}`;
+        try { await sendSms(phone, msg, TELNYX_API_KEY.value()); }
+        catch (e) { console.error(`Issue SMS failed (${phone}):`, e.message); }
+      }
     }
 
-    // Email to owner
-    if (ownerEmail) {
+    if (route.email && ctx.emails.length > 0) {
       const resend = new Resend(RESEND_API_KEY.value());
+      const rows = [["Type", `${issueLabel}${fnLabel}`]];
+      if (callbackPhone) rows.push(["Customer phone", callbackPhone,
+        "color:#00d4aa;font-size:13px;font-family:monospace;"]);
+      if (transferCode) rows.push(["Transfer code", transferCode,
+        "color:#00ff88;font-size:15px;font-family:monospace;letter-spacing:3px;"]);
+      rows.push(["Time", when]);
       try {
         await resend.emails.send({
           from: "WashBoard <alerts@washboard.washlevel.com>",
-          to: ownerEmail,
-          subject: `Issue reported — ${bayName}`,
-          html: `
-            <div style="font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #070e1a;">
-              <div style="background: #0b1628; border-radius: 14px; padding: 28px; border: 1px solid #1e3a5f;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
-                  <div style="width: 36px; height: 36px; background: #f59e0b22; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 18px;">⚠</div>
-                  <div><h2 style="color: #e2e8f0; margin: 0; font-size: 18px;">Issue Reported</h2><p style="color: #6b7a8d; margin: 0; font-size: 12px;">${bayName}</p></div>
-                </div>
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Type</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right;">${issueLabel}${fnLabel}</td></tr>
-                  ${callbackPhone ? `<tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Customer Phone</td><td style="padding: 8px 0; color: #00d4aa; font-size: 13px; text-align: right; font-family: monospace;">${callbackPhone}</td></tr>` : ""}
-                  ${transferCode ? `<tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Transfer Code</td><td style="padding: 8px 0; color: #00ff88; font-size: 15px; text-align: right; font-family: monospace; letter-spacing: 3px;">${transferCode}</td></tr>` : ""}
-                  <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Time</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right;">${new Date().toLocaleString("en-CA", { timeZone: "America/New_York" })}</td></tr>
-                </table>
-                <a href="https://washboard.washlevel.com" style="display: block; background: #00d4aa; color: #070e1a; text-decoration: none; text-align: center; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 14px; margin-top: 20px;">Open Dashboard</a>
-              </div>
-            </div>
-          `
+          to: ctx.emails,
+          subject: `Issue reported - ${bayName}`,
+          html: wbAlertEmailHtml("Issue Reported", bayName, rows, "#f59e0b"),
         });
-      } catch (e) { console.error("Issue email failed:", e); }
+      } catch (e) { console.error("Issue email failed:", e.message); }
     }
   } catch (err) {
     console.error("notifyOperatorIssue error:", err);
@@ -2199,10 +2205,11 @@ async function wbLoadAlertContext(bay) {
 }
 
 function wbAlertEmailHtml(title, bayName, rows, accent) {
-  const cells = rows.map(r =>
-    `<tr><td style="padding:8px 0;color:#6b7a8d;font-size:13px;">${r[0]}</td>` +
-    `<td style="padding:8px 0;color:#e2e8f0;font-size:13px;text-align:right;">${r[1]}</td></tr>`
-  ).join("");
+  const cells = rows.map(r => {
+    const vStyle = r[2] || "color:#e2e8f0;font-size:13px;";
+    return `<tr><td style="padding:8px 0;color:#6b7a8d;font-size:13px;">${r[0]}</td>` +
+      `<td style="padding:8px 0;text-align:right;${vStyle}">${r[1]}</td></tr>`;
+  }).join("");
   return `
     <div style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#070e1a;">
       <div style="background:#0b1628;border-radius:14px;padding:28px;border:1px solid #1e3a5f;">
@@ -2232,8 +2239,6 @@ async function wbHandleCondition(bayId, bay, ctx, key, isActive, detail) {
   }, { merge: true });
 
   const route = ctx.settingFor(key);
-  console.log(`wbDebug ${bayId} ${key} active=${isActive} was=${wasActive} ` +
-    `sms=${route.sms} email=${route.email} phones=${ctx.phones.length} emails=${ctx.emails.length} consent=${ctx.consent}`);
   if (!route.sms && !route.email) return false;
 
   const bayName = bay.displayName || bay.washName || bayId;
@@ -2283,16 +2288,10 @@ exports.notifyWashBoardDeviceHealth = onDocumentWritten(
     const watched = ["thermalState", "powerState", "batteryLevel"];
     const changed = watched.filter(f => before[f] !== after[f]);
     if (changed.length === 0) return;
-    console.log(`wbDebug ${event.params.bayId} changed=[${changed.join(",")}] ` +
-      `power=${before.powerState}->${after.powerState} ` +
-      `battery=${before.batteryLevel}->${after.batteryLevel} ` +
-      `thermal=${before.thermalState}->${after.thermalState}`);
 
     try {
       const bayId = event.params.bayId;
       const ctx = await wbLoadAlertContext(after);
-      console.log(`wbDebug ctx locationId=${after.locationId || "NONE"} ownerId=${after.ownerId || "NONE"} ` +
-        `phones=${ctx.phones.length} emails=${ctx.emails.length} consent=${ctx.consent} threshold=${ctx.threshold}`);
 
       await wbHandleCondition(bayId, after, ctx, "thermalCritical",
         after.thermalState === "critical",

@@ -1443,16 +1443,16 @@ function powerMeta(state) {
   }
 }
 
-function healthAlerts(d) {
+function healthAlerts(d, threshold) {
   const out = []
-  const threshold = typeof d.batteryAlertThreshold === "number" ? d.batteryAlertThreshold : 50
+  if (typeof threshold !== "number") threshold = 50
   if (d.thermalState === "critical") out.push("Device overheating - check bay cooling")
   if (d.powerState === "unplugged") out.push("Running on battery - charger may have failed")
   else if (typeof d.batteryLevel === "number" && d.batteryLevel >= 0 && d.batteryLevel < threshold) out.push("Battery below " + threshold + "%")
   return out
 }
 
-function DevicesTab({ bays }) {
+function DevicesTab({ bays, batteryThreshold }) {
   const now = Date.now()
   const devices = bays.filter(b => b.deviceId).map(b => {
     const hb = b.lastHeartbeat?.toDate ? b.lastHeartbeat.toDate() : null
@@ -1476,8 +1476,8 @@ function DevicesTab({ bays }) {
           </div>
           <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 10px", borderRadius: "6px", background: d.isOnline ? T.green + "20" : T.red + "20", color: d.isOnline ? T.green : T.red }}>{d.isOnline ? "Online" : "Offline"}</span>
         </div>
-            {d.isOnline && healthAlerts(d).length > 0 && <div style={{ marginBottom: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
-              {healthAlerts(d).map((msg, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", background: T.red + "14", border: "1px solid " + T.red + "40", borderRadius: "8px", padding: "8px 10px" }}>
+            {d.isOnline && healthAlerts(d, batteryThreshold).length > 0 && <div style={{ marginBottom: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
+              {healthAlerts(d, batteryThreshold).map((msg, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", background: T.red + "14", border: "1px solid " + T.red + "40", borderRadius: "8px", padding: "8px 10px" }}>
                 <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: T.red, flexShrink: 0 }} />
                 <div style={{ fontSize: "11px", color: T.red, fontWeight: 600 }}>{msg}</div>
               </div>)}
@@ -1486,9 +1486,9 @@ function DevicesTab({ bays }) {
           <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>DEVICE ID</div><div style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.textSecondary, wordBreak: "break-all" }}>{d.deviceId?.substring(0, 16) || "--"}...</div></div>
           <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>LAST HEARTBEAT</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline ? T.green : T.red }}>{d.heartbeatDate ? formatDate(d.heartbeatDate) : "Never"}</div></div>
           <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>RELAY HOST</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: T.accent }}>{d.relayHost || "--"}</div></div>
-          <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>STATUS</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: T.textSecondary }}>{d.status || "--"}</div></div>
+          <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>SESSION</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline && d.status === "active" ? T.accent : T.textSecondary }}>{d.isOnline ? (d.status || "--") : "--"}</div></div>
               <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>THERMAL</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline ? thermalMeta(d.thermalState).color : T.textDim }}>{d.isOnline ? thermalMeta(d.thermalState).label : "--"}</div></div>
-              <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>POWER</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline ? powerMeta(d.powerState).color : T.textDim }}>{d.isOnline ? powerMeta(d.powerState).label : "--"}{d.isOnline && typeof d.batteryLevel === "number" && d.batteryLevel >= 0 && <span style={{ color: d.batteryLevel < (typeof d.batteryAlertThreshold === "number" ? d.batteryAlertThreshold : 50) ? T.amber : T.textSecondary }}>{" " + d.batteryLevel + "%"}</span>}</div></div>
+              <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>POWER</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline ? powerMeta(d.powerState).color : T.textDim }}>{d.isOnline ? powerMeta(d.powerState).label : "--"}{d.isOnline && typeof d.batteryLevel === "number" && d.batteryLevel >= 0 && <span style={{ color: d.batteryLevel < (typeof batteryThreshold === "number" ? batteryThreshold : 50) ? T.amber : T.textSecondary }}>{" " + d.batteryLevel + "%"}</span>}</div></div>
           {d.streamUrl && <div style={{ gridColumn: "1 / -1" }}><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>STREAM URL</div><div style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.accent, wordBreak: "break-all" }}>{d.streamUrl}</div></div>}
         </div>
       </div>)}
@@ -2121,7 +2121,7 @@ export default function App() {
       {activeTab === "sessions" && <SessionsTab ownerId={user.uid} bays={bays} />}
       {activeTab === "codes" && <CodesTab ownerId={user.uid} />}
       {activeTab === "issues" && <IssuesTab ownerId={user.uid} bays={bays} />}
-      {activeTab === "devices" && <DevicesTab bays={bays} />}
+      {activeTab === "devices" && <DevicesTab bays={bays} batteryThreshold={wbLocations.find(l => l.id === selectedLocationId)?.batteryAlertThreshold} />}
       {activeTab === "payments" && <PaymentsTab ownerId={user.uid} bays={bays} />}
       {activeTab === "staff" && <StaffTab ownerId={user.uid} />}
         {activeTab === "alerts" && <AlertsTab ownerId={user.uid} />}

@@ -1911,7 +1911,9 @@ if (task.recurrence && !task.recurrence.includes("cars")) {
   else if (task.recurrence === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
   else if (task.recurrence === "quarterly") nextDue.setMonth(nextDue.getMonth() + 3);
   else if (task.recurrence === "annually") nextDue.setFullYear(nextDue.getFullYear() + 1);
-  const newId = "t" + Date.now();
+  const nextDueStr = nextDue.toLocaleDateString("en-CA");
+  const rootId = task.recurRootId || task.id;
+  const newId = "t_" + rootId + "_" + nextDueStr;
   await setDoc(doc(db, "locations", locId, "tasks", newId), {
     ...task,
     id: newId,
@@ -1921,7 +1923,8 @@ if (task.recurrence && !task.recurrence.includes("cars")) {
     startedAt: null,
     archived: false,
     archivedAt: null,
-    due: nextDue.toISOString().split("T")[0],
+    due: nextDueStr,
+    recurRootId: rootId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     note: "",
@@ -1941,7 +1944,8 @@ if (task.recurrence && !task.recurrence.includes("cars")) {
         lastService: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         updatedAt: new Date().toISOString(),
       });
-      const newId = "t" + Date.now();
+      const rootId = task.recurRootId || task.id;
+      const newId = "t_" + rootId + "_c" + nextTargetCars;
       await setDoc(doc(db, "locations", locId, "tasks", newId), {
         ...task,
         id: newId,
@@ -1953,39 +1957,7 @@ if (task.recurrence && !task.recurrence.includes("cars")) {
         archivedAt: null,
         due: null,
         nextCarsDue: nextTargetCars,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        note: "",
-        attachments: [],
-      });
-    } catch(e) { console.log("Car recurrence error:", e.message); }
-  }
-} else if (task.recurrence && task.recurrence.includes("cars") && task.equipmentId) {
-  // Car-based recurrence — schedule next task based on equipment car count
-  const carInterval = parseInt(task.recurrence.replace(/[^0-9]/g, "")) || 0;
-  if (carInterval > 0) {
-    try {
-      const eqDoc = await getDoc(doc(db, "locations", locId, "equipment", task.equipmentId));
-      const currentCars = eqDoc.exists() ? (eqDoc.data().carsCount || 0) : 0;
-      const nextTargetCars = currentCars + carInterval;
-      // Update equipment lastServiceCars so we can track progress
-      await updateDoc(doc(db, "locations", locId, "equipment", task.equipmentId), {
-        lastServiceCars: currentCars,
-        lastService: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        updatedAt: new Date().toISOString(),
-      });
-      const newId = "t" + Date.now();
-      await setDoc(doc(db, "locations", locId, "tasks", newId), {
-        ...task,
-        id: newId,
-        status: "pending",
-        completedAt: null,
-        completedBy: null,
-        startedAt: null,
-        archived: false,
-        archivedAt: null,
-        due: null,
-        nextCarsDue: nextTargetCars,
+        recurRootId: rootId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         note: "",
@@ -2047,30 +2019,6 @@ return (
   <button onClick={async (e) => {
     e.stopPropagation();
     await updateDoc(doc(db, "locations", locId, "tasks", task.id), { archived: true, archivedAt: new Date().toISOString() });
-    if (task.recurrence && !task.recurrence.includes("cars")) {
-      const nextDue = new Date();
-      if (task.recurrence === "daily") nextDue.setDate(nextDue.getDate() + 1);
-      else if (task.recurrence === "weekly") nextDue.setDate(nextDue.getDate() + 7);
-      else if (task.recurrence === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
-      else if (task.recurrence === "quarterly") nextDue.setMonth(nextDue.getMonth() + 3);
-      else if (task.recurrence === "annually") nextDue.setFullYear(nextDue.getFullYear() + 1);
-      const newId = "t" + Date.now();
-      await setDoc(doc(db, "locations", locId, "tasks", newId), {
-        ...task,
-        id: newId,
-        status: "pending",
-        completedAt: null,
-        completedBy: null,
-        startedAt: null,
-        archived: false,
-        archivedAt: null,
-        due: nextDue.toISOString().split("T")[0],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        note: "",
-        attachments: [],
-      });
-    }
   }} style={{ background: "#d1fae5", color: "#065f46", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Approve</button>
 )}
 {(user?.role === "manager" || user?.role === "owner") && (
@@ -5059,6 +5007,59 @@ function InspectionModal({ task, locId, user, onClose, onComplete, equipment, lo
       });
     }
 
+    // Auto-create next occurrence for recurring inspections
+    if (task.recurrence && task.recurrence.indexOf("cars") === -1) {
+      const nextDue = new Date();
+      if (task.recurrence === "daily") nextDue.setDate(nextDue.getDate() + 1);
+      else if (task.recurrence === "weekly") nextDue.setDate(nextDue.getDate() + 7);
+      else if (task.recurrence === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
+      else if (task.recurrence === "quarterly") nextDue.setMonth(nextDue.getMonth() + 3);
+      else if (task.recurrence === "annually") nextDue.setFullYear(nextDue.getFullYear() + 1);
+      const nextDueStr = nextDue.toLocaleDateString("en-CA");
+      const rootId = task.recurRootId || task.id;
+      const recId = "t_" + rootId + "_" + nextDueStr;
+      await setDoc(doc(db, "locations", locId, "tasks", recId), {
+        ...task,
+        id: recId,
+        recurRootId: rootId,
+        status: "pending",
+        checklist: (task.checklist || []).map(c => ({ ...c, result: null, note: "", photoUrl: null })),
+        completedAt: null, completedBy: null, startedAt: null,
+        archived: false, archivedAt: null,
+        due: nextDueStr,
+        createdAt: now, updatedAt: now,
+        note: "", attachments: [], mediaUrls: [],
+      });
+    } else if (task.recurrence && task.recurrence.indexOf("cars") !== -1 && task.equipmentId) {
+      const carInterval = parseInt(task.recurrence.replace(/[^0-9]/g, "")) || 0;
+      if (carInterval > 0) {
+        try {
+          const eqSnap = await getDoc(doc(db, "locations", locId, "equipment", task.equipmentId));
+          const currentCars = eqSnap.exists() ? (eqSnap.data().carsCount || 0) : 0;
+          const nextTargetCars = currentCars + carInterval;
+          await updateDoc(doc(db, "locations", locId, "equipment", task.equipmentId), {
+            lastServiceCars: currentCars,
+            lastService: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            updatedAt: now,
+          });
+          const rootId = task.recurRootId || task.id;
+          const recId = "t_" + rootId + "_c" + nextTargetCars;
+          await setDoc(doc(db, "locations", locId, "tasks", recId), {
+            ...task,
+            id: recId,
+            recurRootId: rootId,
+            status: "pending",
+            checklist: (task.checklist || []).map(c => ({ ...c, result: null, note: "", photoUrl: null })),
+            completedAt: null, completedBy: null, startedAt: null,
+            archived: false, archivedAt: null,
+            due: null,
+            nextCarsDue: nextTargetCars,
+            createdAt: now, updatedAt: now,
+            note: "", attachments: [], mediaUrls: [],
+          });
+        } catch(e) { console.log("Inspection car recurrence error:", e.message); }
+      }
+    }
     setSaving(false);
     onComplete();
     onClose();
