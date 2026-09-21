@@ -10,7 +10,7 @@ import {
   X, Play, Square, Timer, Gamepad2, Video, PlusCircle,
   Wind, Sparkles, Brush, SprayCan, Waves, Flame,
   CloudRain, Snowflake, Zap, ShieldCheck, CircleDot,
-  Pipette, Eraser, Fan, Car, Hexagon
+  Pipette, Eraser, Fan, Car, Hexagon, ZapOff
 } from "lucide-react"
 import { db, auth, storage, functions, httpsCallable, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase"
 import {
@@ -119,12 +119,29 @@ const makeDefaultConfig = (bayName = "Bay 1") => ({
 // HELPERS
 // ═══════════════════════════════════════════
 
+function statusLabel(st) {
+  if (st === "outOfService") return "Out of service"
+  if (st === "relayDown") return "Relay down"
+  return st
+}
+
 function effectiveStatus(bay) {
   if (bay.outOfService === true) return "outOfService"
   if (!bay.lastHeartbeat) return bay.status || "offline"
   const lastBeat = bay.lastHeartbeat?.toMillis ? bay.lastHeartbeat.toMillis() : (bay.lastHeartbeat?.seconds ? bay.lastHeartbeat.seconds * 1000 : 0)
   const staleMs = Date.now() - lastBeat
-  if (staleMs > 90000) return "offline"
+  // Scale with the interval the iPad reports. HeartbeatScheduler sends every
+  // 30s in a session, 120s idle and 300s overnight, so a fixed 90s flagged
+  // healthy idle bays offline. Floor of 90s for older builds without the field.
+  const interval = typeof bay.heartbeatInterval === "number" ? bay.heartbeatInterval : 30
+  if (staleMs > Math.max(90000, interval * 3000)) return "offline"
+  // The iPad is reporting and says its relay is unreachable. This is
+  // separate from outOfService, which is the operator's own switch.
+  if (bay.relayConnected === false) return "relayDown"
+  // A fresh heartbeat outranks a stored offline. The iPad writes
+  // status: offline on termination and older builds never reset it on
+  // launch, so a live bay could sit on OFFLINE until its next session ended.
+  if (bay.status === "offline") return "idle"
   return bay.status || "idle"
 }
 
@@ -239,11 +256,12 @@ const S = {
   bayCard: (st) => {
     if (st === "offline") return { background: "rgba(239,68,68,0.06)", border: `2px solid ${T.red}`, borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", cursor: "pointer", boxShadow: `0 0 24px rgba(239,68,68,0.25)` }
     if (st === "outOfService") return { background: T.bgPanel, border: `1px dashed rgba(156,163,175,0.5)`, borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", cursor: "pointer", opacity: 0.75 }
+    if (st === "relayDown") return { background: "rgba(245,158,11,0.06)", border: `2px solid ${T.amber}`, borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", cursor: "pointer", boxShadow: `0 0 24px rgba(245,158,11,0.2)` }
     return { background: T.bgPanel, border: `1px solid ${T.border}`, borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", cursor: "pointer" }
   },
   bayHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px" },
   bayName: { fontFamily: T.fontDisplay, fontSize: "15px", fontWeight: 600, color: T.textPrimary, margin: 0 },
-  bayBadge: (st) => { const m = { idle: { bg: T.bgElevated, c: T.textDim, b: T.border }, active: { bg: T.accentDim, c: T.accent, b: "rgba(0,212,170,0.3)" }, issue: { bg: T.amberDim, c: T.amber, b: "rgba(245,158,11,0.3)" }, offline: { bg: T.redDim, c: T.red, b: "rgba(239,68,68,0.3)" }, outOfService: { bg: "rgba(107,114,128,0.15)", c: "#9ca3af", b: "rgba(107,114,128,0.35)" } }; const v = m[st] || m.idle; const label = st === "outOfService" ? "OUT OF SERVICE" : st; return { fontSize: "10px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", borderRadius: "6px", background: v.bg, color: v.c, border: `1px solid ${v.b}`, __label: label } },
+  bayBadge: (st) => { const m = { idle: { bg: T.bgElevated, c: T.textDim, b: T.border }, active: { bg: T.accentDim, c: T.accent, b: "rgba(0,212,170,0.3)" }, issue: { bg: T.amberDim, c: T.amber, b: "rgba(245,158,11,0.3)" }, offline: { bg: T.redDim, c: T.red, b: "rgba(239,68,68,0.3)" }, outOfService: { bg: "rgba(107,114,128,0.15)", c: "#9ca3af", b: "rgba(107,114,128,0.35)" }, relayDown: { bg: T.amberDim, c: T.amber, b: "rgba(245,158,11,0.4)" } }; const v = m[st] || m.idle; return { fontSize: "10px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", borderRadius: "6px", background: v.bg, color: v.c, border: `1px solid ${v.b}` } },
   bayBody: { padding: "0 16px 14px" },
   baySession: { background: T.bgDeep, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "12px", display: "flex", alignItems: "center", gap: "14px" },
   bayTimer: (c) => ({ fontFamily: T.fontMono, fontSize: "28px", color: c || T.accent, letterSpacing: "2px", textShadow: `0 0 15px ${T.accentGlow}`, lineHeight: 1 }),
@@ -509,7 +527,7 @@ function BayDetailModal({ bay, bays, onClose }) {
           <div style={{ fontSize: "11px", color: T.textDim, marginTop: "2px" }}>{bay?.washName || "Self-Serve Wash"}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={S.bayBadge(status)}>{status}</div>
+          <div style={S.bayBadge(status)}>{statusLabel(status)}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: T.textDim }}><X size={20} /></button>
         </div>
       </div>
@@ -623,7 +641,7 @@ function BayCard({ bay, onClick }) {
   return <div style={S.bayCard(status)} onClick={onClick}>
     <div style={S.bayHeader}>
       <div><h3 style={S.bayName}>{bay.displayName || bay.id}</h3><div style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.textDim }}>{bay.deviceId ? "iPad paired" : "No device"}</div></div>
-      <div style={S.bayBadge(status)}>{status}</div>
+      <div style={S.bayBadge(status)}>{statusLabel(status)}</div>
     </div>
     <div style={S.bayBody}>
       {(status === "active" || status === "issue") ? (
@@ -642,6 +660,12 @@ function BayCard({ bay, onClick }) {
           <div style={{ fontFamily: T.fontMono, fontSize: "16px", color: T.accent }}>${(bay.lastSession.charge || 0).toFixed(2)}<span style={{ color: T.textDim, fontSize: "12px", margin: "0 6px" }}>/</span>{formatDuration(bay.lastSession.durationSeconds || 0)}</div>
           <div style={{ fontSize: "10px", color: T.textDim, marginTop: "4px" }}>{bay.lastSession.endedAt?.toDate ? timeAgo(bay.lastSession.endedAt.toDate()) : ""}</div>
         </> : "Waiting for customer"}</div>
+      ) : status === "relayDown" ? (
+        <div style={{ ...S.bayIdle, color: T.amber, padding: "24px 12px" }}>
+          <ZapOff size={30} strokeWidth={2} style={{ marginBottom: 8 }} />
+          <div style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "2px", color: T.amber }}>RELAY DOWN</div>
+          <div style={{ fontSize: "10px", marginTop: 4, color: T.textDim }}>iPad online, relay unreachable</div>
+        </div>
       ) : status === "outOfService" ? (
         <div style={{ ...S.bayIdle, color: "#9ca3af", padding: "24px 12px" }}>
           <Construction size={28} strokeWidth={1.5} style={{ marginBottom: 8, opacity: 0.7 }} />
@@ -835,7 +859,8 @@ function SessionDetailModal({ session, bays, onClose }) {
 // ═══════════════════════════════════════════
 
 function SessionsTab({ ownerId, bays }) {
-  const [sessions, setSessions] = useState([])
+  const [rawSessions, setSessions] = useState([])
+  const sessions = rawSessions.filter(x => bays.some(b => b.id === x.bayId))
   const [loading, setLoading] = useState(true)
   const [selectedSession, setSelectedSession] = useState(null)
 
@@ -907,7 +932,7 @@ function configToFirestore(c, ownerId) {
   const activeFunctions = c.functions.filter(f => f.enabled).map(f => f.id)
   const functionConfigs = {}, perFunctionRates = {}
   c.functions.forEach(f => { const fc = {}; if (f.customName) fc.customName = f.customName; if (f.icon) fc.icon = f.icon; if (Object.keys(fc).length) functionConfigs[String(f.id)] = fc; if (f.perFunctionRate) perFunctionRates[String(f.id)] = parseFloat(f.perFunctionRate) || 0 })
-  return { ownerId, locationId: "default", washName: c.washName, displayName: c.displayName, attendantPhone: c.attendantPhone,
+  return { ownerId, washName: c.washName, displayName: c.displayName, attendantPhone: c.attendantPhone,
     status: c.status || "offline", pricingMode: c.pricingMode, flatRatePerMinute: parseFloat(c.flatRatePerMinute) || 1.00,
     minimumCharge: c.minimumCharge ? parseFloat(c.minimumCharge) : null, maximumCharge: c.maximumCharge ? parseFloat(c.maximumCharge) : null,
     relayHost: c.relayHost, relayPort: parseInt(c.relayPort) || 502, watchdogInterval: parseInt(c.watchdogInterval) || 10,
@@ -915,14 +940,39 @@ function configToFirestore(c, ownerId) {
     activeFunctions, functionConfigs, perFunctionRates, updatedAt: serverTimestamp() }
 }
 
-function BayConfigTab({ bays, ownerId }) {
+function BayConfigTab({ bays, ownerId, locationId }) {
   const [selId, setSelId] = useState(null), [config, setConfig] = useState(makeDefaultConfig()), [saving, setSaving] = useState(false), [saved, setSaved] = useState(false), [creating, setCreating] = useState(false)
-  useEffect(() => { if (bays.length > 0 && !selId) { setSelId(bays[0].id); setConfig(configFromFirestore(bays[0])) } }, [bays])
+  useEffect(() => { if (bays.length > 0 && (!selId || !bays.some(b => b.id === selId))) { setSelId(bays[0].id); setConfig(configFromFirestore(bays[0])) } }, [bays])
   const selectBay = (id) => { setSelId(id); const b = bays.find(x => x.id === id); if (b) setConfig(configFromFirestore(b)); setSaved(false) }
   const u = (k, v) => { setConfig(p => ({ ...p, [k]: v })); setSaved(false) }
   const uFn = (id, k, v) => { setConfig(p => ({ ...p, functions: p.functions.map(f => f.id === id ? { ...f, [k]: v } : f) })); setSaved(false) }
-  const save = async () => { if (!selId) return; setSaving(true); try { await setDoc(doc(db, "bays", selId), configToFirestore(config, ownerId), { merge: true }); setSaved(true); setTimeout(() => setSaved(false), 3000) } catch (e) { alert("Failed: " + e.message) } setSaving(false) }
-  const create = async () => { setCreating(true); try { const c = makeDefaultConfig(`Bay ${bays.length + 1}`); const ref = await addDoc(collection(db, "bays"), configToFirestore(c, ownerId)); setSelId(ref.id); setConfig(c) } catch (e) { alert("Failed: " + e.message) } setCreating(false) }
+  const save = async () => {
+    if (!selId) return
+    setSaving(true)
+    try {
+      const payload = configToFirestore(config, ownerId)
+      // Self-heal bays created before this fix. Only writes when the current
+      // value is missing or the old placeholder — a real location is never
+      // overwritten, even if a different one is selected in the topbar.
+      const current = bays.find(b => b.id === selId)?.locationId
+      if ((!current || current === "default") && locationId) payload.locationId = locationId
+      await setDoc(doc(db, "bays", selId), payload, { merge: true })
+      setSaved(true); setTimeout(() => setSaved(false), 3000)
+    } catch (e) { alert("Failed: " + e.message) }
+    setSaving(false)
+  }
+  const create = async () => {
+    // Alerts, reports and logos all resolve through the bay's location. A
+    // bay without one runs fine and then silently never alerts anyone.
+    if (!locationId) { alert("Add a location first under Settings > Location. Alerts and reports are grouped by location."); return }
+    setCreating(true)
+    try {
+      const c = makeDefaultConfig(`Bay ${bays.length + 1}`)
+      const ref = await addDoc(collection(db, "bays"), { ...configToFirestore(c, ownerId), locationId })
+      setSelId(ref.id); setConfig(c)
+    } catch (e) { alert("Failed: " + e.message) }
+    setCreating(false)
+  }
   const selBay = bays.find(b => b.id === selId)
   const isUnpaired = selBay && !selBay.deviceId
 
@@ -1235,7 +1285,8 @@ function CodesTab({ ownerId }) {
 // ISSUES TAB
 // ═══════════════════════════════════════════
 function IssuesTab({ ownerId, bays }) {
-  const [issues, setIssues] = useState([])
+  const [rawIssues, setIssues] = useState([])
+  const issues = rawIssues.filter(x => bays.some(b => b.id === x.bayId))
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("all")
   const [selectedIssue, setSelectedIssue] = useState(null)
@@ -1446,6 +1497,7 @@ function powerMeta(state) {
 function healthAlerts(d, threshold) {
   const out = []
   if (typeof threshold !== "number") threshold = 50
+  if (d.relayConnected === false) out.push("Relay unreachable - bay cannot run washes")
   if (d.thermalState === "critical") out.push("Device overheating - check bay cooling")
   if (d.powerState === "unplugged") out.push("Running on battery - charger may have failed")
   else if (typeof d.batteryLevel === "number" && d.batteryLevel >= 0 && d.batteryLevel < threshold) out.push("Battery below " + threshold + "%")
@@ -1486,6 +1538,7 @@ function DevicesTab({ bays, batteryThreshold }) {
           <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>DEVICE ID</div><div style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.textSecondary, wordBreak: "break-all" }}>{d.deviceId?.substring(0, 16) || "--"}...</div></div>
           <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>LAST HEARTBEAT</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline ? T.green : T.red }}>{d.heartbeatDate ? formatDate(d.heartbeatDate) : "Never"}</div></div>
           <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>RELAY HOST</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: T.accent }}>{d.relayHost || "--"}</div></div>
+          <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>RELAY</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: !d.isOnline ? T.textDim : d.relayConnected === false ? T.amber : d.relayConnected === true ? T.green : T.textDim }}>{!d.isOnline ? "--" : d.relayConnected === false ? "Unreachable" : d.relayConnected === true ? "Connected" : "Unknown"}</div></div>
           <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>SESSION</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline && d.status === "active" ? T.accent : T.textSecondary }}>{d.isOnline ? (d.status || "--") : "--"}</div></div>
               <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>THERMAL</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline ? thermalMeta(d.thermalState).color : T.textDim }}>{d.isOnline ? thermalMeta(d.thermalState).label : "--"}</div></div>
               <div><div style={{ color: T.textDim, fontSize: "10px", letterSpacing: "1px", marginBottom: "2px" }}>POWER</div><div style={{ fontFamily: T.fontMono, fontSize: "11px", color: d.isOnline ? powerMeta(d.powerState).color : T.textDim }}>{d.isOnline ? powerMeta(d.powerState).label : "--"}{d.isOnline && typeof d.batteryLevel === "number" && d.batteryLevel >= 0 && <span style={{ color: d.batteryLevel < (typeof batteryThreshold === "number" ? batteryThreshold : 50) ? T.amber : T.textSecondary }}>{" " + d.batteryLevel + "%"}</span>}</div></div>
@@ -1501,7 +1554,8 @@ function DevicesTab({ bays, batteryThreshold }) {
 // PAYMENTS TAB (Stripe Connect placeholder)
 // ═══════════════════════════════════════════
 function PaymentsTab({ ownerId, bays }) {
-  const [sessions, setSessions] = useState([])
+  const [rawSessions, setSessions] = useState([])
+  const sessions = rawSessions.filter(x => bays.some(b => b.id === x.bayId))
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -2057,7 +2111,10 @@ export default function App() {
   const [selectedLocationId, setSelectedLocationId] = useState(() => localStorage.getItem("wb_selectedLocation") || "")
   useEffect(() => { window.location.hash = activeTab }, [activeTab])
   useEffect(() => { const onHash = () => { const h = window.location.hash.replace("#", ""); if (h && h !== activeTab) setActiveTab(h) }; window.addEventListener("hashchange", onHash); return () => window.removeEventListener("hashchange", onHash) }, [activeTab])
-  const [todayStats, setTodayStats] = useState({ revenue: 0, sessions: 0, issues: 0 })
+  // Raw owner-wide docs. Stats are derived per location in render so switching
+  // locations is instant and needs no re-subscription.
+  const [todaySessionDocs, setTodaySessionDocs] = useState([])
+  const [openIssueDocs, setOpenIssueDocs] = useState([])
 
   useEffect(() => { const u = onAuthStateChanged(auth, u => { setUser(u); setAuthLoading(false) }); return () => u() }, [])
 
@@ -2079,9 +2136,7 @@ export default function App() {
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const q = query(collection(db, "sessions"), where("ownerId", "==", user.uid), where("startedAt", ">=", Timestamp.fromDate(today)))
     const unsub = onSnapshot(q, snap => {
-      let rev = 0, count = 0
-      snap.docs.forEach(d => { const data = d.data(); if (data.totalCharge) rev += data.totalCharge; count++ })
-      setTodayStats(prev => ({ ...prev, revenue: rev, sessions: count }))
+      setTodaySessionDocs(snap.docs.map(d => d.data()))
     })
     return () => unsub()
   }, [user])
@@ -2090,7 +2145,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return
     const q = query(collection(db, "issues"), where("ownerId", "==", user.uid), where("status", "==", "open"))
-    const unsub = onSnapshot(q, snap => { setTodayStats(prev => ({ ...prev, issues: snap.size })) })
+    const unsub = onSnapshot(q, snap => { setOpenIssueDocs(snap.docs.map(d => d.data())) })
     return () => unsub()
   }, [user])
   // WashBoard Locations
@@ -2105,24 +2160,46 @@ export default function App() {
     return () => unsub()
   }, [user])
 
+  // effectiveStatus is only evaluated on render. A dead iPad sends no more
+  // snapshots, so without a tick its card would stay green indefinitely.
+  const [, setStatusTick] = useState(0)
+  useEffect(() => { const iv = setInterval(() => setStatusTick(t => t + 1), 15000); return () => clearInterval(iv) }, [])
+
   const handleSignOut = async () => { try { await signOut(auth) } catch (e) {} }
 
   if (authLoading) return <><GlobalStyle /><div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bgDeep, fontFamily: T.fontBody }}><div style={{ textAlign: "center" }}><h1 style={{ fontFamily: T.fontDisplay, fontSize: "24px", fontWeight: 700, color: T.accent, margin: "0 0 12px 0" }}>WashBoard</h1><div style={{ fontSize: "12px", color: T.textDim }}>Loading...</div></div></div></>
   if (!user) return <LoginScreen />
 
-  const activeBays = bays.filter(b => { const s = effectiveStatus(b); return s === "active" || s === "issue" }).length
+  // A stale id in localStorage (deleted location) must not blank the dashboard.
+  const activeLocationId = wbLocations.some(l => l.id === selectedLocationId) ? selectedLocationId : ""
+  // Bays with no real location stay visible everywhere so they are not lost;
+  // saving one in Bay Config assigns it to the selected location.
+  const locationBays = activeLocationId
+    ? bays.filter(b => b.locationId === activeLocationId || !b.locationId || b.locationId === "default")
+    : bays
+  const activeBays = locationBays.filter(b => { const s = effectiveStatus(b); return s === "active" || s === "issue" }).length
+  // Scope by which bay a doc belongs to, not the locationId copied onto it.
+  // Older sessions and issues carry "" or "default" for location; bayId is
+  // always present, and history follows the bay to its current location.
+  const locationBayIds = new Set(locationBays.map(b => b.id))
+  const scopedToday = todaySessionDocs.filter(s => locationBayIds.has(s.bayId))
+  const todayStats = {
+    revenue: scopedToday.reduce((sum, s) => sum + (s.totalCharge || 0), 0),
+    sessions: scopedToday.length,
+    issues: openIssueDocs.filter(x => locationBayIds.has(x.bayId)).length,
+  }
 
   return <><GlobalStyle /><div style={S.app}>
     <Sidebar activeTab={activeTab} onTabChange={setActiveTab} user={user} onSignOut={handleSignOut} />
-    <Topbar tabLabel={TAB_LABELS[activeTab]} todayRevenue={todayStats.revenue} todaySessions={todayStats.sessions} activeBays={activeBays} totalBays={bays.length} locations={wbLocations} selectedLocationId={selectedLocationId} onLocationChange={id => { setSelectedLocationId(id); localStorage.setItem("wb_selectedLocation", id) }} />
+    <Topbar tabLabel={TAB_LABELS[activeTab]} todayRevenue={todayStats.revenue} todaySessions={todayStats.sessions} activeBays={activeBays} totalBays={locationBays.length} locations={wbLocations} selectedLocationId={selectedLocationId} onLocationChange={id => { setSelectedLocationId(id); localStorage.setItem("wb_selectedLocation", id) }} />
     <div style={S.main}>
-      {activeTab === "overview" && <BayOverview bays={bays} todayStats={todayStats} onNavigateConfig={() => setActiveTab("config")} onNavigateSessions={() => setActiveTab("sessions")} onNavigateIssues={() => setActiveTab("issues")} onNavigateDevices={() => setActiveTab("devices")} />}
-      {activeTab === "config" && <BayConfigTab bays={bays} ownerId={user.uid} />}
-      {activeTab === "sessions" && <SessionsTab ownerId={user.uid} bays={bays} />}
+      {activeTab === "overview" && <BayOverview bays={locationBays} todayStats={todayStats} onNavigateConfig={() => setActiveTab("config")} onNavigateSessions={() => setActiveTab("sessions")} onNavigateIssues={() => setActiveTab("issues")} onNavigateDevices={() => setActiveTab("devices")} />}
+      {activeTab === "config" && <BayConfigTab bays={locationBays} ownerId={user.uid} locationId={activeLocationId} />}
+      {activeTab === "sessions" && <SessionsTab ownerId={user.uid} bays={locationBays} />}
       {activeTab === "codes" && <CodesTab ownerId={user.uid} />}
-      {activeTab === "issues" && <IssuesTab ownerId={user.uid} bays={bays} />}
-      {activeTab === "devices" && <DevicesTab bays={bays} batteryThreshold={wbLocations.find(l => l.id === selectedLocationId)?.batteryAlertThreshold} />}
-      {activeTab === "payments" && <PaymentsTab ownerId={user.uid} bays={bays} />}
+      {activeTab === "issues" && <IssuesTab ownerId={user.uid} bays={locationBays} />}
+      {activeTab === "devices" && <DevicesTab bays={locationBays} batteryThreshold={wbLocations.find(l => l.id === selectedLocationId)?.batteryAlertThreshold} />}
+      {activeTab === "payments" && <PaymentsTab ownerId={user.uid} bays={locationBays} />}
       {activeTab === "staff" && <StaffTab ownerId={user.uid} />}
         {activeTab === "alerts" && <AlertsTab ownerId={user.uid} />}
       {activeTab === "location" && <LocationTab ownerId={user.uid} bays={bays} />}

@@ -209,8 +209,7 @@ const unsub = onAuthStateChanged(auth, async (fu) => {
 if (fu) {
 let profile = DEMO_PROFILES[fu.email] || { name: fu.email, role: "attendant", locationId: "loc1", color: "#6366f1" };
 try {
-let snap = await getDoc(doc(db, "users", fu.uid));
-for (let i = 0; i < 10 && !snap.exists(); i++) { await new Promise(r => setTimeout(r, 500)); snap = await getDoc(doc(db, "users", fu.uid)); }
+const snap = await getDoc(doc(db, "users", fu.uid));
 if (snap.exists()) {
   profile = snap.data();
   // Migrate existing account creators from manager to owner
@@ -722,8 +721,6 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "", inviteBi
           uid, email, name, role: "owner", locationId: locId,
           bizName, color: "#6366f1", createdAt: new Date().toISOString()
         });
-        window.location.reload();
-        return;
       }
     } catch(e) {
       if (e.message?.includes("email-already-in-use")) {
@@ -7961,7 +7958,6 @@ function Settings({ locations, onUpdateLocation, user, initialTab }) {
 const { refreshUser } = useAuth();
 const [settingsTab, setSettingsTab] = useState(initialTab || "profile");
 const [showUpgrade, setShowUpgrade] = useState(null);
-const isMgrSettings = user?.role === "owner" || user?.role === "manager";
 const [editing, setEditing] = useState(null);
 const [name, setName] = useState("");
 const [address, setAddress] = useState("");
@@ -8073,7 +8069,7 @@ return (
 <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Manage locations and preferences</div>
 </div>
 <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-  {[["profile","Profile"],...(isMgrSettings ? [["locations","Locations"],["integrations","Integrations"]] : []),...(user?.role === "owner" ? [["billing","Billing"]] : [])].map(([id,label]) => (
+  {[["profile","Profile"],["locations","Locations"],["integrations","Integrations"],...(user?.role === "owner" ? [["billing","Billing"]] : [])].map(([id,label]) => (
     <button key={id} onClick={() => setSettingsTab(id)} style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: settingsTab === id ? "#0f1f35" : "#f3f4f6", color: settingsTab === id ? "#fff" : "#6b7280" }}>{label}</button>
   ))}
 </div>
@@ -8127,7 +8123,7 @@ return (
   </button>
 </div>}
 {settingsTab === "profile" && (user?.role === "manager" || user?.role === "owner") && <TeamMembers user={user} locations={locations} />}
-{(isMgrSettings && settingsTab === "locations") && (
+{settingsTab === "locations" && (
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>Locations</div>
@@ -8208,7 +8204,7 @@ return (
 )}
 </div>
 )}
-{(isMgrSettings && settingsTab === "integrations") && (
+{settingsTab === "integrations" && (
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Integrations</div>
 <SensorPushIntegration locations={locations} />

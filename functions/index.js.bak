@@ -1358,37 +1358,10 @@ exports.createWashLevelCheckout = onCall({ secrets: [STRIPE_SECRET_KEY] }, async
     line_items: [{ price: priceId, quantity: 1 }],
     subscription_data: { metadata: { firebaseUid: uid, type: "washlevel_plan", priceId: priceId } },
     metadata: { firebaseUid: uid, type: "washlevel_plan", priceId: priceId },
-    allow_promotion_codes: true,
     success_url: "https://washlevel.com/?plan_success=1",
     cancel_url: "https://washlevel.com/?plan_cancel=1",
   });
   return { url: session.url };
-});
-
-exports.upgradeWashLevelPlan = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
-  const uid = request.auth.uid;
-  const { priceId } = request.data;
-  const newPlan = WL_PLANS[priceId];
-  if (!newPlan) throw new HttpsError("invalid-argument", "Invalid plan");
-  const subRef = db.collection("subscriptions").doc(uid);
-  const snap = await subRef.get();
-  const data = snap.exists ? snap.data() : {};
-  if (!data.planStripeSubscriptionId) throw new HttpsError("failed-precondition", "No active plan found");
-  const stripeClient = stripe(STRIPE_SECRET_KEY.value());
-  const sub = await stripeClient.subscriptions.retrieve(data.planStripeSubscriptionId);
-  if (sub.metadata?.firebaseUid !== uid) throw new HttpsError("permission-denied", "Subscription mismatch");
-  const item = sub.items.data[0];
-  const curPlan = WL_PLANS[item.price.id] || { limit: 0 };
-  if (newPlan.limit <= curPlan.limit) throw new HttpsError("failed-precondition", "Only upgrades are allowed");
-  const updated = await stripeClient.subscriptions.update(sub.id, {
-    items: [{ id: item.id, price: priceId }],
-    proration_behavior: "always_invoice",
-    payment_behavior: "error_if_incomplete",
-    metadata: { ...sub.metadata, priceId },
-  });
-  await subRef.set({ planName: newPlan.name, locationLimit: newPlan.limit, planPriceId: priceId, planStripeStatus: updated.status }, { merge: true });
-  return { ok: true, planName: newPlan.name, locationLimit: newPlan.limit };
 });
 exports.stripeWebhook = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET] }, async (req, res) => {
   const stripeClient = stripe(STRIPE_SECRET_KEY.value());
@@ -1419,11 +1392,10 @@ exports.stripeWebhook = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_
     const active = sub.status === "active" || sub.status === "trialing";
     const until = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     if (sub.metadata?.type === "washlevel_plan") {
-      const curPriceId = sub.items?.data?.[0]?.price?.id || sub.metadata.priceId;
-      const planInfo = WL_PLANS[curPriceId] || { name: "Unknown", limit: 1 };
+      const planInfo = WL_PLANS[sub.metadata.priceId] || { name: "Unknown", limit: 1 };
       await subRef.set({
         planActive: active, planName: planInfo.name, locationLimit: planInfo.limit,
-        planPriceId: curPriceId, planUntil: until,
+        planPriceId: sub.metadata.priceId, planUntil: until,
         planStripeCustomerId: sub.customer, planStripeSubscriptionId: sub.id, planStripeStatus: sub.status,
       }, { merge: true });
     } else {

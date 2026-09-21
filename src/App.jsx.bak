@@ -209,8 +209,7 @@ const unsub = onAuthStateChanged(auth, async (fu) => {
 if (fu) {
 let profile = DEMO_PROFILES[fu.email] || { name: fu.email, role: "attendant", locationId: "loc1", color: "#6366f1" };
 try {
-let snap = await getDoc(doc(db, "users", fu.uid));
-for (let i = 0; i < 10 && !snap.exists(); i++) { await new Promise(r => setTimeout(r, 500)); snap = await getDoc(doc(db, "users", fu.uid)); }
+const snap = await getDoc(doc(db, "users", fu.uid));
 if (snap.exists()) {
   profile = snap.data();
   // Migrate existing account creators from manager to owner
@@ -498,59 +497,6 @@ function SmsTermsPage() {
   );
 }
 
-const WL_PLAN_TIERS = [
-  { name: "Single Site", price: 39, limit: 1, priceId: "price_1U7G4lERWU7SaCxDlw09PgzF" },
-  { name: "Operator", price: 49, limit: 3, priceId: "price_1U7G7MERWU7SaCxDT5a6OAwj" },
-  { name: "Regional", price: 100, limit: 5, priceId: "price_1U7G7oERWU7SaCxDJxmerjlr" },
-  { name: "Enterprise", price: 200, limit: 10, priceId: "price_1U7G9PERWU7SaCxDpc9Ff2Wi" },
-];
-
-function UpgradePlanModal({ planSub, reason, onClose }) {
-  const [loading, setLoading] = useState(null);
-  const [done, setDone] = useState("");
-  const curLimit = planSub?.locationLimit || 0;
-  const options = WL_PLAN_TIERS.filter(p => p.limit > curLimit);
-  const handleUpgrade = async (p) => {
-    if (!window.confirm("Upgrade to " + p.name + " ($" + p.price + "/mo)? You will be charged the prorated difference today.")) return;
-    setLoading(p.priceId);
-    try {
-      const fn = httpsCallable(functions, "upgradeWashLevelPlan");
-      const res = await fn({ priceId: p.priceId });
-      setDone("Upgraded to " + res.data.planName + ". You can now have up to " + res.data.locationLimit + " locations.");
-    } catch(e) { alert("Error: " + e.message); }
-    setLoading(null);
-  };
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,31,53,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, padding: 24, maxWidth: 520, width: "100%", boxSizing: "border-box" }}>
-        <div style={{ fontWeight: 800, fontSize: 18, color: "#0f1f35", marginBottom: 6 }}>Upgrade Your Plan</div>
-        {reason && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>{reason}</div>}
-        {done ? (
-          <>
-            <div style={{ fontSize: 14, color: "#059669", fontWeight: 600, marginBottom: 16 }}>{done}</div>
-            <button onClick={onClose} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 8, padding: "10px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Done</button>
-          </>
-        ) : options.length === 0 ? (
-          <div style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, marginBottom: 16 }}>You are on our largest plan. For more than 10 locations, contact us for custom pricing at support@washlevel.com or 717-966-1794.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-            {options.map(p => (
-              <div key={p.priceId} style={{ display: "flex", alignItems: "center", gap: 12, border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f1f35" }}>{p.name}</div>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>Up to {p.limit} location{p.limit === 1 ? "" : "s"} - ${p.price}/mo</div>
-                </div>
-                <button onClick={() => handleUpgrade(p)} disabled={loading !== null} style={{ background: "#3ec6e0", color: "#06243b", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: loading ? "default" : "pointer" }}>{loading === p.priceId ? "Upgrading..." : "Upgrade"}</button>
-              </div>
-            ))}
-          </div>
-        )}
-        {!done && <button onClick={onClose} style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>}
-      </div>
-    </div>
-  );
-}
-
 function PlanPaywall({ user }) {
   const [loading, setLoading] = useState(null);
   const plans = [
@@ -722,8 +668,6 @@ function Login({ defaultTab = "login", defaultEmail = "", ownerId = "", inviteBi
           uid, email, name, role: "owner", locationId: locId,
           bizName, color: "#6366f1", createdAt: new Date().toISOString()
         });
-        window.location.reload();
-        return;
       }
     } catch(e) {
       if (e.message?.includes("email-already-in-use")) {
@@ -7960,8 +7904,6 @@ function NotificationSettingsTab({ user }) {
 function Settings({ locations, onUpdateLocation, user, initialTab }) {
 const { refreshUser } = useAuth();
 const [settingsTab, setSettingsTab] = useState(initialTab || "profile");
-const [showUpgrade, setShowUpgrade] = useState(null);
-const isMgrSettings = user?.role === "owner" || user?.role === "manager";
 const [editing, setEditing] = useState(null);
 const [name, setName] = useState("");
 const [address, setAddress] = useState("");
@@ -8047,8 +7989,6 @@ setSaved(false);
 
 const handleSave = async (locId) => {
 if (locId === "**new**") {
-const lim = planSub?.planActive ? planSub?.locationLimit : null;
-if (lim && sortedLocs.length >= lim) { setShowUpgrade("Location limit reached for your plan."); return; }
 const newId = "loc" + Date.now();
 const ownerId = user.isTeamMember ? user.ownerId : user.uid;
 await setDoc(doc(db, "locations", newId), { id: newId, name, address, zipCode, ownerId });
@@ -8073,11 +8013,10 @@ return (
 <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>Manage locations and preferences</div>
 </div>
 <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-  {[["profile","Profile"],...(isMgrSettings ? [["locations","Locations"],["integrations","Integrations"]] : []),...(user?.role === "owner" ? [["billing","Billing"]] : [])].map(([id,label]) => (
+  {[["profile","Profile"],["locations","Locations"],["integrations","Integrations"],...(user?.role === "owner" ? [["billing","Billing"]] : [])].map(([id,label]) => (
     <button key={id} onClick={() => setSettingsTab(id)} style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: settingsTab === id ? "#0f1f35" : "#f3f4f6", color: settingsTab === id ? "#fff" : "#6b7280" }}>{label}</button>
   ))}
 </div>
-{showUpgrade !== null && <UpgradePlanModal planSub={planSub} reason={showUpgrade} onClose={() => setShowUpgrade(null)} />}
 {settingsTab === "billing" && user?.role === "owner" && <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
   <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Subscription</div>
   {planSub?.planActive ? (
@@ -8089,10 +8028,7 @@ return (
       </div>
       {planSub.planUntil && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Current period ends {new Date(planSub.planUntil).toLocaleDateString()}</div>}
       {planSub.locationLimit && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Location limit: {planSub.locationLimit}</div>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {planSub.planStripeSubscriptionId && <button onClick={() => setShowUpgrade("")} style={{ background: "#3ec6e0", color: "#06243b", border: "none", borderRadius: 9, padding: "10px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Upgrade Plan</button>}
       {planSub.planStripeCustomerId && <button onClick={openPlanBilling} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 9, padding: "10px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Manage Billing</button>}
-      </div>
     </div>
   ) : (
     <div>
@@ -8127,11 +8063,11 @@ return (
   </button>
 </div>}
 {settingsTab === "profile" && (user?.role === "manager" || user?.role === "owner") && <TeamMembers user={user} locations={locations} />}
-{(isMgrSettings && settingsTab === "locations") && (
+{settingsTab === "locations" && (
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35" }}>Locations</div>
-<button onClick={() => { const lim = planSub?.planActive ? planSub?.locationLimit : null; if (lim && sortedLocs.length >= lim) { setShowUpgrade("Your " + (planSub.planName || "current") + " plan includes " + lim + " location" + (lim === 1 ? "" : "s") + ". Upgrade to add more."); return; } setEditing("**new**"); }} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Location</button>
+<button onClick={() => setEditing("**new**")} style={{ background: "#0f1f35", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Location</button>
 </div>
 {sortedLocs.map((loc, idx) => (
 <div key={loc.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 12 }}>
@@ -8208,7 +8144,7 @@ return (
 )}
 </div>
 )}
-{(isMgrSettings && settingsTab === "integrations") && (
+{settingsTab === "integrations" && (
 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, marginBottom: 18 }}>
 <div style={{ fontWeight: 700, fontSize: 15, color: "#0f1f35", marginBottom: 16 }}>Integrations</div>
 <SensorPushIntegration locations={locations} />
