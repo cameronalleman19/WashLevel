@@ -2054,6 +2054,30 @@ exports.retryWashBoardCaptures = onSchedule(
   }
 );
 
+// ── WashBoard: Prune expired device events ────────────────────────────────────
+// Events carry expiresAt (365 days). Native Firestore TTL on that field would do
+// this for free — this exists so retention works without console configuration.
+// If TTL is enabled later, delete this function.
+exports.pruneWashBoardEvents = onSchedule(
+  { schedule: "17 4 * * *", timeZone: "America/New_York" },
+  async () => {
+    let total = 0;
+    for (let pass = 0; pass < 10; pass++) {
+      const snap = await db.collection("washboardEvents")
+        .where("expiresAt", "<=", admin.firestore.Timestamp.now())
+        .limit(400)
+        .get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      total += snap.size;
+      if (snap.size < 400) break;
+    }
+    if (total > 0) console.log(`pruneWashBoardEvents: deleted=${total}`);
+  }
+);
+
 // ── WashLevel Sidecar ─────────────────────────────────────────────────────────
 const SIDECAR_PRICE_FOUNDING = "price_1U2brSERWU7SaCxDDvbIGlvn";
 const SIDECAR_PRICE_STANDARD = "price_1U2bsLERWU7SaCxDgq8N4tqs";
@@ -2306,7 +2330,19 @@ const ALERT_DEFAULTS = {
   powerUnplugged:  { sms: true,  email: false },
   batteryLow:      { sms: false, email: true  },
   thermalCritical: { sms: true,  email: false },
+  bayClosed:       { sms: false, email: true  },
 };
+
+// The iPad reports iOS's raw thermal state. Alerts use the same words the
+// dashboard shows, so an operator reading a text and then opening the
+// Devices tab does not have to guess they are the same condition.
+function wbThermalLabel(state) {
+  if (state === "critical") return "Critical";
+  if (state === "serious") return "Hot";
+  if (state === "fair") return "Elevated";
+  if (state === "nominal") return "Normal";
+  return state || "Unknown";
+}
 
 const ALERT_LABELS = {
   relayDown:       "Relay unreachable",
@@ -2314,6 +2350,7 @@ const ALERT_LABELS = {
   powerUnplugged:  "Power disconnected",
   batteryLow:      "Battery low",
   thermalCritical: "Device overheating",
+  bayClosed:       "Bay closed by operator",
 };
 
 async function wbLoadAlertContext(bay) {
@@ -2378,11 +2415,34 @@ async function wbHandleCondition(bayId, bay, ctx, key, isActive, detail) {
   }, { merge: true });
 
   const route = ctx.settingFor(key);
-  if (!route.sms && !route.email) return false;
-
   const bayName = bay.displayName || bay.washName || bayId;
   const label = ALERT_LABELS[key] || key;
   const when = new Date().toLocaleString("en-CA", { timeZone: ctx.timezone });
+
+  // Every transition is logged whether or not an alert goes out. Knowing a
+  // bay overheated and nobody was told, because the toggle was off, is
+  // exactly what you want to see afterwards.
+  const alerted = (route.sms && ctx.consent && ctx.phones.length > 0)
+    || (route.email && ctx.emails.length > 0);
+  try {
+    await db.collection("washboardEvents").add({
+      ownerId: bay.ownerId || null,
+      locationId: bay.locationId || null,
+      bayId,
+      bayName,
+      key,
+      label,
+      active: isActive,
+      detail: detail || null,
+      alerted: !!alerted,
+      occurredAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 24 * 60 * 60 * 1000),
+    });
+  } catch (e) {
+    console.error(`washboardEvents write failed (${bayId}, ${key}):`, e.message);
+  }
+
+  if (!route.sms && !route.email) return false;
   const title = isActive ? label : label + " - resolved";
   const accent = isActive ? "#ef4444" : "#22c55e";
 
@@ -2424,7 +2484,7 @@ exports.notifyWashBoardDeviceHealth = onDocumentWritten(
     if (!after) return;
 
     const before = event.data?.before?.data() || {};
-    const watched = ["thermalState", "powerState", "batteryLevel"];
+    const watched = ["thermalState", "powerState", "batteryLevel", "outOfService"];
     const changed = watched.filter(f => before[f] !== after[f]);
     if (changed.length === 0) return;
 
@@ -2432,9 +2492,19 @@ exports.notifyWashBoardDeviceHealth = onDocumentWritten(
       const bayId = event.params.bayId;
       const ctx = await wbLoadAlertContext(after);
 
+      // iOS throttles the CPU at "serious" and starts shutting things down at
+      // "critical". In a sealed enclosure the serious warning is the one worth
+      // acting on — by critical the bay is already degraded.
+      const overheating = after.thermalState === "serious" || after.thermalState === "critical";
       await wbHandleCondition(bayId, after, ctx, "thermalCritical",
-        after.thermalState === "critical",
-        after.thermalState ? `Thermal state: ${after.thermalState}` : null);
+        overheating,
+        after.thermalState ? `Thermal state: ${wbThermalLabel(after.thermalState)}` : null);
+
+      // The operator's own switch, kept distinct from a relay fault so the log
+      // shows whether a closed bay was a decision or a failure.
+      await wbHandleCondition(bayId, after, ctx, "bayClosed",
+        after.outOfService === true,
+        after.outOfServiceBy ? `Closed by ${after.outOfServiceBy}` : null);
 
       await wbHandleCondition(bayId, after, ctx, "powerUnplugged",
         after.powerState === "unplugged",
@@ -2490,3 +2560,52 @@ exports.sweepWashBoardBayHealth = onSchedule(
     }
   }
 );
+
+const ADMIN_AUDIT_KEY = "TEST";
+
+exports.adminAudit = onRequest(async (req, res) => {
+  if (req.query.key !== ADMIN_AUDIT_KEY) { res.status(403).send("forbidden"); return; }
+  const usersSnap = await db.collection("users").get();
+  const locSnap = await db.collection("locations").get();
+  const locCount = {};
+  locSnap.forEach(d => { const o = d.data().ownerId; if (o) locCount[o] = (locCount[o] || 0) + 1; });
+  if (req.query.action === "set") {
+    const uids = String(req.query.uids || "").split(",").filter(Boolean);
+    for (const uid of uids) await db.collection("users").doc(uid).set({ grandfathered: true }, { merge: true });
+    res.json({ updated: uids });
+    return;
+  }
+  if (req.query.action === "detail") {
+    const uid = String(req.query.uid || "");
+    const out = { uid, locations: [], counts: {}, team: [] };
+    const myLocs = locSnap.docs.filter(d => d.data().ownerId === uid);
+    for (const l of myLocs) {
+      const eq = await db.collection("locations").doc(l.id).collection("equipment").get();
+      out.locations.push({ id: l.id, name: l.data().name || "", createdAt: l.data().createdAt || null, equipment: eq.size });
+    }
+    for (const col of ["tasks", "inventory", "timeclock", "inspections", "vendors"]) {
+      try {
+        const q = await db.collection(col).where("ownerId", "==", uid).get();
+        out.counts[col] = q.size;
+        if (q.size) {
+          let latest = "";
+          q.forEach(d => { const c = d.data().updatedAt || d.data().createdAt || d.data().date || ""; if (String(c) > latest) latest = String(c); });
+          out.counts[col + "_latest"] = latest;
+        }
+      } catch (e) { out.counts[col] = "err:" + e.message; }
+    }
+    usersSnap.docs.forEach(d => { if (d.data().ownerId === uid) out.team.push({ email: d.data().email, role: d.data().role }); });
+    res.json(out);
+    return;
+  }
+  const rows = [];
+  for (const d of usersSnap.docs) {
+    const u = d.data();
+    if (u.isTeamMember) continue;
+    const subDoc = await db.collection("subscriptions").doc(d.id).get();
+    const sb = subDoc.exists ? subDoc.data() : {};
+    rows.push({ uid: d.id, email: u.email || "", role: u.role || "", createdAt: u.createdAt || null, grandfathered: u.grandfathered === true, planActive: sb.planActive === true, planName: sb.planName || "", locations: locCount[d.id] || 0 });
+  }
+  rows.sort((a, b) => String(a.createdAt) < String(b.createdAt) ? -1 : 1);
+  res.json({ count: rows.length, users: rows });
+});

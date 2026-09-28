@@ -10253,7 +10253,7 @@ const landingPath = window.location.pathname;
 if (landingPath === "/privacy") return <PrivacyPage />;
 if (landingPath === "/sms-terms") return <SmsTermsPage />;
 if (user && user.role === "owner" && planSub !== undefined) {
-  const grandfathered = !user.createdAt || user.createdAt < PAYWALL_CUTOFF;
+  const grandfathered = user.grandfathered === true;
   if (!grandfathered && (!planSub || !planSub.planActive)) return <PlanPaywall user={user} />;
 }
 if (user) return <Dashboard />;

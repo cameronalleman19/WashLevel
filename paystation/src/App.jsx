@@ -10,7 +10,7 @@ import {
   X, Play, Square, Timer, Gamepad2, Video, PlusCircle,
   Wind, Sparkles, Brush, SprayCan, Waves, Flame,
   CloudRain, Snowflake, Zap, ShieldCheck, CircleDot,
-  Pipette, Eraser, Fan, Car, Hexagon, ZapOff
+  Pipette, Eraser, Fan, Car, Hexagon, ZapOff, Activity, Archive
 } from "lucide-react"
 import { db, auth, storage, functions, httpsCallable, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase"
 import {
@@ -170,6 +170,22 @@ function fnName(id, bay) {
 // ═══════════════════════════════════════════
 
 function generateRandomCode() { return String(Math.floor(100000 + Math.random() * 900000)) }
+// Clears the device binding so a new iPad can pair to this bay. Works with a
+// dead iPad, which is the point — the old one may be smashed or missing.
+// Clearing deviceUid is also how you revoke a device's write access.
+async function unpairBayDevice(bayId) {
+  await updateDoc(doc(db, "bays", bayId), {
+    deviceId: null, deviceUid: null, deviceName: null, status: "offline",
+  })
+}
+
+// Archive rather than delete: sessions, issues and events all reference bayId,
+// and removing the bay would erase its history from every report.
+async function setBayArchived(bayId, archived) {
+  await updateDoc(doc(db, "bays", bayId), { archived, archivedAt: archived ? serverTimestamp() : null })
+}
+
+
 async function createPairingCode(bayId, ownerId) {
   for (let i = 0; i < 10; i++) {
     const code = generateRandomCode()
@@ -396,6 +412,30 @@ function Topbar({ tabLabel, todayRevenue, todaySessions, activeBays, totalBays, 
 // ═══════════════════════════════════════════
 // PAIRING SECTION (Bay Config)
 // ═══════════════════════════════════════════
+
+function PairedDeviceSection({ bay }) {
+  const [busy, setBusy] = useState(false)
+  const replace = async () => {
+    if (!window.confirm(`Unpair the iPad from ${bay.displayName || bay.id}?\n\nThe bay keeps all of its history. A new iPad can pair using a fresh code.`)) return
+    setBusy(true)
+    try { await unpairBayDevice(bay.id) } catch (e) { alert("Failed: " + e.message) }
+    setBusy(false)
+  }
+  return <div style={CS.section}>
+    <h3 style={CS.sectionTitle}><Smartphone size={16} /> Paired iPad</h3>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+      <div>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: T.textPrimary }}>{bay.deviceName || "Unnamed device"}</div>
+        <div style={{ fontFamily: T.fontMono, fontSize: "11px", color: T.textDim, marginTop: "2px" }}>{(bay.deviceId || "").substring(0, 18)}{bay.deviceId && bay.deviceId.length > 18 ? "..." : ""}</div>
+        <div style={{ fontSize: "11px", color: bay.deviceUid ? T.green : T.amber, marginTop: "4px" }}>{bay.deviceUid ? "Device identity registered" : "No device identity - update the iPad app"}</div>
+      </div>
+      <button onClick={replace} disabled={busy} style={{ ...CS.saveBtn, background: T.amber + "18", color: T.amber, border: "1px solid " + T.amber + "55", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+        {busy ? <Loader size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Link size={14} />}Replace iPad
+      </button>
+    </div>
+  </div>
+}
+
 
 function PairingSection({ bayId, ownerId }) {
   const [code, setCode] = useState(null), [expiresAt, setExpiresAt] = useState(null), [timeLeft, setTimeLeft] = useState(0), [generating, setGenerating] = useState(false), [copied, setCopied] = useState(false)
@@ -940,7 +980,7 @@ function configToFirestore(c, ownerId) {
     activeFunctions, functionConfigs, perFunctionRates, updatedAt: serverTimestamp() }
 }
 
-function BayConfigTab({ bays, ownerId, locationId }) {
+function BayConfigTab({ bays, ownerId, locationId, userEmail }) {
   const [selId, setSelId] = useState(null), [config, setConfig] = useState(makeDefaultConfig()), [saving, setSaving] = useState(false), [saved, setSaved] = useState(false), [creating, setCreating] = useState(false)
   useEffect(() => { if (bays.length > 0 && (!selId || !bays.some(b => b.id === selId))) { setSelId(bays[0].id); setConfig(configFromFirestore(bays[0])) } }, [bays])
   const selectBay = (id) => { setSelId(id); const b = bays.find(x => x.id === id); if (b) setConfig(configFromFirestore(b)); setSaved(false) }
@@ -951,6 +991,9 @@ function BayConfigTab({ bays, ownerId, locationId }) {
     setSaving(true)
     try {
       const payload = configToFirestore(config, ownerId)
+      // Named in the device event log. A trigger cannot see who wrote the doc,
+      // so the actor has to travel with the change.
+      payload.outOfServiceBy = config.outOfService ? (userEmail || ownerId) : null
       // Self-heal bays created before this fix. Only writes when the current
       // value is missing or the old placeholder — a real location is never
       // overwritten, even if a different one is selected in the topbar.
@@ -974,15 +1017,22 @@ function BayConfigTab({ bays, ownerId, locationId }) {
     setCreating(false)
   }
   const selBay = bays.find(b => b.id === selId)
+  const toggleArchive = async () => {
+    const next = !(selBay && selBay.archived)
+    const msg = next
+      ? `Archive ${selBay.displayName || selBay.id}?\n\nIt disappears from Bay Overview and Devices. All sessions, issues and events are kept.`
+      : `Restore ${selBay.displayName || selBay.id} to active?`
+    if (!window.confirm(msg)) return
+    try { await setBayArchived(selId, next) } catch (e) { alert("Failed: " + e.message) }
+  }
   const isUnpaired = selBay && !selBay.deviceId
 
   return <div style={CS.wrap}>
     <div style={CS.baySelector}>
-      {bays.map(b => <button key={b.id} style={CS.bayTab(selId === b.id)} onClick={() => selectBay(b.id)}>{b.displayName || b.id}</button>)}
+      {bays.map(b => <button key={b.id} style={{ ...CS.bayTab(selId === b.id), opacity: b.archived ? 0.5 : 1 }} onClick={() => selectBay(b.id)}>{b.displayName || b.id}{b.archived ? " (archived)" : ""}</button>)}
       <button style={{ ...CS.bayTab(false), borderStyle: "dashed", display: "flex", alignItems: "center", gap: "4px" }} onClick={create} disabled={creating}>{creating ? <Loader size={12} /> : <Plus size={12} />}{creating ? "Creating..." : "Add Bay"}</button>
     </div>
     {!selId && bays.length === 0 ? <div style={S.placeholder}><Settings size={40} strokeWidth={1} /><div style={S.placeholderTitle}>No bays yet</div></div> : <>
-      {isUnpaired && selId && <PairingSection bayId={selId} ownerId={ownerId} />}
 
       <div style={CS.section}><h3 style={CS.sectionTitle}><Tag size={16} /> Identity</h3>
         <div style={CS.row}><div style={CS.field()}><label style={CS.label}>Wash Name</label><input style={{ ...CS.input, color: T.textPrimary, background: T.bgDeep }} value={config.washName} onChange={e => u("washName", e.target.value)} placeholder="Self-Serve Wash" /><div style={CS.hint}>Shown at top of kiosk</div></div>
@@ -1096,6 +1146,19 @@ function BayConfigTab({ bays, ownerId, locationId }) {
           <div style={CS.field(0.5)}><label style={CS.label}>Watchdog (sec)</label><input style={{ ...CS.inputMono, color: T.accent, background: T.bgDeep }} value={config.watchdogInterval} onChange={e => u("watchdogInterval", e.target.value)} /></div>
         </div>
       </div>
+
+      {selBay && selBay.archived && <div style={{ ...CS.section, borderColor: T.amber + "55", background: T.amber + "0c" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", color: T.amber, fontSize: "13px", fontWeight: 600 }}>
+          <Archive size={16} />This bay is archived. Its history is intact; it is hidden from Bay Overview and Devices.
+        </div>
+      </div>}
+      {isUnpaired && selId && <PairingSection bayId={selId} ownerId={ownerId} />}
+      {!isUnpaired && selBay && <PairedDeviceSection bay={selBay} />}
+      {selBay && <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+        <button onClick={toggleArchive} style={{ background: "transparent", color: T.textDim, border: "1px solid " + T.border, borderRadius: "8px", padding: "6px 14px", fontSize: "11px", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          <Archive size={13} />{selBay.archived ? "Restore bay" : "Archive bay"}
+        </button>
+      </div>}
 
       <div style={CS.saveBar}>
         {saved && <div style={CS.savedBanner}><Check size={14} /> Saved</div>}
@@ -1284,12 +1347,59 @@ function CodesTab({ ownerId }) {
 // ═══════════════════════════════════════════
 // ISSUES TAB
 // ═══════════════════════════════════════════
+function DeviceEventsSection({ ownerId, bays }) {
+  const [rawEvents, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(null)
+  const events = rawEvents.filter(x => bays.some(b => b.id === x.bayId))
+
+  useEffect(() => {
+    const q = query(collection(db, "washboardEvents"), where("ownerId", "==", ownerId), orderBy("occurredAt", "desc"), limit(200))
+    const unsub = onSnapshot(q, snap => {
+      setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    }, e => { setErr(e.message); setLoading(false) })
+    return () => unsub()
+  }, [ownerId])
+
+  if (loading) return <div style={S.placeholder}><Loader size={24} style={{ animation: "spin 1s linear infinite" }} /></div>
+  if (err) return <div style={S.placeholder}><AlertTriangle size={40} strokeWidth={1} /><div style={S.placeholderTitle}>Could not load events</div><div style={{ fontSize: "12px", color: T.textDim, maxWidth: "520px", textAlign: "center" }}>{err}</div></div>
+
+  return <>
+    <div style={S.sectionHeader}>
+      <h2 style={S.sectionTitle}>Device Events</h2>
+      <span style={{ fontSize: "12px", color: T.textDim }}>{events.length} in the last 12 months</span>
+    </div>
+    {events.length === 0 ? <div style={S.placeholder}><Activity size={40} strokeWidth={1} /><div style={S.placeholderTitle}>No device events</div></div>
+    : <div style={{ background: T.bgPanel, border: "1px solid " + T.border, borderRadius: "12px", overflow: "hidden" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+        <thead><tr style={{ borderBottom: "1px solid " + T.border }}>
+          {["Time", "Bay", "Condition", "State", "Detail", "Alerted"].map(h => <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: "10px", fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", color: T.textDim }}>{h}</th>)}
+        </tr></thead>
+        <tbody>{events.map(ev => {
+          const t = ev.occurredAt?.toDate ? ev.occurredAt.toDate() : null
+          return <tr key={ev.id} style={{ borderBottom: "1px solid " + T.border }}>
+            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "12px", color: T.textSecondary }}>{t ? formatDate(t) : "--"}</td>
+            <td style={{ padding: "10px 14px", fontWeight: 600 }}>{ev.bayName || ev.bayId?.substring(0, 8) || "--"}</td>
+            <td style={{ padding: "10px 14px" }}>{ev.label || ev.key}</td>
+            <td style={{ padding: "10px 14px" }}><span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: ev.active ? T.amberDim : T.green + "20", color: ev.active ? T.amber : T.green }}>{ev.active ? "STARTED" : "RESOLVED"}</span></td>
+            <td style={{ padding: "10px 14px", fontSize: "12px", color: T.textSecondary }}>{ev.detail || "--"}</td>
+            <td style={{ padding: "10px 14px", fontSize: "11px", color: ev.alerted ? T.accent : T.textDim }}>{ev.alerted ? "Sent" : "No"}</td>
+          </tr>
+        })}</tbody>
+      </table>
+    </div>}
+  </>
+}
+
+
 function IssuesTab({ ownerId, bays }) {
   const [rawIssues, setIssues] = useState([])
   const issues = rawIssues.filter(x => bays.some(b => b.id === x.bayId))
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("all")
   const [selectedIssue, setSelectedIssue] = useState(null)
+  const [view, setView] = useState("issues")
 
   useEffect(() => {
     const q = query(collection(db, "issues"), where("ownerId", "==", ownerId), orderBy("reportedAt", "desc"), limit(100))
@@ -1317,6 +1427,15 @@ function IssuesTab({ ownerId, bays }) {
   if (loading) return <div style={S.placeholder}><Loader size={24} style={{ animation: "spin 1s linear infinite" }} /></div>
 
   return <>
+    <div style={{ display: "flex", gap: "6px", marginBottom: "18px" }}>
+      {[["issues", "Customer Issues"], ["events", "Device Events"]].map(([v, lbl]) => <button key={v} onClick={() => setView(v)} style={{
+        padding: "6px 14px", borderRadius: "8px", fontSize: "11px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+        border: "1px solid " + (view === v ? T.accent + "55" : T.border),
+        background: view === v ? T.accent + "18" : T.bgDeep,
+        color: view === v ? T.accent : T.textDim
+      }}>{lbl}</button>)}
+    </div>
+    {view === "events" ? <DeviceEventsSection ownerId={ownerId} bays={bays} /> : <>
     <div style={S.sectionHeader}>
       <h2 style={S.sectionTitle}>Issues</h2>
       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -1353,6 +1472,7 @@ function IssuesTab({ ownerId, bays }) {
       </table>
     </div>}
     {selectedIssue && <IssueDetailModal issue={selectedIssue} bays={bays} onClose={() => setSelectedIssue(null)} onResolve={(id) => { resolveIssue(id); setSelectedIssue(null) }} />}
+    </>}
   </>
 }
 
@@ -1498,7 +1618,7 @@ function healthAlerts(d, threshold) {
   const out = []
   if (typeof threshold !== "number") threshold = 50
   if (d.relayConnected === false) out.push("Relay unreachable - bay cannot run washes")
-  if (d.thermalState === "critical") out.push("Device overheating - check bay cooling")
+  if (d.thermalState === "serious" || d.thermalState === "critical") out.push("Device overheating - check bay cooling")
   if (d.powerState === "unplugged") out.push("Running on battery - charger may have failed")
   else if (typeof d.batteryLevel === "number" && d.batteryLevel >= 0 && d.batteryLevel < threshold) out.push("Battery below " + threshold + "%")
   return out
@@ -1919,6 +2039,7 @@ function AlertsTab({ ownerId }) {
     { key: "powerUnplugged", label: "Power disconnected", desc: "iPad running on battery" },
     { key: "batteryLow", label: "Battery below threshold", desc: "Charger may be failing" },
     { key: "thermalCritical", label: "Device overheating", desc: "Check bay cooling" },
+    { key: "bayClosed", label: "Bay closed by operator", desc: "Someone took a bay out of service" },
   ]
 
   const DEFAULTS = {
@@ -1928,6 +2049,7 @@ function AlertsTab({ ownerId }) {
     powerUnplugged: { sms: true, email: false },
     batteryLow: { sms: false, email: true },
     thermalCritical: { sms: true, email: false },
+    bayClosed: { sms: false, email: true },
   }
 
   const settingFor = key => (config?.alertSettings || {})[key] || DEFAULTS[key] || { sms: false, email: false }
@@ -2177,10 +2299,13 @@ export default function App() {
   const locationBays = activeLocationId
     ? bays.filter(b => b.locationId === activeLocationId || !b.locationId || b.locationId === "default")
     : bays
-  const activeBays = locationBays.filter(b => { const s = effectiveStatus(b); return s === "active" || s === "issue" }).length
   // Scope by which bay a doc belongs to, not the locationId copied onto it.
   // Older sessions and issues carry "" or "default" for location; bayId is
   // always present, and history follows the bay to its current location.
+  // Archived bays stay in locationBays so their sessions, issues and events
+  // keep resolving; operatingBays is what the day-to-day screens show.
+  const operatingBays = locationBays.filter(b => b.archived !== true)
+  const activeBays = operatingBays.filter(b => { const s = effectiveStatus(b); return s === "active" || s === "issue" }).length
   const locationBayIds = new Set(locationBays.map(b => b.id))
   const scopedToday = todaySessionDocs.filter(s => locationBayIds.has(s.bayId))
   const todayStats = {
@@ -2191,14 +2316,14 @@ export default function App() {
 
   return <><GlobalStyle /><div style={S.app}>
     <Sidebar activeTab={activeTab} onTabChange={setActiveTab} user={user} onSignOut={handleSignOut} />
-    <Topbar tabLabel={TAB_LABELS[activeTab]} todayRevenue={todayStats.revenue} todaySessions={todayStats.sessions} activeBays={activeBays} totalBays={locationBays.length} locations={wbLocations} selectedLocationId={selectedLocationId} onLocationChange={id => { setSelectedLocationId(id); localStorage.setItem("wb_selectedLocation", id) }} />
+    <Topbar tabLabel={TAB_LABELS[activeTab]} todayRevenue={todayStats.revenue} todaySessions={todayStats.sessions} activeBays={activeBays} totalBays={operatingBays.length} locations={wbLocations} selectedLocationId={selectedLocationId} onLocationChange={id => { setSelectedLocationId(id); localStorage.setItem("wb_selectedLocation", id) }} />
     <div style={S.main}>
-      {activeTab === "overview" && <BayOverview bays={locationBays} todayStats={todayStats} onNavigateConfig={() => setActiveTab("config")} onNavigateSessions={() => setActiveTab("sessions")} onNavigateIssues={() => setActiveTab("issues")} onNavigateDevices={() => setActiveTab("devices")} />}
-      {activeTab === "config" && <BayConfigTab bays={locationBays} ownerId={user.uid} locationId={activeLocationId} />}
+      {activeTab === "overview" && <BayOverview bays={operatingBays} todayStats={todayStats} onNavigateConfig={() => setActiveTab("config")} onNavigateSessions={() => setActiveTab("sessions")} onNavigateIssues={() => setActiveTab("issues")} onNavigateDevices={() => setActiveTab("devices")} />}
+      {activeTab === "config" && <BayConfigTab bays={locationBays} ownerId={user.uid} locationId={activeLocationId} userEmail={user.email} />}
       {activeTab === "sessions" && <SessionsTab ownerId={user.uid} bays={locationBays} />}
       {activeTab === "codes" && <CodesTab ownerId={user.uid} />}
       {activeTab === "issues" && <IssuesTab ownerId={user.uid} bays={locationBays} />}
-      {activeTab === "devices" && <DevicesTab bays={locationBays} batteryThreshold={wbLocations.find(l => l.id === selectedLocationId)?.batteryAlertThreshold} />}
+      {activeTab === "devices" && <DevicesTab bays={operatingBays} batteryThreshold={wbLocations.find(l => l.id === selectedLocationId)?.batteryAlertThreshold} />}
       {activeTab === "payments" && <PaymentsTab ownerId={user.uid} bays={locationBays} />}
       {activeTab === "staff" && <StaffTab ownerId={user.uid} />}
         {activeTab === "alerts" && <AlertsTab ownerId={user.uid} />}

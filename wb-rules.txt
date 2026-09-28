@@ -124,41 +124,11 @@ service cloud.firestore {
     }
 
     // ── WashBoard: bays ──────────────────────────────────────────────────────
-    // Owner has full access; the paired device has telemetry-only access.
-    // Create/delete remain owner-only.
-    // Kiosk identity is the anonymous uid stored as deviceUid at pairing.
+    // Read/update open for iPad kiosk access (no auth on device).
+    // Create/delete restricted to authenticated owner.
+    // TODO: tighten with custom auth tokens or Cloud Functions.
     match /bays/{bayId} {
-      // The kiosk signs in anonymously and claims its bay at pairing by writing
-      // its uid to deviceUid. After that it may write telemetry only — never
-      // pricing, functions, or anything else the operator controls. The bay is
-      // strictly a display for dashboard config.
-
-      // A bay with no deviceUid is unclaimed and can be paired. Bay ids are random,
-      // and the window closes the moment a device claims it.
-      function wbUnclaimed() {
-        return !("deviceUid" in resource.data) || resource.data.deviceUid == null;
-      }
-      function wbIsDevice() {
-        return request.auth != null
-          && "deviceUid" in resource.data
-          && resource.data.deviceUid == request.auth.uid;
-      }
-      function wbTelemetryOnly() {
-        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "lastHeartbeat", "thermalState", "powerState", "batteryLevel",
-          "heartbeatInterval", "relayConnected", "status", "currentFunction",
-          "currentSessionStartedAt", "streamUrl", "lastSession", "healthUpdatedAt",
-          "remoteCommand", "deviceId", "deviceUid", "deviceName"
-        ]);
-      }
-
-      allow read: if request.auth != null
-        && (isOwner(resource.data.ownerId) || wbIsDevice() || wbUnclaimed());
-
-      allow update: if request.auth != null
-        && (isOwner(resource.data.ownerId)
-            || ((wbIsDevice() || wbUnclaimed()) && wbTelemetryOnly()));
-
+      allow read, update: if true;
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
       allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
     }
@@ -211,14 +181,6 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
       allow update: if true;
       allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
-    }
-
-    // ── WashBoard: washboardEvents ───────────────────────────────────────────
-    // Device fault log. Written only by Cloud Functions, which use the Admin
-    // SDK and bypass rules entirely, so no client ever needs write access.
-    match /washboardEvents/{eventId} {
-      allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
-      allow write: if false;
     }
 
     // ── WashBoard: kioskDevices ──────────────────────────────────────────────
