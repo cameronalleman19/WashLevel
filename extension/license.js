@@ -1,5 +1,4 @@
 const SIDECAR_API_BASE = "https://washlevel.com/api/sidecar";
-const SIDECAR_OWNER_KEY = "WLSC-OWNER-CAM1-2026";
 const SIDECAR_CACHE_MS = 24 * 60 * 60 * 1000;
 const SIDECAR_SYNC_BTN_IDS = ["syncBtn", "syncAllBtn", "consSyncBtn", "viaSyncBtn"];
 
@@ -69,11 +68,6 @@ async function licValidate(key, opts) {
   opts = opts || {};
   if (!key) {
     return { key: "", valid: false, plan: null, status: null, reason: "no-key", checkedAt: Date.now() };
-  }
-  if (key === SIDECAR_OWNER_KEY) {
-    const state = { key: key, valid: true, plan: "owner", status: "owner", reason: null, checkedAt: Date.now() };
-    await licSaveState(state);
-    return state;
   }
   const cached = await licGetCachedState();
   const fresh = cached && cached.key === key && Date.now() - cached.checkedAt < SIDECAR_CACHE_MS;
@@ -145,7 +139,9 @@ async function ensureLicense(opts) {
 async function licOpenPortal() {
   const msgEl = document.getElementById("licPortalMsg");
   const key = await licGetKey();
-  if (!key || key === SIDECAR_OWNER_KEY) return;
+  if (!key) return;
+  const curState = await licGetCachedState();
+  if (curState && curState.plan === "owner") return;
   if (msgEl) msgEl.textContent = "Opening billing portal...";
   try {
     const res = await fetch(SIDECAR_API_BASE + "/portal", {
