@@ -385,19 +385,26 @@ function rInitCollapsible(){
 }
 
 async function retRender(){
-  R$("retStatus").textContent = "Calculating...";
-  await retLoad();
-  rRenderTiles();
-  rRenderYoY();
-  if (typeof wlTips === "function") wlTips("retTiles", WL_TIP_RETAIL);
-  rRenderChart();
-  rRenderDow();
-  rRenderCapture();
-  await rRenderPackages();
-  rRenderAnoms();
-  await rRenderPlates();
-  R$("retStatus").textContent = "";
-  rInitCollapsible();
+  const st = R$("retStatus");
+  st.textContent = "Calculating...";
+  const failed = [];
+  const run = async function(name, fn){
+    try { await fn(); }
+    catch (e){ console.error("[Sidecar] Retail section failed: " + name, e); failed.push(name); }
+  };
+  try { await retLoad(); }
+  catch (e){ console.error("[Sidecar] retLoad failed", e); st.textContent = "Load failed - see console"; return; }
+  await run("tiles", rRenderTiles);
+  await run("yoy", rRenderYoY);
+  await run("tips", function(){ if (typeof wlTips === "function") wlTips("retTiles", WL_TIP_RETAIL); });
+  await run("chart", rRenderChart);
+  await run("dow", rRenderDow);
+  await run("capture", rRenderCapture);
+  await run("packages", rRenderPackages);
+  await run("anomalies", rRenderAnoms);
+  await run("plates", rRenderPlates);
+  await run("collapsible", rInitCollapsible);
+  st.textContent = failed.length ? ("Some sections failed: " + failed.join(", ")) : "";
 }
 
 function rPlatePeriodRange(){

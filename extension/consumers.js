@@ -87,11 +87,13 @@ async function fetchPaymentsPage(page, startStr, endStr){
   return out;
 }
 
+function consIsLogin(res){ return /\/customerlogin\//i.test((res && res.url) || ""); }
 async function fetchVehicleCount(id){
   try {
     // Step 1: fetch consumer page to find their pass link
     const cRes = await safeFetch(DENCAR_BASE + "/consumer/" + id + "/", {credentials: "include", redirect: "manual"});
     if (!cRes.ok || cRes.type === "opaqueredirect" || cRes.status === 0) return -1;
+    if (consIsLogin(cRes)) return -1;
     const cDoc = new DOMParser().parseFromString(await cRes.text(), "text/html");
     let cPhone = "", cFavSite = "";
     for (const s of cDoc.querySelectorAll("strong")){
@@ -108,6 +110,7 @@ async function fetchVehicleCount(id){
     // Step 2: fetch pass page, read Vehicle Count <strong> + <p>
     const res = await safeFetch(DENCAR_BASE + passUrl, {credentials: "include", redirect: "manual"});
     if (!res.ok || res.type === "opaqueredirect" || res.status === 0) return -1;
+    if (consIsLogin(res)) return -1;
     const doc = new DOMParser().parseFromString(await res.text(), "text/html");
     let veh = 1, washPlan = "";
     for (const s of doc.querySelectorAll("strong")){
@@ -122,7 +125,7 @@ async function fetchVehicleCount(id){
       }
     }
     return {veh: veh, washPlan: washPlan, phone: cPhone, favSite: cFavSite};
-  } catch(e){ return {veh: 1, washPlan: "", phone: "", favSite: ""}; }
+  } catch(e){ console.error("[Sidecar] fetchVehicleCount failed", id, e); return -1; }
 }
 
 async function fetchConsumerPhone(id){

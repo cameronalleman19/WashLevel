@@ -1,12 +1,12 @@
 const SIDECAR_API_BASE = "https://washlevel.com/api/sidecar";
 const SIDECAR_OWNER_KEY = "WLSC-OWNER-CAM1-2026";
 const SIDECAR_CACHE_MS = 24 * 60 * 60 * 1000;
-const SIDECAR_SYNC_BTN_IDS = ["syncBtn", "consSyncBtn", "viaSyncBtn"];
+const SIDECAR_SYNC_BTN_IDS = ["syncBtn", "syncAllBtn", "consSyncBtn", "viaSyncBtn"];
 
 let sidecarLicenseState = null;
 
 document.addEventListener("click", function (e) {
-  const btn = e.target.closest && e.target.closest("#syncBtn, #consSyncBtn, #viaSyncBtn");
+  const btn = e.target.closest && e.target.closest("#syncBtn, #syncAllBtn, #consSyncBtn, #viaSyncBtn");
   if (!btn) return;
   if (sidecarLicenseState && !sidecarLicenseState.valid) {
     e.preventDefault();

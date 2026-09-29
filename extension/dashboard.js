@@ -159,7 +159,15 @@ async function fetchSiteAddresses(siteList){
   } catch(e){ console.warn("fetchSiteAddresses failed:", e); }
 }
 
+let _syncRunning = false;
 async function sync(){
+  if (_syncRunning) return;
+  _syncRunning = true;
+  try { await syncInner(); }
+  catch (e){ console.error("[Sidecar] sync failed", e); setStatus("Sync failed: " + (e && e.message ? e.message : e)); throw e; }
+  finally { _syncRunning = false; $("syncBtn").disabled = false; }
+}
+async function syncInner(){
   await getDencarBase();
   $("syncBtn").disabled = true;
   setStatus("Discovering sites...");
@@ -1026,8 +1034,6 @@ async function init(){
   await load();
   render();
 }
-$("syncBtn").addEventListener("click", sync);
-$("detailClose").addEventListener("click", function(){ $("detailModal").style.display = "none"; });
 function wireButtons() {
   var sb = $("syncBtn"); if (sb) sb.addEventListener("click", sync);
   var dc = $("detailClose"); if (dc) dc.addEventListener("click", function(){ $("detailModal").style.display = "none"; });
