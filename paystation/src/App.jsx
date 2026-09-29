@@ -10,7 +10,7 @@ import {
   X, Play, Square, Timer, Gamepad2, Video, PlusCircle,
   Wind, Sparkles, Brush, SprayCan, Waves, Flame,
   CloudRain, Snowflake, Zap, ShieldCheck, CircleDot,
-  Pipette, Eraser, Fan, Car, Hexagon, ZapOff, Activity, Archive
+  Pipette, Eraser, Fan, Car, Hexagon, ZapOff, Activity, Archive, ShoppingBag, Gift
 } from "lucide-react"
 import { db, auth, storage, functions, httpsCallable, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase"
 import {
@@ -107,11 +107,21 @@ const LucideForSF = ({ sf, size = 16, color }) => {
   return <Icon size={size} color={color} />
 }
 
+// Buy-ups: one optional vending product and one optional prepaid credit
+// offer per bay. Stored as strings in form state, numbers in Firestore.
+function makeDefaultBuyUps() {
+  return {
+    vend: { enabled: false, name: "", nameES: "", description: "", descriptionES: "", regularPrice: "", price: "",
+      coil: "", pulseCount: "4", pulseOnMs: "100", pulseOffMs: "100", pulseValue: "", imageUrl: "" },
+    prepaid: { enabled: false, pricePaid: "", creditValue: "" },
+  }
+}
+
 const makeDefaultConfig = (bayName = "Bay 1") => ({
   washName: "Self-Serve Wash", displayName: bayName, attendantPhone: "", logoUrl: "",
   pricingMode: "flatRate", flatRatePerMinute: "1.00", minimumCharge: "", maximumCharge: "",
   relayHost: "192.168.1.100", relayPort: "502", watchdogInterval: "10",
-  status: "offline", displayMode: "auto", salesTaxEnabled: false, salesTaxRate: "",
+  status: "offline", displayMode: "auto", salesTaxEnabled: false, salesTaxRate: "", buyUps: makeDefaultBuyUps(),
   functions: DEFAULT_FUNCTIONS.map(f => ({ ...f, enabled: f.id < 12, customName: "", icon: "", perFunctionRate: "" })),
 })
 
@@ -952,6 +962,60 @@ function SessionsTab({ ownerId, bays }) {
 // BAY CONFIG
 // ═══════════════════════════════════════════
 
+function buyUpsFromFirestore(b) {
+  const d = makeDefaultBuyUps()
+  if (!b) return d
+  const s = (x, fb = "") => (x == null ? fb : String(x))
+  const v = b.vend || {}, p = b.prepaid || {}
+  return {
+    vend: { enabled: v.enabled === true, name: s(v.name), nameES: s(v.nameES), description: s(v.description), descriptionES: s(v.descriptionES),
+      regularPrice: s(v.regularPrice), price: s(v.price), coil: s(v.coil),
+      pulseCount: s(v.pulseCount, d.vend.pulseCount), pulseOnMs: s(v.pulseOnMs, d.vend.pulseOnMs), pulseOffMs: s(v.pulseOffMs, d.vend.pulseOffMs),
+      pulseValue: s(v.pulseValue), imageUrl: s(v.imageUrl) },
+    prepaid: { enabled: p.enabled === true, pricePaid: s(p.pricePaid), creditValue: s(p.creditValue) },
+  }
+}
+
+function buyUpsToFirestore(b) {
+  const x = b || makeDefaultBuyUps(), v = x.vend, p = x.prepaid
+  const money = s => { if (s === "" || s == null) return null; const n = parseFloat(s); return isNaN(n) ? null : Math.round(n * 100) / 100 }
+  const int = s => { if (s === "" || s == null) return null; const n = parseInt(s); return isNaN(n) ? null : n }
+  return {
+    vend: { enabled: !!v.enabled, name: v.name.trim(), nameES: v.nameES.trim(), description: v.description.trim(), descriptionES: v.descriptionES.trim(),
+      regularPrice: money(v.regularPrice), price: money(v.price), coil: int(v.coil),
+      pulseCount: int(v.pulseCount), pulseOnMs: int(v.pulseOnMs), pulseOffMs: int(v.pulseOffMs), pulseValue: money(v.pulseValue),
+      imageUrl: v.imageUrl || "" },
+    prepaid: { enabled: !!p.enabled, pricePaid: money(p.pricePaid), creditValue: money(p.creditValue) },
+  }
+}
+
+// Returns an error string, or null when the buy-ups are safe to save.
+// Only enabled offers are checked, so a half-filled disabled offer can sit.
+function validateBuyUps(b, functions) {
+  if (!b) return null
+  const isMoney = s => /^\d+(\.\d{1,2})?$/.test(String(s).trim())
+  const v = b.vend, p = b.prepaid
+  if (v.enabled) {
+    if (!v.name.trim()) return "Buy-Ups: give the vending product a name."
+    if (!isMoney(v.price) || parseFloat(v.price) <= 0) return "Buy-Ups: enter the buy-up price for the vending product."
+    if (v.regularPrice !== "" && (!isMoney(v.regularPrice) || parseFloat(v.regularPrice) <= parseFloat(v.price)))
+      return "Buy-Ups: the regular price must be higher than the buy-up price, or left blank."
+    const coil = parseInt(v.coil)
+    if (!(coil >= 0 && coil <= 15)) return "Buy-Ups: pick the relay coil wired to the vending machine."
+    const clash = functions.find(f => f.id === coil && f.enabled)
+    if (clash) return "Buy-Ups: coil " + String(coil).padStart(2, "0") + " is in use by " + (clash.customName || clash.name) + ". Pick a spare coil or turn that function off."
+    const n = parseInt(v.pulseCount), on = parseInt(v.pulseOnMs), off = parseInt(v.pulseOffMs)
+    if (!(n >= 1 && n <= 100)) return "Buy-Ups: pulse count must be between 1 and 100."
+    if (!(on >= 50 && on <= 2000) || !(off >= 50 && off <= 2000)) return "Buy-Ups: pulse on and off times must be between 50 and 2000 ms."
+    if (v.pulseValue !== "" && !isMoney(v.pulseValue)) return "Buy-Ups: credit per pulse must be a dollar amount, or left blank."
+  }
+  if (p.enabled) {
+    if (!isMoney(p.pricePaid) || parseFloat(p.pricePaid) <= 0) return "Buy-Ups: enter what the customer pays for prepaid credit."
+    if (!isMoney(p.creditValue) || parseFloat(p.creditValue) < parseFloat(p.pricePaid)) return "Buy-Ups: prepaid credit must be at least what the customer pays."
+  }
+  return null
+}
+
 function configFromFirestore(d) {
   const fns = DEFAULT_FUNCTIONS.map(f => {
     const active = d.activeFunctions || Array.from({ length: 12 }, (_, i) => i)
@@ -965,7 +1029,7 @@ function configFromFirestore(d) {
     relayHost: d.relayHost || "192.168.1.100", relayPort: d.relayPort != null ? String(d.relayPort) : "502",
     watchdogInterval: d.watchdogInterval != null ? String(d.watchdogInterval) : "10", status: d.status || "offline",
     logoUrl: d.logoUrl || "", displayMode: d.displayMode || "auto", salesTaxEnabled: d.salesTaxEnabled || false, salesTaxRate: d.salesTaxRate != null ? String(d.salesTaxRate) : "",
-    outOfService: d.outOfService === true, functions: fns }
+    outOfService: d.outOfService === true, buyUps: buyUpsFromFirestore(d.buyUps), functions: fns }
 }
 
 function configToFirestore(c, ownerId) {
@@ -977,7 +1041,181 @@ function configToFirestore(c, ownerId) {
     minimumCharge: c.minimumCharge ? parseFloat(c.minimumCharge) : null, maximumCharge: c.maximumCharge ? parseFloat(c.maximumCharge) : null,
     relayHost: c.relayHost, relayPort: parseInt(c.relayPort) || 502, watchdogInterval: parseInt(c.watchdogInterval) || 10,
     logoUrl: c.logoUrl || "", displayMode: c.displayMode || "auto", salesTaxEnabled: c.salesTaxEnabled || false, salesTaxRate: c.salesTaxRate ? parseFloat(c.salesTaxRate) : null,
-    activeFunctions, functionConfigs, perFunctionRates, updatedAt: serverTimestamp() }
+    activeFunctions, functionConfigs, perFunctionRates, buyUps: buyUpsToFirestore(c.buyUps), updatedAt: serverTimestamp() }
+}
+
+// ═══════════════════════════════════════════
+// BUY-UPS (Bay Config panel)
+// ═══════════════════════════════════════════
+
+// Square-wave preview of the pulse train, drawn to scale.
+function PulseTrace({ count, onMs, offMs }) {
+  const total = parseInt(count) || 0, n = Math.min(total, 16)
+  const on = Math.max(parseInt(onMs) || 0, 1), off = Math.max(parseInt(offMs) || 0, 1)
+  const W = 260, H = 28, lo = H - 5, hi = 5
+  if (!n) return <svg width={W} height={H} />
+  const unit = (W - 4) / (n * (on + off))
+  let x = 2, d = "M0 " + lo + " L2 " + lo
+  for (let k = 0; k < n; k++) {
+    const r = x + on * unit
+    d += " L" + x.toFixed(1) + " " + hi + " L" + r.toFixed(1) + " " + hi + " L" + r.toFixed(1) + " " + lo
+    x += (on + off) * unit
+    d += " L" + x.toFixed(1) + " " + lo
+  }
+  return <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+    <svg width={W} height={H} style={{ display: "block" }}>
+      <line x1="0" y1={lo} x2={W} y2={lo} stroke={T.border} strokeWidth="1" />
+      <path d={d} fill="none" stroke={T.accent} strokeWidth="1.5" strokeLinejoin="miter" />
+    </svg>
+    {total > n && <span style={{ fontFamily: T.fontMono, fontSize: "11px", color: T.textDim }}>+{total - n}</span>}
+  </div>
+}
+
+function BuyUpsSection({ buyUps, functions, bayId, onChange }) {
+  const b = buyUps || makeDefaultBuyUps()
+  const v = b.vend, p = b.prepaid
+  const setV = (k, val) => onChange({ ...b, vend: { ...v, [k]: val } })
+  const setP = (k, val) => onChange({ ...b, prepaid: { ...p, [k]: val } })
+  const f2 = s => { const n = parseFloat(s); return isNaN(n) ? null : n }
+  const usd = n => "$" + n.toFixed(2)
+
+  const inp = { ...CS.input, color: T.textPrimary, background: T.bgDeep }
+  const money = (val, set, ph) => <div style={{ position: "relative" }}>
+    <span style={{ position: "absolute", left: "12px", top: "10px", color: T.textDim, fontSize: "14px", fontFamily: T.fontMono }}>$</span>
+    <input style={{ ...CS.inputMono, paddingLeft: "26px", color: T.accent, background: T.bgDeep }} value={val} inputMode="decimal" placeholder={ph} onChange={e => set(e.target.value)} />
+  </div>
+  const count = (val, set, suffix) => <div style={{ position: "relative" }}>
+    <input style={{ ...CS.inputMono, color: T.accent, background: T.bgDeep, paddingRight: suffix ? "40px" : "14px" }} value={val} inputMode="numeric" onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} />
+    {suffix && <span style={{ position: "absolute", right: "12px", top: "11px", color: T.textDim, fontSize: "11px", fontFamily: T.fontMono }}>{suffix}</span>}
+  </div>
+  const readout = items => <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 22px", padding: "9px 12px", background: T.bgBase, border: "1px solid " + T.border, borderRadius: "8px", fontFamily: T.fontMono, fontSize: "12px" }}>
+    {items.filter(Boolean).map(([k, val, c], idx) => <span key={idx}><span style={{ color: T.textDim, letterSpacing: "1px" }}>{k}&nbsp;&nbsp;</span><span style={{ color: c || T.textPrimary }}>{val}</span></span>)}
+  </div>
+  const header = (Icon, title, sub, on, flip) => <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+    <div style={{ display: "flex", gap: "10px" }}>
+      <Icon size={18} color={on ? T.accent : T.textDim} style={{ marginTop: "1px", flexShrink: 0 }} />
+      <div><div style={CS.fnName}>{title}</div><div style={{ ...CS.hint, marginTop: "3px" }}>{sub}</div></div>
+    </div>
+    <div style={CS.toggleSwitch(on)} onClick={flip}><div style={CS.toggleKnob(on)} /></div>
+  </div>
+  const card = on => ({ background: T.bgDeep, border: "1px solid " + (on ? "rgba(0,212,170,0.35)" : T.border), borderRadius: "10px", padding: "16px 18px", display: "flex", flexDirection: "column", gap: "14px" })
+
+  // Vending math
+  const price = f2(v.price), reg = f2(v.regularPrice)
+  const saves = price != null && reg != null && reg > price ? reg - price : null
+  const pc = parseInt(v.pulseCount) || 0, on = parseInt(v.pulseOnMs) || 0, off = parseInt(v.pulseOffMs) || 0
+  const pv = f2(v.pulseValue)
+  const coilSel = v.coil === "" ? null : parseInt(v.coil)
+  const usedBy = id => functions.find(f => f.id === id && f.enabled)
+
+  // Prepaid math
+  const paid = f2(p.pricePaid), credit = f2(p.creditValue)
+  const bonus = paid != null && credit != null && credit > paid ? credit - paid : null
+
+  const uploadPhoto = async e => {
+    const file = e.target.files && e.target.files[0]; if (!file) return
+    if (!bayId) { alert("Save the bay first."); return }
+    try {
+      const r = storageRef(storage, "bays/" + bayId + "/buyups/vend." + file.name.split(".").pop())
+      await uploadBytes(r, file, { contentType: file.type })
+      setV("imageUrl", await getDownloadURL(r))
+    } catch (err) { alert("Upload failed: " + err.message) }
+  }
+
+  return <div style={CS.section}>
+    <h3 style={CS.sectionTitle}><ShoppingBag size={16} /> Buy-Ups</h3>
+    <div style={{ ...CS.hint, marginTop: "-8px", marginBottom: "16px", lineHeight: 1.6 }}>
+      Offered once when the customer presses Stop, on card-paid washes only. The customer can take one offer or decline, and the offer closes itself after 20 seconds. Not shown on code, promo or issue sessions. Buy-ups are added to the wash subtotal and taxed at this bay's sales tax rate when tax is on.
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+
+      <div style={card(v.enabled)}>
+        {header(ShoppingBag, "Vending Product", "Pulses a spare relay coil into a vending machine's coin input", v.enabled, () => setV("enabled", !v.enabled))}
+        {v.enabled && <>
+          <div style={{ ...CS.row, marginBottom: 0 }}>
+            <div style={CS.field()}><label style={CS.label}>Product Name</label><input style={inp} value={v.name} onChange={e => setV("name", e.target.value)} placeholder="Car Care Kit" /></div>
+            <div style={CS.field()}><label style={CS.label}>Nombre (Español)</label><input style={inp} value={v.nameES} onChange={e => setV("nameES", e.target.value)} placeholder="Kit de Cuidado" /></div>
+          </div>
+          <div style={{ ...CS.row, marginBottom: 0 }}>
+            <div style={CS.field()}><label style={CS.label}>Description</label><input style={inp} value={v.description} onChange={e => setV("description", e.target.value)} placeholder="Optional, one line" /></div>
+            <div style={CS.field()}><label style={CS.label}>Descripción</label><input style={inp} value={v.descriptionES} onChange={e => setV("descriptionES", e.target.value)} placeholder="Opcional" /></div>
+          </div>
+          <div style={{ ...CS.row, marginBottom: 0, alignItems: "flex-end" }}>
+            <div style={CS.field()}><label style={CS.label}>Regular Price</label>{money(v.regularPrice, x => setV("regularPrice", x), "6.00")}</div>
+            <div style={CS.field()}><label style={CS.label}>Buy-Up Price</label>{money(v.price, x => setV("price", x), "5.00")}</div>
+            <div style={CS.field()}><label style={CS.label}>Photo</label>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <label style={{ flex: 1, height: "41px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", border: "1px dashed " + T.borderLight, borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: T.textSecondary }}>
+                  {v.imageUrl ? <img src={v.imageUrl} alt="" style={{ height: "28px", borderRadius: "4px" }} /> : <Upload size={14} />}
+                  {v.imageUrl ? "Replace" : "Upload"}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={uploadPhoto} />
+                </label>
+                {v.imageUrl && <button type="button" title="Remove photo" onClick={() => setV("imageUrl", "")} style={{ background: "transparent", border: "1px solid " + T.border, borderRadius: "8px", height: "41px", width: "41px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><X size={14} color={T.red} /></button>}
+              </div>
+            </div>
+          </div>
+          {readout([
+            ["CUSTOMER PAYS", price != null ? usd(price) : "--", T.accent],
+            saves != null ? ["SAVES", usd(saves), T.amber] : ["SAVINGS LINE", "hidden until regular price is set", T.textDim],
+          ])}
+
+          <div>
+            <label style={CS.label}>Relay Coil</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(16, 1fr)", gap: "4px", marginTop: "6px" }}>
+              {Array.from({ length: 16 }, (_, id) => {
+                const fn = usedBy(id), sel = coilSel === id, clash = sel && !!fn
+                return <button key={id} type="button" disabled={!!fn && !sel}
+                  title={fn ? "In use: " + (fn.customName || fn.name) : "Coil " + String(id).padStart(2, "0") + " (spare)"}
+                  onClick={() => setV("coil", String(id))}
+                  style={{ height: "32px", borderRadius: "6px", fontFamily: T.fontMono, fontSize: "12px", cursor: fn ? "not-allowed" : "pointer",
+                    background: clash ? T.redDim : sel ? T.accentDim : T.bgBase,
+                    color: clash ? T.red : sel ? T.accent : fn ? T.textDim : T.textSecondary,
+                    border: "1px solid " + (clash ? T.red : sel ? T.accent : fn ? "rgba(255,255,255,0.04)" : T.borderLight),
+                    opacity: fn && !sel ? 0.3 : 1, textDecoration: fn && !sel ? "line-through" : "none" }}>{String(id).padStart(2, "0")}</button>
+              })}
+            </div>
+            <div style={CS.hint}>{coilSel != null && usedBy(coilSel)
+              ? <span style={{ color: T.red }}>This coil is now assigned to {usedBy(coilSel).customName || usedBy(coilSel).name}. Pick a spare coil.</span>
+              : "Only coils with no wash function assigned can be picked. Wire the coil's normally-open contact to the machine's coin pulse input."}</div>
+          </div>
+
+          <div style={{ ...CS.row, marginBottom: 0 }}>
+            <div style={CS.field()}><label style={CS.label}>Pulses</label>{count(v.pulseCount, x => setV("pulseCount", x))}</div>
+            <div style={CS.field()}><label style={CS.label}>On</label>{count(v.pulseOnMs, x => setV("pulseOnMs", x), "ms")}</div>
+            <div style={CS.field()}><label style={CS.label}>Off</label>{count(v.pulseOffMs, x => setV("pulseOffMs", x), "ms")}</div>
+            <div style={CS.field()}><label style={CS.label}>Credit / Pulse</label>{money(v.pulseValue, x => setV("pulseValue", x), "0.25")}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+            <PulseTrace count={v.pulseCount} onMs={v.pulseOnMs} offMs={v.pulseOffMs} />
+            {readout([
+              ["TRAIN", pc && on && off ? (pc * (on + off) / 1000).toFixed(1) + " s" : "--"],
+              pv != null ? ["MACHINE CREDIT", usd(pc * pv), reg != null && Math.abs(pc * pv - reg) > 0.001 ? T.amber : T.accent] : null,
+            ])}
+          </div>
+          {pv != null && reg != null && Math.abs(pc * pv - reg) > 0.001 && <div style={{ ...CS.hint, color: T.amber, marginTop: "-6px" }}>
+            Machine credit does not match the regular price. Check the pulse count against the machine's vend price.
+          </div>}
+
+        </>}
+      </div>
+
+      <div style={card(p.enabled)}>
+        {header(Gift, "Prepaid Wash Credit", "Customer prepays now and receives a code worth more toward a future wash", p.enabled, () => setP("enabled", !p.enabled))}
+        {p.enabled && <>
+          <div style={{ ...CS.row, marginBottom: 0 }}>
+            <div style={CS.field()}><label style={CS.label}>Customer Pays</label>{money(p.pricePaid, x => setP("pricePaid", x), "20.00")}</div>
+            <div style={CS.field()}><label style={CS.label}>Credit Received</label>{money(p.creditValue, x => setP("creditValue", x), "25.00")}</div>
+            <div style={CS.field()} />
+          </div>
+          {readout([
+            ["BONUS", bonus != null ? usd(bonus) + (paid ? "  (" + Math.round(bonus / paid * 100) + "%)" : "") : "--", T.amber],
+            ["REDEEMABLE", "all locations, balance carries over", T.textSecondary],
+          ])}
+        </>}
+      </div>
+
+    </div>
+  </div>
 }
 
 function BayConfigTab({ bays, ownerId, locationId, userEmail }) {
@@ -987,6 +1225,8 @@ function BayConfigTab({ bays, ownerId, locationId, userEmail }) {
   const u = (k, v) => { setConfig(p => ({ ...p, [k]: v })); setSaved(false) }
   const uFn = (id, k, v) => { setConfig(p => ({ ...p, functions: p.functions.map(f => f.id === id ? { ...f, [k]: v } : f) })); setSaved(false) }
   const save = async () => {
+    const buErr = validateBuyUps(config.buyUps, config.functions)
+    if (buErr) { alert(buErr); return }
     if (!selId) return
     setSaving(true)
     try {
@@ -1135,6 +1375,8 @@ function BayConfigTab({ bays, ownerId, locationId, userEmail }) {
         </div>)}</div>
       </div>
 
+      <BuyUpsSection buyUps={config.buyUps} functions={config.functions} bayId={selId} onChange={val => u("buyUps", val)} />
+
       <div style={CS.section}><h3 style={CS.sectionTitle}><Phone size={16} /> Contact</h3>
         <div style={CS.row}><div style={CS.field(0.5)}><label style={CS.label}>Attendant Phone</label><input style={{ ...CS.inputMono, color: T.accent, background: T.bgDeep }} value={config.attendantPhone} onChange={e => u("attendantPhone", e.target.value)} placeholder="(555) 555-1234" /><div style={CS.hint}>Shown in help flow</div></div></div>
       </div>
@@ -1187,6 +1429,8 @@ function CodesTab({ ownerId }) {
   const [generating, setGenerating] = useState(false)
   const [generatedCode, setGeneratedCode] = useState(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [prepaidCodes, setPrepaidCodes] = useState([])
+  const [sort, setSort] = useState({ key: "created", dir: "desc" })
 
   useEffect(() => {
     const q1 = query(collection(db, "promoCodes"), where("ownerId", "==", ownerId), orderBy("createdAt", "desc"), limit(50))
@@ -1200,7 +1444,12 @@ function CodesTab({ ownerId }) {
       setTransferCodes(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     }, () => {})
 
-    return () => { unsub1(); unsub2() }
+    const q3 = query(collection(db, "washboardPrepaidCodes"), where("ownerId", "==", ownerId))
+    const unsub3 = onSnapshot(q3, snap => {
+      setPrepaidCodes(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    }, () => {})
+
+    return () => { unsub1(); unsub2(); unsub3() }
   }, [ownerId])
 
   const handleGenerate = async () => {
@@ -1221,13 +1470,50 @@ function CodesTab({ ownerId }) {
 
   const allCodes = [
     ...codes.map(c => ({ ...c, source: "promo" })),
-    ...transferCodes.map(c => ({ ...c, source: "transfer", codeType: "dollar", value: c.originalCharge || 0 }))
-  ].sort((a, b) => {
-    const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0
-    const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0
-    return bTime - aTime
-  })
+    ...transferCodes.map(c => ({ ...c, source: "transfer", codeType: "dollar", value: c.originalCharge || 0 })),
+    ...prepaidCodes.map(c => ({ ...c, source: "prepaid", codeType: "prepaid", value: c.balance || 0, label: c.label || ("Paid $" + Number(c.pricePaid || 0).toFixed(2)) })),
+  ]
 
+  const ms = t => (t && t.toMillis ? t.toMillis() : 0)
+  const codeStatus = c => {
+    const expired = c.expiresAt && ms(c.expiresAt) < Date.now()
+    if (c.source === "prepaid") {
+      if (c.status === "void") return { text: "Void", color: T.textDim, rank: 3 }
+      if (!(c.balance > 0)) return { text: "Used Up", color: T.textDim, rank: 2 }
+      if (expired) return { text: "Expired", color: T.red, rank: 1 }
+      return { text: "Active", color: T.green, rank: 0 }
+    }
+    if (c.used || c.redeemed) return { text: "Used", color: T.textDim, rank: 2 }
+    if (expired) return { text: "Expired", color: T.red, rank: 1 }
+    return { text: "Active", color: T.green, rank: 0 }
+  }
+  const typeLabel = c => c.codeType === "prepaid" ? "Prepaid" : c.codeType === "percent" ? "% Off" : "$ Credit"
+  const sourceLabel = c => c.source === "prepaid" ? "Buy-Up" : c.source === "transfer" ? "Transfer" : "Promo"
+  const usesOf = c => c.source === "prepaid" ? (c.redemptionCount || 0) : (c.usageCount || 0)
+
+  const COLUMNS = [
+    { key: "code", label: "Code", val: c => c.code || c.id || "" },
+    { key: "label", label: "Label", val: c => (c.label || "").toLowerCase() },
+    { key: "type", label: "Type", val: c => typeLabel(c) },
+    { key: "value", label: "Value", val: c => Number(c.value || 0) },
+    { key: "uses", label: "Uses", val: c => usesOf(c) },
+    { key: "source", label: "Source", val: c => sourceLabel(c) },
+    { key: "status", label: "Status", val: c => codeStatus(c).rank },
+    { key: "created", label: "Created", val: c => ms(c.createdAt) },
+    { key: "expires", label: "Expires", val: c => ms(c.expiresAt) || Number.MAX_SAFE_INTEGER },
+  ]
+  const sortCol = COLUMNS.find(col => col.key === sort.key) || COLUMNS[7]
+  const clickSort = key => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "created" || key === "value" || key === "uses" ? "desc" : "asc" })
+
+  const q = searchQuery.trim().toLowerCase()
+  const visibleCodes = (q ? allCodes.filter(c =>
+    (c.code || c.id || "").toLowerCase().includes(q) || (c.label || "").toLowerCase().includes(q) ||
+    typeLabel(c).toLowerCase().includes(q) || sourceLabel(c).toLowerCase().includes(q)
+  ) : allCodes).slice().sort((a, b) => {
+    const x = sortCol.val(a), y = sortCol.val(b)
+    const r = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })
+    return (sort.dir === "asc" ? r : -r) || ms(b.createdAt) - ms(a.createdAt)
+  })
   if (loading) return <div style={S.placeholder}><Loader size={24} style={{ animation: "spin 1s linear infinite" }} /></div>
 
   return <>
@@ -1298,40 +1584,38 @@ function CodesTab({ ownerId }) {
       <input style={{ ...CS.input, color: T.textPrimary, background: T.bgDeep, maxWidth: "300px" }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search by code, label, or type..." />
     </div>
 
-    {(() => {
-      const filtered = searchQuery ? allCodes.filter(c => {
-        const q = searchQuery.toLowerCase()
-        return (c.code || "").toLowerCase().includes(q) || (c.label || "").toLowerCase().includes(q) || (c.codeType || "").toLowerCase().includes(q) || (c.source || "").toLowerCase().includes(q)
-      }) : allCodes
-      return filtered
-    })().length === 0 ? <div style={S.placeholder}><KeyRound size={40} strokeWidth={1} /><div style={S.placeholderTitle}>No codes yet</div><div style={S.placeholderSub}>Generate promo codes or transfer codes will appear here from help flow sessions.</div></div>
-    : <div style={{ background: T.bgPanel, border: "1px solid " + T.border, borderRadius: "12px", overflow: "hidden" }}>
+    {visibleCodes.length === 0 ? <div style={S.placeholder}><KeyRound size={40} strokeWidth={1} /><div style={S.placeholderTitle}>{q ? "No matching codes" : "No codes yet"}</div><div style={S.placeholderSub}>Promo codes you generate, transfer codes from help flow sessions, and prepaid credit bought at the kiosk appear here.</div></div>
+    : <div style={{ background: T.bgPanel, border: "1px solid " + T.border, borderRadius: "12px", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead><tr style={{ borderBottom: "1px solid " + T.border }}>
-          {["Code", "Label", "Type", "Value", "Uses", "Source", "Status", "Expires"].map(h => <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: T.textDim }}>{h}</th>)}
+          {COLUMNS.map(col => {
+            const active = sort.key === col.key
+            return <th key={col.key} onClick={() => clickSort(col.key)} style={{ padding: "12px 14px", textAlign: "left", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: active ? T.accent : T.textDim, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                {col.label}
+                <ChevronDown size={12} style={{ opacity: active ? 1 : 0, transform: active && sort.dir === "asc" ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+              </span>
+            </th>
+          })}
         </tr></thead>
-        <tbody>{(() => {
-      const filtered = searchQuery ? allCodes.filter(c => {
-        const q = searchQuery.toLowerCase()
-        return (c.code || "").toLowerCase().includes(q) || (c.label || "").toLowerCase().includes(q) || (c.codeType || "").toLowerCase().includes(q) || (c.source || "").toLowerCase().includes(q)
-      }) : allCodes
-      return filtered
-    })().map((c, i) => {
+        <tbody>{visibleCodes.map((c, i) => {
           const created = c.createdAt?.toDate ? c.createdAt.toDate() : null
           const expires = c.expiresAt?.toDate ? c.expiresAt.toDate() : null
-          const isExpired = expires && expires < new Date()
-          const isUsed = c.used || c.redeemed
-          const statusColor = isUsed ? T.textDim : isExpired ? T.red : T.green
-          const statusText = isUsed ? "Used" : isExpired ? "Expired" : "Active"
-          return <tr key={c.id || i} style={{ borderBottom: "1px solid " + T.border }}>
-            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "14px", fontWeight: 600, color: T.accent, letterSpacing: "2px" }}>{c.code}</td>
+          const st = codeStatus(c)
+          const badge = c.source === "prepaid" ? { bg: T.blueDim || "rgba(59,130,246,0.15)", fg: T.blue } : c.source === "transfer" ? { bg: T.amberDim, fg: T.amber } : { bg: T.accentDim, fg: T.accent }
+          return <tr key={c.source + (c.id || i)} style={{ borderBottom: "1px solid " + T.border }}>
+            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "14px", fontWeight: 600, color: T.accent, letterSpacing: "2px" }}>{c.code || c.id}</td>
             <td style={{ padding: "10px 14px", fontSize: "12px", color: T.textSecondary, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label || "--"}</td>
-            <td style={{ padding: "10px 14px" }}>{c.codeType === "percent" ? "% Off" : "$ Credit"}</td>
-            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, color: T.textPrimary }}>{c.codeType === "percent" ? c.value + "%" : "$" + (c.value || 0).toFixed(2)}</td>
-            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "12px", color: T.textSecondary }}>{c.usageLimit ? (c.usageCount || 0) + "/" + c.usageLimit : (c.usageCount || 0)}</td>
-            <td style={{ padding: "10px 14px" }}><span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: c.source === "transfer" ? T.amberDim : T.accentDim, color: c.source === "transfer" ? T.amber : T.accent }}>{c.source === "transfer" ? "Transfer" : "Promo"}</span></td>
-            <td style={{ padding: "10px 14px" }}><span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: statusColor + "20", color: statusColor }}>{statusText}</span></td>
-            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "11px", color: isExpired ? T.red : T.textSecondary }}>{expires ? formatDate(expires) : "--"}</td>
+            <td style={{ padding: "10px 14px" }}>{typeLabel(c)}</td>
+            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, color: T.textPrimary, whiteSpace: "nowrap" }}>
+              {c.codeType === "percent" ? c.value + "%" : "$" + Number(c.value || 0).toFixed(2)}
+              {c.source === "prepaid" && <span style={{ color: T.textDim, fontSize: "11px" }}> / ${Number(c.originalCredit || 0).toFixed(2)}</span>}
+            </td>
+            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "12px", color: T.textSecondary }}>{c.source !== "prepaid" && c.usageLimit ? usesOf(c) + "/" + c.usageLimit : usesOf(c)}</td>
+            <td style={{ padding: "10px 14px" }}><span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: badge.bg, color: badge.fg }}>{sourceLabel(c)}</span></td>
+            <td style={{ padding: "10px 14px" }}><span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: st.color + "20", color: st.color }}>{st.text}</span></td>
+            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "11px", color: T.textSecondary, whiteSpace: "nowrap" }}>{created ? formatDate(created) : "--"}</td>
+            <td style={{ padding: "10px 14px", fontFamily: T.fontMono, fontSize: "11px", color: st.text === "Expired" ? T.red : T.textSecondary, whiteSpace: "nowrap" }}>{expires ? formatDate(expires) : "--"}</td>
           </tr>
         })}</tbody>
       </table>
@@ -2005,6 +2289,31 @@ function AlertsTab({ ownerId }) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // wbDailySummaryCard - account-wide daily summary settings (washboardSettings/{ownerId})
+  const WB_SUMMARY_ZONES = [
+    ["America/New_York", "Eastern"], ["America/Chicago", "Central"], ["America/Denver", "Mountain"],
+    ["America/Phoenix", "Arizona"], ["America/Los_Angeles", "Pacific"], ["America/Anchorage", "Alaska"],
+    ["Pacific/Honolulu", "Hawaii"],
+  ]
+  const [summary, setSummary] = useState(null)
+  const us = (field, value) => setSummary(prev => ({ ...prev, [field]: value, _dirty: true }))
+
+  useEffect(() => {
+    const fallback = { enabled: true, time: "07:00", timezone: "America/New_York", recipients: [auth.currentUser?.email || ""], lastSentAt: null, lastSentFor: null }
+    const unsub = onSnapshot(doc(db, "washboardSettings", ownerId), snap => {
+      const s = (snap.exists() && snap.data().dailySummary) || {}
+      setSummary(prev => prev && prev._dirty ? { ...prev, lastSentAt: s.lastSentAt || prev.lastSentAt, lastSentFor: s.lastSentFor || prev.lastSentFor } : {
+        enabled: s.enabled ?? true,
+        time: s.time || "07:00",
+        timezone: s.timezone || "America/New_York",
+        recipients: (s.recipients && s.recipients.length) ? s.recipients : [auth.currentUser?.email || ""],
+        lastSentAt: s.lastSentAt || null,
+        lastSentFor: s.lastSentFor || null,
+      })
+    }, e => { console.error("Summary settings load failed:", e); setSummary(prev => prev || fallback) })
+    return () => unsub()
+  }, [ownerId])
+
   useEffect(() => {
     const q = query(collection(db, "washboardLocations"), where("ownerId", "==", ownerId))
     const unsub = onSnapshot(q, snap => {
@@ -2022,13 +2331,29 @@ function AlertsTab({ ownerId }) {
   const save = async () => {
     if (!selectedId || !config) return
     setSaving(true)
+    let ok = true
     try {
       const { id, ...data } = config
       data.updatedAt = serverTimestamp()
       await updateDoc(doc(db, "washboardLocations", selectedId), data)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e) { console.error("Save failed:", e) }
+    } catch (e) { ok = false; console.error("Save failed:", e) }
+    if (summary && summary._dirty) {
+      const recipients = summary.recipients.map(r => r.trim()).filter(Boolean)
+      const bad = recipients.filter(r => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
+      if (bad.length) { ok = false; alert("Check this summary recipient: " + bad[0]) }
+      else if (summary.enabled && recipients.length === 0) { ok = false; alert("Add at least one daily summary recipient, or turn the summary off.") }
+      else {
+        try {
+          await setDoc(doc(db, "washboardSettings", ownerId), {
+            ownerId,
+            dailySummary: { enabled: summary.enabled, time: summary.time, timezone: summary.timezone, recipients },
+            updatedAt: serverTimestamp(),
+          }, { merge: true })
+          setSummary(prev => ({ ...prev, recipients: recipients.length ? recipients : [""], _dirty: false }))
+        } catch (e) { ok = false; console.error("Summary save failed:", e); alert("Daily summary settings did not save: " + e.message) }
+      }
+    }
+    if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2000) }
     setSaving(false)
   }
 
@@ -2173,7 +2498,7 @@ function AlertsTab({ ownerId }) {
         <div style={{ ...CS.section, padding: "20px" }}>
           <h3 style={CS.sectionTitle}><Bell size={16} /> Alert Conditions</h3>
           <div style={{ ...CS.hint, marginTop: "4px", marginBottom: "14px" }}>Choose how you want to be notified for each condition. Repeat alerts are suppressed until the condition clears.</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px", gap: "0", alignItems: "center" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px", gap: "0", alignItems: "stretch" }}>
             <div />
             <div style={{ ...CS.label, textAlign: "center", marginBottom: "8px" }}>TEXT</div>
             <div style={{ ...CS.label, textAlign: "center", marginBottom: "8px" }}>EMAIL</div>
@@ -2182,10 +2507,10 @@ function AlertsTab({ ownerId }) {
                 <div style={{ fontSize: "13px", fontWeight: 600, color: T.textPrimary }}>{c.label}</div>
                 <div style={{ fontSize: "11px", color: T.textDim, marginTop: "2px" }}>{c.desc}</div>
               </div>
-              <div style={{ padding: "12px 0", borderTop: "1px solid " + T.border, display: "flex", justifyContent: "center" }}>
+              <div style={{ padding: "12px 0", borderTop: "1px solid " + T.border, display: "flex", justifyContent: "center", alignItems: "center" }}>
                 <Toggle on={settingFor(c.key).sms} onClick={() => toggle(c.key, "sms")} />
               </div>
-              <div style={{ padding: "12px 0", borderTop: "1px solid " + T.border, display: "flex", justifyContent: "center" }}>
+              <div style={{ padding: "12px 0", borderTop: "1px solid " + T.border, display: "flex", justifyContent: "center", alignItems: "center" }}>
                 <Toggle on={settingFor(c.key).email} onClick={() => toggle(c.key, "email")} />
               </div>
             </div>)}
@@ -2206,6 +2531,63 @@ function AlertsTab({ ownerId }) {
           </div>
         </div>
 
+        {/* wbDailySummaryCard */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px" }}>
+          <div style={{ flex: 1, height: "1px", background: T.border }} />
+          <div style={{ fontFamily: T.fontMono, fontSize: "10px", letterSpacing: "2px", color: T.textDim }}>ALL LOCATIONS</div>
+          <div style={{ flex: 1, height: "1px", background: T.border }} />
+        </div>
+
+        {summary && <div style={{ ...CS.section, padding: "20px" }}>
+          <h3 style={CS.sectionTitle}><BarChart3 size={16} /> Daily Summary</h3>
+          <div style={{ ...CS.hint, marginTop: "4px", marginBottom: "14px" }}>One email covering every location, sent every day - including days with no washes. These recipients are separate from alert recipients.</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "150px 170px 1fr", background: T.bgDeep, border: "1px solid " + T.border, borderRadius: "10px" }}>
+            <div style={{ padding: "12px 16px", borderRight: "1px solid " + T.border }}>
+              <div style={{ ...CS.label, fontSize: "9px", marginBottom: "8px" }}>Status</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", height: "24px" }}>
+                <Toggle on={summary.enabled} onClick={() => us("enabled", !summary.enabled)} />
+                <span style={{ fontFamily: T.fontMono, fontSize: "12px", letterSpacing: "1px", color: summary.enabled ? T.accent : T.textDim }}>{summary.enabled ? "ON" : "OFF"}</span>
+              </div>
+            </div>
+            <div style={{ padding: "12px 16px", borderRight: "1px solid " + T.border }}>
+              <div style={{ ...CS.label, fontSize: "9px", marginBottom: "8px" }}>Send At</div>
+              <input type="time" step="900" value={summary.time} onChange={e => us("time", e.target.value || "07:00")}
+                style={{ background: "transparent", border: "none", outline: "none", padding: 0, width: "100%", height: "24px", fontFamily: T.fontMono, fontSize: "15px", color: T.accent, colorScheme: "dark" }} />
+            </div>
+            <div style={{ padding: "12px 16px" }}>
+              <div style={{ ...CS.label, fontSize: "9px", marginBottom: "8px" }}>Time Zone</div>
+              <select value={summary.timezone} onChange={e => us("timezone", e.target.value)}
+                style={{ background: "transparent", border: "none", outline: "none", padding: 0, width: "100%", height: "24px", fontFamily: T.fontBody, fontSize: "13px", color: T.textPrimary, colorScheme: "dark", cursor: "pointer" }}>
+                {WB_SUMMARY_ZONES.map(([v, l]) => <option key={v} value={v} style={{ background: T.bgPanel }}>{l}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "16px", opacity: summary.enabled ? 1 : 0.45, transition: "opacity 0.15s" }}>
+            {summary.recipients.map((email, i) => <div key={i} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ ...CS.label, fontSize: "9px" }}>Summary Recipient {summary.recipients.length > 1 ? (i + 1) : ""}</label>
+                <input style={{ ...CS.input, color: T.textPrimary, background: T.bgDeep }} value={email} onChange={e => {
+                  const r = [...summary.recipients]
+                  r[i] = e.target.value
+                  us("recipients", r)
+                }} placeholder="owner@example.com" />
+              </div>
+              {summary.recipients.length > 1 && <button onClick={() => {
+                const r = [...summary.recipients]
+                r.splice(i, 1)
+                us("recipients", r)
+              }} style={{ background: "none", border: "none", cursor: "pointer", color: T.textDim, padding: "4px", marginTop: "16px" }}><Trash2 size={14} /></button>}
+            </div>)}
+          </div>
+          {summary.recipients.length < 5 && <button onClick={() => us("recipients", [...summary.recipients, ""])} style={{ marginTop: "8px", background: "none", border: "1px dashed " + T.border, borderRadius: "8px", padding: "8px 16px", fontSize: "11px", color: T.textDim, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}><Plus size={12} /> Add another address</button>}
+
+          <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid " + T.border, display: "flex", gap: "28px", fontFamily: T.fontMono, fontSize: "11px", letterSpacing: "1px", color: T.textDim }}>
+            <span>LAST SENT <span style={{ color: summary.lastSentAt ? T.textSecondary : T.textDim, marginLeft: "6px" }}>{summary.lastSentAt?.toDate ? summary.lastSentAt.toDate().toLocaleString("en-US", { timeZone: summary.timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).toUpperCase() : "NOT YET"}</span></span>
+            {summary.lastSentFor && <span>COVERED <span style={{ color: T.textSecondary, marginLeft: "6px" }}>{summary.lastSentFor}</span></span>}
+          </div>
+        </div>}
         <button onClick={save} disabled={saving} style={{ background: saving ? T.bgPanel : T.accent, color: saving ? T.textDim : T.bgDeep, border: "none", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: 700, letterSpacing: "2px", cursor: saving ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
           {saving ? <><Loader size={16} style={{ animation: "spin 1s linear infinite" }} /> SAVING...</> : saved ? <><Check size={16} /> SAVED</> : <><Save size={16} /> SAVE ALERTS</>}
         </button>

@@ -187,7 +187,7 @@ function mRenderLostMembers(){
       "<td style=\"" + reasonStyle + "\">" + reason + "</td>" +
       "<td>" + mDate(lostDate) + "</td>" +
       "<td>" + mEsc(c.washPlan || "--") + "</td>" +
-      "<td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
+      "<td><a class=\"via-open\" target=\"_blank\" href=\"" + DENCAR_BASE + "/consumer/" + c.id + "/\">Open</a></td>";
     tb.appendChild(tr);
   }
 }
@@ -232,7 +232,7 @@ function mRenderIncomplete(){
       "<td>" + mDate(c.signup) + "</td>" +
       "<td" + daysStyle + ">" + daysLeft + "d</td>" +
       "<td>" + mEsc(c.favSite || "--") + "</td>" +
-      "<td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + c.id + "/\">Open</a></td>";
+      "<td><a class=\"via-open\" target=\"_blank\" href=\"" + DENCAR_BASE + "/consumer/" + c.id + "/\">Open</a></td>";
     tb.appendChild(tr);
   }
 }
@@ -257,7 +257,7 @@ function mRenderRisk(){
   for (const x of scored.slice(0, 75)){
     const lvl = x.r.score >= 50 ? "HIGH" : "MED";
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td><a class=\"via-open\" target=\"_blank\" href=\"" + CBASE + "/consumer/" + x.c.id + "/\">" + mEsc(x.c.name) + "</a></td>" +
+    tr.innerHTML = "<td><a class=\"via-open\" target=\"_blank\" href=\"" + DENCAR_BASE + "/consumer/" + x.c.id + "/\">" + mEsc(x.c.name) + "</a></td>" +
       "<td>" + lvl + " (" + x.r.score + ")</td>" +
       "<td>" + mEsc(x.r.reasons.join("; ")) + "</td>" +
       "<td>" + x.r.recent.toFixed(1) + "</td>" +
@@ -774,25 +774,32 @@ function mRenderYoY(){
 }
 
 async function memRender(){
-  M$("memStatus").textContent = "Calculating...";
-  await memLoad();
-  mRenderTiles();
-  mRenderYoY();
-  mRenderEconomics();
-  mRenderVehicles();
-  mRenderTierBreakdown();
-  mRenderChart();
-  if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); }
-  mRenderIncomplete();
-  mRenderLostMembers();
-  mRenderRisk();
-  await mRenderCohorts();
-  mRenderFrequency();
-  mRenderCancelTiming();
-  if (typeof wlTips === "function"){ wlTips("memLtv", WL_TIP_MEM_ECON); }
-  mRenderNet();
-  await mRenderConversions();
-  M$("memStatus").textContent = "";
+  const st = M$("memStatus");
+  st.textContent = "Calculating...";
+  const failed = [];
+  const run = async function(name, fn){
+    try { await fn(); }
+    catch (e){ console.error("[Sidecar] Members section failed: " + name, e); failed.push(name); }
+  };
+  try { await memLoad(); }
+  catch (e){ console.error("[Sidecar] memLoad failed", e); st.textContent = "Load failed - see console"; return; }
+  await run("tiles", mRenderTiles);
+  await run("yoy", mRenderYoY);
+  await run("economics", mRenderEconomics);
+  await run("vehicles", mRenderVehicles);
+  await run("tiers", mRenderTierBreakdown);
+  await run("chart", mRenderChart);
+  await run("tips-tiles", function(){ if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); } });
+  await run("incomplete", mRenderIncomplete);
+  await run("lost", mRenderLostMembers);
+  await run("risk", mRenderRisk);
+  await run("cohorts", mRenderCohorts);
+  await run("frequency", mRenderFrequency);
+  await run("cancel-timing", mRenderCancelTiming);
+  await run("tips-ltv", function(){ if (typeof wlTips === "function"){ wlTips("memLtv", WL_TIP_MEM_ECON); } });
+  await run("net", mRenderNet);
+  await run("conversions", mRenderConversions);
+  st.textContent = failed.length ? ("Some sections failed: " + failed.join(", ")) : "";
 }
 
 function mPopulateSiteFilter(){

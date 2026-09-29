@@ -1021,6 +1021,8 @@ function renderAnomalies(today){
 }
 
 async function init(){
+  try { await getDencarBase(); } catch(e){ console.error("[Sidecar] getDencarBase failed", e); }
+  console.log("[Sidecar] Dencar base: " + DENCAR_BASE);
   await load();
   render();
 }

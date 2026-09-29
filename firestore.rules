@@ -192,6 +192,11 @@ service cloud.firestore {
     }
 
     // ── WashBoard: washboardLocations ────────────────────────────────────────
+    // WashBoard account-wide settings (daily summary). Owner only - revenue data.
+    match /washboardSettings/{ownerId} {
+      allow read, write: if request.auth != null && request.auth.uid == ownerId;
+    }
+
     match /washboardLocations/{locId} {
       allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
@@ -211,6 +216,17 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
       allow update: if true;
       allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ── WashBoard: washboardPrepaidCodes ─────────────────────────────────────
+    // Stored-value codes. Only Cloud Functions write them (Admin SDK).
+    match /washboardPrepaidCodes/{code} {
+      allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      allow write: if false;
+      match /redemptions/{sessionId} {
+        allow read: if request.auth != null && get(/databases/$(database)/documents/washboardPrepaidCodes/$(code)).data.ownerId == request.auth.uid;
+        allow write: if false;
+      }
     }
 
     // ── WashBoard: washboardEvents ───────────────────────────────────────────

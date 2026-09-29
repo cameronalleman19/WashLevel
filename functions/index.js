@@ -1547,18 +1547,25 @@ exports.sendWashBoardReceipt = onRequest({ cors: true, secrets: [RESEND_API_KEY,
       return res.status(400).json({ error: "method, destination, and sessionData required" });
     }
 
-    const { washName, bayName, date, duration, subtotal, salesTax, total, functions, transferCode, promoDiscount, promoCredit, logoUrl } = sessionData;
+    const { washName, bayName, date, duration, subtotal, salesTax, total, functions, transferCode, promoDiscount, promoCredit, logoUrl, buyUp, prepaidPurchase, prepaidRedemption } = sessionData;
+    const hasPrepaidCode = !!(prepaidPurchase && /^\d{7}$/.test(String(prepaidPurchase.code || "")));
+    const hasPrepaidBalance = !!(prepaidRedemption && typeof prepaidRedemption.balance === "number");
+    const hasBuyUp = !!(buyUp && buyUp.name);
+    const buyUpName = hasBuyUp ? String(buyUp.name).replace(/[<>&"]/g, "") : "";
 
     if (method === "sms") {
       let msg = `${washName || "Self-Serve Wash"} — ${bayName || "Bay"}\n`;
       msg += `Date: ${date}\n`;
       msg += `Time: ${duration}\n`;
+      if (hasBuyUp) msg += `${buyUpName}: $${Number(buyUp.price || 0).toFixed(2)}\n`;
       msg += `Subtotal: $${(subtotal || 0).toFixed(2)}\n`;
       if (salesTax > 0) msg += `Tax: $${salesTax.toFixed(2)}\n`;
       msg += `Total: $${(total || 0).toFixed(2)}\n`;
       if (promoDiscount > 0) msg += `Promo: ${promoDiscount}% off\n`;
       if (promoCredit > 0) msg += `Promo credit: $${promoCredit.toFixed(2)}\n`;
       if (transferCode) msg += `Transfer code: ${transferCode}\n`;
+      if (hasPrepaidCode) msg += `\nWash credit code: ${prepaidPurchase.code}\n$${Number(prepaidPurchase.credit || 0).toFixed(2)} credit, good until ${prepaidPurchase.expires || "one year from today"}. Use it at any of our locations.\n`;
+      if (hasPrepaidBalance) msg += `Code balance left: $${prepaidRedemption.balance.toFixed(2)}\n`;
       msg += `\nThank you for your wash!\n\nReply STOP to opt out.`;
 
       await sendSms(destination, msg, TELNYX_API_KEY.value());
@@ -1582,6 +1589,9 @@ exports.sendWashBoardReceipt = onRequest({ cors: true, secrets: [RESEND_API_KEY,
       let transferLine = "";
       if (transferCode) transferLine = `<div style="background: #0a1a10; border: 2px solid #00ff88; border-radius: 10px; padding: 16px; text-align: center; margin-top: 16px;"><div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-bottom: 6px;">TRANSFER CODE</div><div style="color: #00ff88; font-size: 28px; font-family: 'SF Mono', monospace; letter-spacing: 6px;">${transferCode}</div><div style="color: #f59e0b; font-size: 11px; margin-top: 6px;">Valid until 11:59 PM today</div></div>`;
 
+      const buyUpLine = hasBuyUp ? `<tr><td style="padding: 8px 0; color: #cbd5e1; font-size: 13px;">${buyUpName}</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">$${Number(buyUp.price || 0).toFixed(2)}</td></tr>` : "";
+      const prepaidLine = hasPrepaidCode ? `<div style="background: #0a1a10; border: 2px solid #00ff88; border-radius: 10px; padding: 16px; text-align: center; margin-top: 16px;"><div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-bottom: 6px;">WASH CREDIT CODE</div><div style="color: #00ff88; font-size: 28px; letter-spacing: 6px; font-family: 'SF Mono', monospace;">${prepaidPurchase.code}</div><div style="color: #ffaa22; font-size: 12px; margin-top: 6px;">$${Number(prepaidPurchase.credit || 0).toFixed(2)} credit, good until ${prepaidPurchase.expires || "one year from today"}</div><div style="color: #6b7a8d; font-size: 11px; margin-top: 4px;">Tap I Have a Code at any of our locations. Unused balance stays on the code.</div></div>` : (hasPrepaidBalance ? `<div style="text-align: center; color: #6b7a8d; font-size: 12px; margin-top: 12px;">Code balance left: <span style="color: #00ff88; font-family: 'SF Mono', monospace;">$${prepaidRedemption.balance.toFixed(2)}</span></div>` : "");
+
       const logoSection = logoUrl ? `<img src="${logoUrl}" alt="${washName || 'Wash'}" style="max-width: 200px; max-height: 80px; width: auto; height: auto; margin-bottom: 12px;" />` : "";
 
       await resend.emails.send({
@@ -1601,11 +1611,13 @@ exports.sendWashBoardReceipt = onRequest({ cors: true, secrets: [RESEND_API_KEY,
                 <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px; border-bottom: 1px solid #1e3a5f;">Total Time</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace; border-bottom: 1px solid #1e3a5f;">${duration}</td></tr>
                 ${fnRows}
                 ${promoLine}
+                ${buyUpLine}
                 <tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Subtotal</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">$${(subtotal || 0).toFixed(2)}</td></tr>
                 ${salesTax > 0 ? `<tr><td style="padding: 8px 0; color: #6b7a8d; font-size: 13px;">Sales Tax</td><td style="padding: 8px 0; color: #e2e8f0; font-size: 13px; text-align: right; font-family: 'SF Mono', monospace;">$${salesTax.toFixed(2)}</td></tr>` : ""}
                 <tr><td style="padding: 12px 0; color: #e2e8f0; font-size: 16px; font-weight: 700; border-top: 2px solid #1e3a5f;">Total</td><td style="padding: 12px 0; color: #ffaa22; font-size: 22px; font-weight: 700; text-align: right; font-family: 'SF Mono', monospace; border-top: 2px solid #1e3a5f;">$${(total || 0).toFixed(2)}</td></tr>
               </table>
               ${transferLine}
+              ${prepaidLine}
             </div>
             <p style="color: #4a5568; font-size: 10px; text-align: center; margin-top: 16px;">Powered by WashBoard &middot; washlevel.com</p>
           </div>
@@ -1696,136 +1708,348 @@ exports.notifyOperatorIssue = onDocumentCreated({ document: "issues/{issueId}", 
 });
 
 // ── WashBoard: Daily Summary Email ────────────────────────────────────────────
-exports.washBoardDailySummary = onSchedule({ schedule: "0 7 * * *", timeZone: "America/New_York", secrets: [RESEND_API_KEY] }, async () => {
+// Runs every 15 minutes. Each owner gets ONE email per day covering every
+// location, once their chosen local send time has passed. Settings live in
+// washboardSettings/{ownerId}.dailySummary { enabled, time "HH:MM", timezone,
+// recipients } and are edited on the dashboard Alerts tab.
+//
+// Sends on zero-wash days too, with each bay's status at send time, so a quiet
+// inbox never has to mean "is this broken?".
+//
+// lastSentFor (the covered YYYY-MM-DD) is claimed in a transaction BEFORE the
+// send, so overlapping runs cannot double-send. If Resend fails the claim is
+// released and the next run retries.
+//
+// Owners with no settings doc fall back to users/{ownerId}.email at 7:00 AM
+// Eastern, and the old washBoardPrefs.dailySummary === false opt-out is honored.
+
+const WB_DASHBOARD_URL = "https://washboard-washlevel.web.app";
+
+const WB_TZ_NAMES = {
+  "America/New_York": "Eastern", "America/Chicago": "Central", "America/Denver": "Mountain",
+  "America/Phoenix": "Arizona", "America/Los_Angeles": "Pacific", "America/Anchorage": "Alaska",
+  "Pacific/Honolulu": "Hawaii",
+};
+
+const WB_MAIL = {
+  bg: "#070e1a", panel: "#0b1628", raised: "#0f1f38", line: "#1c3455",
+  text: "#e8eef6", sub: "#a8b8cd", dim: "#7d90aa",
+  teal: "#00d4aa", green: "#34d399", amber: "#fbbf24", red: "#f87171",
+  mono: "'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace",
+  sans: "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif",
+};
+
+function wbTzParts(date, tz) {
+  const p = {};
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(date).forEach(x => { p[x.type] = x.value; });
+  return { y: +p.year, m: +p.month, d: +p.day, hh: +p.hour, mm: +p.minute };
+}
+
+// UTC millis of local midnight on y-m-d in tz (DST-safe: converges in <=2 passes)
+function wbTzMidnightUtc(y, m, d, tz) {
+  const target = Date.UTC(y, m - 1, d);
+  let guess = target;
+  for (let i = 0; i < 3; i++) {
+    const p = wbTzParts(new Date(guess), tz);
+    guess -= Date.UTC(p.y, p.m - 1, p.d, p.hh, p.mm) - target;
+  }
+  return guess;
+}
+
+function wbYmd(y, m, d) {
+  const t = new Date(Date.UTC(y, m - 1, d));
+  const Y = t.getUTCFullYear(), M = t.getUTCMonth() + 1, D = t.getUTCDate();
+  return { y: Y, m: M, d: D, key: `${Y}-${String(M).padStart(2, "0")}-${String(D).padStart(2, "0")}` };
+}
+
+function wbEsc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function wbMoney(n) {
+  return "$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// "2m 16s" rather than "2:16" - iOS turns clock-looking text into links
+function wbDuration(sec) {
+  if (!sec) return "--";
+  const t = Math.round(sec), m = Math.floor(t / 60), s = t % 60;
+  return m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+
+function wbTime12(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+// Same staleness rule as sweepWashBoardBayHealth and the dashboard: 3x reported interval
+function wbBayStatus(bay, now, tz) {
+  if (bay.archived) return { label: "Archived", color: WB_MAIL.dim };
+  if (!bay.deviceId) return { label: "No iPad paired", color: WB_MAIL.dim };
+  const hb = bay.lastHeartbeat?.toMillis ? bay.lastHeartbeat.toMillis() : 0;
+  const interval = typeof bay.heartbeatInterval === "number" ? bay.heartbeatInterval : 30;
+  if (!hb) return { label: "Offline - never reported in", color: WB_MAIL.red, down: true };
+  if (now - hb > interval * 3000) {
+    const when = new Date(hb).toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return { label: `Offline since ${when}`, color: WB_MAIL.red, down: true };
+  }
+  if (bay.relayConnected === false) return { label: "Online - relay not responding", color: WB_MAIL.red, down: true };
+  if (bay.outOfService === true) return { label: "Closed by operator", color: WB_MAIL.amber };
+  return { label: "Online", color: WB_MAIL.green };
+}
+
+function wbSummaryHtml(d) {
+  const C = WB_MAIL;
+  const label = `font-family:${C.sans};font-size:10px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:${C.dim};`;
+  const stat = (name, value, color, first) =>
+    `<td width="33%" valign="top" style="padding:16px 16px 18px;${first ? "" : `border-left:1px solid ${C.line};`}">` +
+    `<div style="${label}">${name}</div>` +
+    `<div style="font-family:${C.mono};font-size:22px;line-height:28px;padding-top:6px;color:${color};white-space:nowrap;">${value}</div></td>`;
+
+  const locBlocks = d.locations.map(loc => {
+    const rows = loc.bays.map(b =>
+      `<tr>` +
+      `<td valign="top" style="padding:11px 0;border-bottom:1px solid ${C.line};">` +
+      `<div style="font-family:${C.sans};font-size:14px;line-height:20px;color:${C.text};">${wbEsc(b.name)}</div>` +
+      `<div style="font-family:${C.sans};font-size:12px;line-height:17px;color:${b.status.color};">${wbEsc(b.status.label)}</div></td>` +
+      `<td valign="top" align="right" style="padding:11px 0;border-bottom:1px solid ${C.line};font-family:${C.mono};font-size:14px;line-height:20px;color:${b.washes ? C.text : C.dim};white-space:nowrap;">${b.washes}</td>` +
+      `<td valign="top" align="right" style="padding:11px 0;border-bottom:1px solid ${C.line};font-family:${C.mono};font-size:14px;line-height:20px;color:${b.revenue ? C.teal : C.dim};white-space:nowrap;">${wbMoney(b.revenue)}</td>` +
+      `</tr>`).join("");
+
+    const quiet = loc.washes === 0
+      ? `<div style="margin-top:12px;padding:10px 12px;background:${C.raised};border-left:2px solid ${loc.down ? C.red : C.green};font-family:${C.sans};font-size:13px;line-height:19px;color:${C.sub};">` +
+        `No washes recorded. ` +
+        (loc.down
+          ? `<span style="color:${C.red};">${loc.down} bay${loc.down > 1 ? "s" : ""} not operating - see status below.</span>`
+          : `<span style="color:${C.green};">All bays reporting in.</span>`) +
+        `</div>`
+      : "";
+
+    const issues = loc.issues
+      ? `<div style="margin-top:12px;font-family:${C.sans};font-size:13px;line-height:19px;color:${C.amber};">${loc.issues} customer issue${loc.issues > 1 ? "s" : ""} reported</div>`
+      : "";
+
+    const subtotal = d.locations.length > 1
+      ? `<td align="right" valign="bottom" style="font-family:${C.mono};font-size:13px;line-height:20px;color:${C.sub};white-space:nowrap;">${wbMoney(loc.revenue)} / ${loc.washes} wash${loc.washes === 1 ? "" : "es"}</td>`
+      : "";
+
+    return `<tr><td style="padding:26px 24px 0;">` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>` +
+      `<td valign="bottom" style="font-family:${C.sans};font-size:16px;line-height:22px;font-weight:600;color:${C.text};">${wbEsc(loc.name)}</td>${subtotal}</tr></table>` +
+      quiet +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;border-collapse:collapse;">` +
+      `<tr><td style="${label}padding-bottom:8px;border-bottom:1px solid ${C.line};">Bay / status now</td>` +
+      `<td align="right" width="64" style="${label}padding-bottom:8px;border-bottom:1px solid ${C.line};">Washes</td>` +
+      `<td align="right" width="96" style="${label}padding-bottom:8px;border-bottom:1px solid ${C.line};">Revenue</td></tr>` +
+      rows + `</table>` + issues +
+      `</td></tr>`;
+  }).join("");
+
+  const issueStrip = d.issues
+    ? `<tr><td style="padding:12px 24px;background:${C.raised};border-bottom:1px solid ${C.line};font-family:${C.sans};font-size:13px;line-height:19px;color:${C.amber};">${d.issues} customer issue${d.issues > 1 ? "s" : ""} reported yesterday</td></tr>`
+    : "";
+
+  return `<!doctype html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">
+<style>
+:root{color-scheme:light dark;supported-color-schemes:light dark;}
+a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+u + #body a{color:inherit;text-decoration:none;}
+</style></head>
+<body id="body" style="margin:0;padding:0;background:${C.bg};">
+<div style="display:none;max-height:0;overflow:hidden;">${wbEsc(d.preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg};">
+<tr><td align="center" style="padding:20px 10px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.panel}" style="max-width:560px;background:${C.panel};border:1px solid ${C.line};border-radius:12px;">
+
+<tr><td style="padding:26px 24px 22px;border-bottom:1px solid ${C.line};">
+<div style="font-family:${C.mono};font-size:11px;line-height:16px;letter-spacing:2px;color:${C.teal};">WASHBOARD / DAILY SUMMARY</div>
+<div style="font-family:${C.sans};font-size:22px;line-height:28px;font-weight:600;color:${C.text};padding-top:10px;">${wbEsc(d.dayLabel)}</div>
+<div style="font-family:${C.sans};font-size:13px;line-height:19px;color:${C.sub};padding-top:4px;">${wbEsc(d.scopeLabel)}</div>
+</td></tr>
+
+<tr><td style="border-bottom:1px solid ${C.line};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+${stat("Revenue", wbMoney(d.revenue), d.revenue ? C.teal : C.sub, true)}
+${stat("Washes", String(d.washes), C.text, false)}
+${stat("Avg time", wbDuration(d.avgSec), C.text, false)}
+</tr></table>
+</td></tr>
+${issueStrip}
+${locBlocks}
+
+<tr><td style="padding:28px 24px 24px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td align="center" bgcolor="${C.teal}" style="border-radius:8px;background:${C.teal};">
+<a href="${WB_DASHBOARD_URL}" style="display:block;padding:13px 0;font-family:${C.sans};font-size:14px;font-weight:700;color:${C.bg};text-decoration:none;">Open Dashboard</a>
+</td></tr></table>
+</td></tr>
+</table>
+
+<div style="max-width:520px;padding:16px 10px 0;font-family:${C.sans};font-size:11px;line-height:17px;color:${C.dim};text-align:center;">
+${wbEsc(d.footer)}
+</div>
+</td></tr></table>
+</body></html>`;
+}
+
+async function wbSendDailySummaryFor(ownerId, bays, now, getResend) {
+  const settingsRef = db.collection("washboardSettings").doc(ownerId);
+  const settingsSnap = await settingsRef.get();
+  const s = (settingsSnap.exists && settingsSnap.data().dailySummary) || {};
+
+  let ownerEmail = null, legacyOff = false;
+  if (s.enabled === undefined || !(s.recipients && s.recipients.length)) {
+    const u = await db.collection("users").doc(ownerId).get();
+    const ud = u.exists ? u.data() : {};
+    ownerEmail = ud.email || null;
+    legacyOff = ud.washBoardPrefs?.dailySummary === false;
+  }
+  const enabled = s.enabled ?? !legacyOff;
+  if (!enabled) return;
+  const recipients = ((s.recipients && s.recipients.length) ? s.recipients : [ownerEmail])
+    .filter(e => e && e.includes("@"));
+  if (!recipients.length) return;
+
+  const tz = WB_TZ_NAMES[s.timezone] ? s.timezone : "America/New_York";
+  const sendAt = /^\d{2}:\d{2}$/.test(s.time || "") ? s.time : "07:00";
+  const local = wbTzParts(new Date(now), tz);
+  const nowHm = `${String(local.hh).padStart(2, "0")}:${String(local.mm).padStart(2, "0")}`;
+  if (nowHm < sendAt) return;
+
+  const day = wbYmd(local.y, local.m, local.d - 1);
+  if (s.lastSentFor === day.key) return;
+
+  const prevSentFor = s.lastSentFor || null;
+  const claimed = await db.runTransaction(async t => {
+    const cur = await t.get(settingsRef);
+    const cs = (cur.exists && cur.data().dailySummary) || {};
+    if (cs.lastSentFor === day.key) return false;
+    t.set(settingsRef, { ownerId, dailySummary: { lastSentFor: day.key } }, { merge: true });
+    return true;
+  });
+  if (!claimed) return;
+
   try {
-    // Find all owners who have bays (and therefore use WashBoard)
-    const baysSnap = await db.collection("bays").get();
-    const ownerBays = {};
-    baysSnap.forEach(doc => {
-      const d = doc.data();
-      if (!d.ownerId) return;
-      if (!ownerBays[d.ownerId]) ownerBays[d.ownerId] = [];
-      ownerBays[d.ownerId].push({ id: doc.id, ...d });
+    const startMs = wbTzMidnightUtc(day.y, day.m, day.d, tz);
+    const endMs = wbTzMidnightUtc(local.y, local.m, local.d, tz);
+    const T0 = admin.firestore.Timestamp.fromMillis(startMs);
+    const T1 = admin.firestore.Timestamp.fromMillis(endMs);
+
+    const [sessionsSnap, locSnap] = await Promise.all([
+      db.collection("sessions").where("ownerId", "==", ownerId)
+        .where("startedAt", ">=", T0).where("startedAt", "<", T1).get(),
+      db.collection("washboardLocations").where("ownerId", "==", ownerId).get(),
+    ]);
+
+    let issues = [];
+    try {
+      const snap = await db.collection("issues").where("ownerId", "==", ownerId)
+        .where("reportedAt", ">=", T0).where("reportedAt", "<", T1).get();
+      issues = snap.docs.map(x => x.data());
+    } catch (e) {
+      // Missing ownerId+reportedAt index: fall back to the single-field range and filter here
+      console.error("washBoardDailySummary issues query (needs ownerId+reportedAt index):", e.message);
+      const snap = await db.collection("issues").where("reportedAt", ">=", T0).where("reportedAt", "<", T1).get();
+      issues = snap.docs.map(x => x.data()).filter(x => x.ownerId === ownerId);
+    }
+
+    const locNames = new Map(locSnap.docs.map(x => [x.id, x.data().name || "Location"]));
+    const bayById = new Map(bays.map(b => [b.id, b]));
+    const groups = new Map();
+    const groupFor = locId => {
+      const key = locNames.has(locId) ? locId : "_other";
+      if (!groups.has(key)) groups.set(key, { name: key === "_other" ? "Other bays" : locNames.get(key), rows: new Map(), washes: 0, revenue: 0, issues: 0, down: 0 });
+      return groups.get(key);
+    };
+    const rowFor = (g, bayId, bay) => {
+      if (!g.rows.has(bayId)) {
+        const status = bay ? wbBayStatus(bay, now, tz) : { label: "Removed bay", color: WB_MAIL.dim };
+        if (status.down) g.down++;
+        g.rows.set(bayId, { name: bay ? (bay.displayName || bay.washName || bayId) : "Unknown bay", status, washes: 0, revenue: 0 });
+      }
+      return g.rows.get(bayId);
+    };
+
+    // every live bay gets a row, so zero-wash bays still show their status
+    bays.filter(b => !b.archived).forEach(b => rowFor(groupFor(b.locationId), b.id, b));
+
+    let revenue = 0, durSum = 0, durN = 0;
+    sessionsSnap.forEach(x => {
+      const sd = x.data();
+      const bay = bayById.get(sd.bayId);
+      const g = groupFor(bay?.locationId);
+      const r = rowFor(g, sd.bayId || "unknown", bay);
+      const amt = sd.totalCharge || 0;
+      r.washes++; r.revenue += amt; g.washes++; g.revenue += amt; revenue += amt;
+      if (sd.startedAt?.toMillis && sd.endedAt?.toMillis) { durSum += (sd.endedAt.toMillis() - sd.startedAt.toMillis()) / 1000; durN++; }
+    });
+    issues.forEach(i => { const b = bayById.get(i.bayId); if (b) groupFor(b.locationId).issues++; });
+
+    const locations = [...groups.values()]
+      .sort((a, b) => (a.name === "Other bays") - (b.name === "Other bays") || a.name.localeCompare(b.name))
+      .map(g => ({ ...g, bays: [...g.rows.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })) }));
+
+    const washes = sessionsSnap.size;
+    const down = locations.reduce((n, l) => n + l.down, 0);
+    const noon = new Date(startMs + 12 * 3600 * 1000);
+    const dayLabel = noon.toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" });
+    const shortDay = noon.toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" });
+    const tzName = WB_TZ_NAMES[tz];
+    const locCount = locations.filter(l => l.name !== "Other bays").length;
+
+    const headline = washes ? `${wbMoney(revenue)} from ${washes} wash${washes === 1 ? "" : "es"}` : "No washes";
+    const subject = `WashBoard: ${shortDay} \u2014 ${headline}` + (down ? ` \u2014 ${down} bay${down > 1 ? "s" : ""} down` : "");
+
+    const html = wbSummaryHtml({
+      dayLabel,
+      scopeLabel: `${locCount > 1 ? `${locCount} locations` : (locations[0]?.name || "Your wash")} \u00b7 midnight to midnight ${tzName}`,
+      preheader: `${headline}${locCount > 1 ? ` across ${locCount} locations` : ""}${down ? `. ${down} bay${down > 1 ? "s" : ""} not operating.` : "."}`,
+      revenue, washes, avgSec: durN ? durSum / durN : 0, issues: issues.length, locations,
+      footer: `Sent at ${wbTime12(sendAt)} ${tzName} to ${recipients.length} recipient${recipients.length > 1 ? "s" : ""}. Bay status is as of send time. Change recipients or send time in WashBoard under Settings > Alerts.`,
     });
 
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    await getResend().emails.send({ from: "WashBoard <reports@washboard.washlevel.com>", to: recipients, subject, html });
 
-    const resend = new Resend(RESEND_API_KEY.value());
-
-    for (const [ownerId, bays] of Object.entries(ownerBays)) {
-      // Check if owner wants daily summary
-      const ownerDoc = await db.collection("users").doc(ownerId).get();
-      const owner = ownerDoc.exists ? ownerDoc.data() : null;
-      if (!owner || !owner.email) continue;
-
-      // Check preference (default to true for WashBoard users)
-      const prefs = owner.washBoardPrefs || {};
-      if (prefs.dailySummary === false) continue;
-
-      // Fetch yesterday's sessions for this owner
-      const sessionsSnap = await db.collection("sessions")
-        .where("ownerId", "==", ownerId)
-        .where("startedAt", ">=", admin.firestore.Timestamp.fromDate(yesterday))
-        .where("startedAt", "<", admin.firestore.Timestamp.fromDate(today))
-        .get();
-
-      const sessions = [];
-      sessionsSnap.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
-
-      // Fetch yesterday's issues
-      const issuesSnap = await db.collection("issues")
-        .where("ownerId", "==", ownerId)
-        .where("reportedAt", ">=", admin.firestore.Timestamp.fromDate(yesterday))
-        .where("reportedAt", "<", admin.firestore.Timestamp.fromDate(today))
-        .get();
-
-      const issues = [];
-      issuesSnap.forEach(doc => issues.push({ id: doc.id, ...doc.data() }));
-
-      const totalRevenue = sessions.reduce((sum, s) => sum + (s.totalCharge || 0), 0);
-      const totalSessions = sessions.length;
-      const totalIssues = issues.length;
-      const avgDuration = totalSessions > 0
-        ? sessions.reduce((sum, s) => {
-            if (s.startedAt && s.endedAt) {
-              return sum + (s.endedAt.toDate() - s.startedAt.toDate()) / 1000;
-            }
-            return sum;
-          }, 0) / totalSessions
-        : 0;
-      const avgMins = Math.floor(avgDuration / 60);
-      const avgSecs = Math.floor(avgDuration % 60);
-
-      // Per-bay breakdown
-      const bayStats = {};
-      bays.forEach(b => { bayStats[b.id] = { name: b.displayName || b.washName || b.id, sessions: 0, revenue: 0 }; });
-      sessions.forEach(s => {
-        if (bayStats[s.bayId]) {
-          bayStats[s.bayId].sessions++;
-          bayStats[s.bayId].revenue += (s.totalCharge || 0);
-        }
-      });
-
-      let bayRows = Object.values(bayStats).map(b =>
-        `<tr><td style="padding: 6px 0; color: #cbd5e1; font-size: 13px; border-bottom: 1px solid #1e3a5f;">${b.name}</td><td style="padding: 6px 0; color: #e2e8f0; font-size: 13px; text-align: center; font-family: monospace; border-bottom: 1px solid #1e3a5f;">${b.sessions}</td><td style="padding: 6px 0; color: #00d4aa; font-size: 13px; text-align: right; font-family: monospace; border-bottom: 1px solid #1e3a5f;">$${b.revenue.toFixed(2)}</td></tr>`
-      ).join("");
-
-      const dateStr = yesterday.toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
-
-      // Skip if no activity and no issues
-      if (totalSessions === 0 && totalIssues === 0) continue;
-
-      await resend.emails.send({
-        from: "WashBoard <reports@washboard.washlevel.com>",
-        to: owner.email,
-        subject: `Daily Summary — ${dateStr} — $${totalRevenue.toFixed(2)} from ${totalSessions} washes`,
-        html: `
-          <div style="font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; background: #070e1a;">
-            <div style="background: #0b1628; border-radius: 14px; padding: 28px; border: 1px solid #1e3a5f; margin-bottom: 16px;">
-              <h1 style="color: #e2e8f0; margin: 0 0 4px; font-size: 18px;">Daily Summary</h1>
-              <p style="color: #6b7a8d; margin: 0 0 20px; font-size: 13px;">${dateStr}</p>
-
-              <div style="display: flex; gap: 12px; margin-bottom: 20px;">
-                <div style="flex: 1; background: #112240; border-radius: 10px; padding: 16px; text-align: center;">
-                  <div style="color: #00d4aa; font-size: 26px; font-weight: 700; font-family: monospace;">$${totalRevenue.toFixed(2)}</div>
-                  <div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-top: 4px;">REVENUE</div>
-                </div>
-                <div style="flex: 1; background: #112240; border-radius: 10px; padding: 16px; text-align: center;">
-                  <div style="color: #e2e8f0; font-size: 26px; font-weight: 700; font-family: monospace;">${totalSessions}</div>
-                  <div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-top: 4px;">WASHES</div>
-                </div>
-                <div style="flex: 1; background: #112240; border-radius: 10px; padding: 16px; text-align: center;">
-                  <div style="color: #e2e8f0; font-size: 26px; font-weight: 700; font-family: monospace;">${avgMins}:${String(avgSecs).padStart(2, "0")}</div>
-                  <div style="color: #6b7a8d; font-size: 10px; letter-spacing: 2px; margin-top: 4px;">AVG TIME</div>
-                </div>
-              </div>
-
-              ${totalIssues > 0 ? `<div style="background: #f59e0b11; border: 1px solid #f59e0b33; border-radius: 8px; padding: 12px; margin-bottom: 20px;"><span style="color: #f59e0b; font-weight: 600; font-size: 13px;">${totalIssues} issue${totalIssues > 1 ? "s" : ""} reported</span></div>` : ""}
-
-              ${bays.length > 1 ? `
-              <h3 style="color: #6b7a8d; font-size: 11px; letter-spacing: 2px; margin: 0 0 10px;">BY BAY</h3>
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 6px 0; color: #4a5568; font-size: 10px; letter-spacing: 1px;">BAY</td><td style="padding: 6px 0; color: #4a5568; font-size: 10px; letter-spacing: 1px; text-align: center;">WASHES</td><td style="padding: 6px 0; color: #4a5568; font-size: 10px; letter-spacing: 1px; text-align: right;">REVENUE</td></tr>
-                ${bayRows}
-              </table>` : ""}
-
-              <a href="https://washboard.washlevel.com" style="display: block; background: #00d4aa; color: #070e1a; text-decoration: none; text-align: center; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 14px; margin-top: 24px;">Open Dashboard</a>
-            </div>
-            <p style="color: #4a5568; font-size: 10px; text-align: center;">You're receiving this because daily summaries are enabled. Manage in WashBoard settings.</p>
-          </div>
-        `
-      });
-
-      console.log(`[WashBoard] Daily summary sent to ${owner.email}: $${totalRevenue.toFixed(2)} / ${totalSessions} sessions`);
-    }
-  } catch (err) {
-    console.error("washBoardDailySummary error:", err);
+    await settingsRef.set({ dailySummary: { lastSentAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+    console.log(`[WashBoard] Daily summary ${day.key} sent for ${ownerId} to ${recipients.length}: ${headline}`);
+  } catch (e) {
+    await settingsRef.set({ dailySummary: { lastSentFor: prevSentFor } }, { merge: true }).catch(() => {});
+    throw e;
   }
-});
+}
+
+exports.washBoardDailySummary = onSchedule(
+  { schedule: "*/15 * * * *", timeZone: "America/New_York", timeoutSeconds: 300, secrets: [RESEND_API_KEY] },
+  async () => {
+    const now = Date.now();
+    const baysSnap = await db.collection("bays").get();
+    const ownerBays = new Map();
+    baysSnap.forEach(x => {
+      const b = { id: x.id, ...x.data() };
+      if (!b.ownerId) return;
+      if (!ownerBays.has(b.ownerId)) ownerBays.set(b.ownerId, []);
+      ownerBays.get(b.ownerId).push(b);
+    });
+
+    let resend = null;
+    const getResend = () => resend || (resend = new Resend(RESEND_API_KEY.value()));
+
+    for (const [ownerId, bays] of ownerBays) {
+      if (!bays.some(b => !b.archived)) continue;
+      try {
+        await wbSendDailySummaryFor(ownerId, bays, now, getResend);
+      } catch (e) {
+        console.error(`washBoardDailySummary failed for ${ownerId}:`, e);
+      }
+    }
+  }
+);
 
 // ── WashBoard: Stripe Terminal — Create PaymentIntent ─────────────────────────
 exports.createWashBoardPaymentIntent = onRequest({ cors: true, secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
@@ -2392,7 +2616,7 @@ function wbAlertEmailHtml(title, bayName, rows, accent) {
         <h2 style="color:${accent};margin:0 0 2px;font-size:18px;">${title}</h2>
         <p style="color:#6b7a8d;margin:0 0 16px;font-size:12px;">${bayName}</p>
         <table style="width:100%;border-collapse:collapse;">${cells}</table>
-        <a href="https://washboard.washlevel.com/#devices" style="display:block;background:#00d4aa;color:#070e1a;text-decoration:none;text-align:center;padding:12px;border-radius:8px;font-weight:700;font-size:14px;margin-top:20px;">Open Dashboard</a>
+        <a href="${WB_DASHBOARD_URL}/#devices" style="display:block;background:#00d4aa;color:#070e1a;text-decoration:none;text-align:center;padding:12px;border-radius:8px;font-weight:700;font-size:14px;margin-top:20px;">Open Dashboard</a>
       </div>
     </div>`;
 }
@@ -2608,4 +2832,167 @@ exports.adminAudit = onRequest(async (req, res) => {
   }
   rows.sort((a, b) => String(a.createdAt) < String(b.createdAt) ? -1 : 1);
   res.json({ count: rows.length, users: rows });
+});
+
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// WashBoard: Prepaid wash credit
+// Codes live in washboardPrepaidCodes/{7-digit code}. Only these functions
+// write them (Admin SDK); owners can read them from the dashboard.
+// ═════════════════════════════════════════════════════════════════════════════
+const PREPAID_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+const PREPAID_LOCK_MS = 75 * 60 * 1000;
+const prepaidCents = n => Math.round(Number(n || 0) * 100);
+const prepaidRound = n => Math.round(Number(n || 0) * 100) / 100;
+function prepaidPreflight(req, res) {
+  if (req.method !== "OPTIONS") return false;
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+  res.status(204).send("");
+  return true;
+}
+
+exports.issueWashBoardPrepaidCode = onRequest({ cors: true, secrets: [STRIPE_SECRET_KEY] }, async (req, res) => {
+  if (prepaidPreflight(req, res)) return;
+  try {
+    const { sessionId } = req.body || {};
+    if (!sessionId) return res.status(400).json({ error: "sessionId required" });
+    const sessRef = db.collection("sessions").doc(String(sessionId));
+    const sessSnap = await sessRef.get();
+    if (!sessSnap.exists) return res.status(404).json({ error: "session not found" });
+    const s = sessSnap.data();
+
+    if (s.prepaidCode) {
+      return res.json({ code: s.prepaidCode, credit: s.prepaidCreditIssued, expiresAt: s.prepaidExpiresAt ? s.prepaidExpiresAt.toDate().toISOString() : null });
+    }
+    const bu = s.buyUp || {};
+    if (bu.type !== "prepaid" || bu.status !== "charged" || !(Number(bu.pricePaid) > 0)) {
+      return res.status(409).json({ error: "no prepaid purchase on this session" });
+    }
+    if (!s.stripePaymentIntentId) return res.status(409).json({ error: "session has no payment" });
+
+    // The whole session total must have been captured, not just held.
+    const stripeClient = stripe(STRIPE_SECRET_KEY.value());
+    const pi = await stripeClient.paymentIntents.retrieve(s.stripePaymentIntentId);
+    const due = prepaidCents(s.totalCharge);
+    if (pi.status !== "succeeded" || (pi.amount_received || 0) < due - 1) {
+      console.warn("issueWashBoardPrepaidCode: not captured", sessionId, pi.status, pi.amount_received, due);
+      return res.status(402).json({ error: "payment not captured" });
+    }
+
+    // Credit follows the bay's configured ratio. If the offer was removed
+    // after the customer paid, they still get at least what they paid.
+    const baySnap = await db.collection("bays").doc(String(s.bayId)).get();
+    const pp = baySnap.exists && baySnap.data().buyUps ? baySnap.data().buyUps.prepaid : null;
+    const paid = prepaidRound(bu.pricePaid);
+    const credit = pp && Number(pp.pricePaid) > 0 && Number(pp.creditValue) >= Number(pp.pricePaid)
+      ? prepaidRound(paid * Number(pp.creditValue) / Number(pp.pricePaid))
+      : paid;
+    const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + PREPAID_TTL_MS);
+    const crypto = require("crypto");
+
+    let result = null;
+    for (let attempt = 0; attempt < 8 && !result; attempt++) {
+      const candidate = String(crypto.randomInt(1000000, 10000000));
+      result = await db.runTransaction(async tx => {
+        const again = await tx.get(sessRef);
+        const codeRef = db.collection("washboardPrepaidCodes").doc(candidate);
+        const existing = await tx.get(codeRef);
+        const a = again.data();
+        if (a.prepaidCode) return { code: a.prepaidCode, credit: a.prepaidCreditIssued, expiresAt: a.prepaidExpiresAt };
+        if (existing.exists) return null;
+        tx.create(codeRef, {
+          code: candidate,
+          type: "prepaid",
+          ownerId: s.ownerId,
+          locationId: s.locationId || null,
+          bayId: s.bayId || null,
+          purchasedSessionId: sessRef.id,
+          pricePaid: paid,
+          originalCredit: credit,
+          balance: credit,
+          status: "active",
+          redemptionCount: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt,
+          lastUsedAt: null,
+          lockedBayId: null,
+          lockedUntil: null,
+        });
+        tx.update(sessRef, { prepaidCode: candidate, prepaidCreditIssued: credit, prepaidExpiresAt: expiresAt, "buyUp.status": "issued" });
+        return { code: candidate, credit, expiresAt };
+      });
+    }
+    if (!result) return res.status(500).json({ error: "could not allocate a code" });
+    return res.json({ code: result.code, credit: result.credit, expiresAt: result.expiresAt.toDate().toISOString() });
+  } catch (err) {
+    console.error("issueWashBoardPrepaidCode error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+exports.washBoardPrepaid = onRequest({ cors: true }, async (req, res) => {
+  if (prepaidPreflight(req, res)) return;
+  try {
+    const { action, code, bayId, sessionId, amount } = req.body || {};
+    if (!/^\d{7}$/.test(String(code || "")) || !bayId) return res.status(400).json({ error: "code and bayId required" });
+    const baySnap = await db.collection("bays").doc(String(bayId)).get();
+    if (!baySnap.exists) return res.status(404).json({ error: "notFound" });
+    const ownerId = baySnap.data().ownerId;
+    const ref = db.collection("washboardPrepaidCodes").doc(String(code));
+    const now = Date.now();
+
+    const out = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      // Another owner's code reads exactly like a wrong code.
+      if (!snap.exists || snap.data().ownerId !== ownerId) return { status: 404, error: "notFound" };
+      const c = snap.data();
+
+      if (action === "lookup") {
+        if (c.status === "void") return { status: 410, error: "void" };
+        if (c.expiresAt && c.expiresAt.toMillis() < now) {
+          if (c.status !== "expired") tx.update(ref, { status: "expired" });
+          return { status: 410, error: "expired" };
+        }
+        if (!(Number(c.balance) > 0)) return { status: 410, error: "depleted" };
+        const heldElsewhere = c.lockedBayId && c.lockedBayId !== bayId && c.lockedUntil && c.lockedUntil.toMillis() > now;
+        if (heldElsewhere) return { status: 409, error: "inUse" };
+        tx.update(ref, { lockedBayId: bayId, lockedUntil: admin.firestore.Timestamp.fromMillis(now + PREPAID_LOCK_MS) });
+        return { status: 200, balance: prepaidRound(c.balance), expiresAt: c.expiresAt ? c.expiresAt.toDate().toISOString() : null };
+      }
+
+      if (action === "debit") {
+        if (!sessionId) return { status: 400, error: "sessionId required" };
+        const redRef = ref.collection("redemptions").doc(String(sessionId));
+        const red = await tx.get(redRef);
+        if (red.exists) return { status: 200, balance: prepaidRound(c.balance), debited: red.data().amount };
+        const take = Math.min(prepaidRound(Math.max(0, Number(amount) || 0)), prepaidRound(c.balance));
+        const balance = prepaidRound(Number(c.balance) - take);
+        tx.set(redRef, { sessionId: String(sessionId), bayId, amount: take, balanceAfter: balance, at: admin.firestore.FieldValue.serverTimestamp() });
+        tx.update(ref, {
+          balance,
+          status: balance <= 0 ? "depleted" : c.status,
+          redemptionCount: admin.firestore.FieldValue.increment(1),
+          lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lockedBayId: null,
+          lockedUntil: null,
+        });
+        return { status: 200, balance, debited: take };
+      }
+
+      if (action === "release") {
+        if (c.lockedBayId === bayId) tx.update(ref, { lockedBayId: null, lockedUntil: null });
+        return { status: 200 };
+      }
+      return { status: 400, error: "unknown action" };
+    });
+
+    const { status, ...body } = out;
+    return res.status(status).json(body);
+  } catch (err) {
+    console.error("washBoardPrepaid error:", err);
+    return res.status(500).json({ error: err.message });
+  }
 });
