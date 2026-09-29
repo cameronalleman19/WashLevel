@@ -9,26 +9,41 @@ let viaActiveTab = "open"; // "open" or "auto"
 function vEsc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 function vDays(ts){ return (Date.now() - ts) / 86400000; }
 
+const VIA_IMG_MAX = 800;
+function viaBlobToDataUrl(blob){
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
 async function cacheImg(url){
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    try {
+      const bmp = await createImageBitmap(blob);
+      const scale = Math.min(1, VIA_IMG_MAX / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(bmp.width * scale);
+      cv.height = Math.round(bmp.height * scale);
+      cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+      if (bmp.close) bmp.close();
+      return cv.toDataURL("image/jpeg", 0.75);
+    } catch(_){ return await viaBlobToDataUrl(blob); }
   } catch(e){ return null; }
 }
 
-async function cacheExceptionImgs(d){
-  for (const img of d.imgs){
-    if (img.cached) continue;
+async function cacheExceptionImgs(d, prevCache){
+  await Promise.all(d.imgs.map(async function(img){
+    if (img.cached) return;
+    const prev = prevCache && prevCache[img.kind + ":" + img.pid];
+    if (prev){ img.cached = prev; return; }
     const data = await cacheImg(img.url);
     if (data) img.cached = data;
-  }
+  }));
 }
 
 function htmlToLines(html){
@@ -224,18 +239,27 @@ async function viaSync(){
     }
     if (!ids.length){ V$("viaStatus").textContent = "No open exceptions found."; viaData = {}; await viaSave(); renderViaList(); V$("viaSyncBtn").disabled = false; return; }
     const fresh = {};
-    for (let i = 0; i < ids.length; i++){
-      V$("viaStatus").textContent = "Loading exception " + (i + 1) + " / " + ids.length;
-      const r2 = await safeFetch(DENCAR_BASE + "/consumerpassexceptions/" + ids[i] + "/", {credentials: "include"});
-      const d = parseDetail(await r2.text(), ids[i]);
-      await enrichConsumer(d);
-      await cacheExceptionImgs(d);
-      fresh[ids[i]] = d;
-      const key = d.consumerPassId || ids[i];
-      viaSeen[key] = viaSeen[key] || {};
-      viaSeen[key][ids[i]] = Date.now();
-      await new Promise(r => setTimeout(r, 150));
+    const prevCache = {};
+    for (const old of Object.values(viaData || {})){
+      for (const im of (old && old.imgs) || []){ if (im.cached && im.pid) prevCache[im.kind + ":" + im.pid] = im.cached; }
     }
+    let next = 0, done = 0;
+    const worker = async function(){
+      while (next < ids.length){
+        const id = ids[next++];
+        const r2 = await safeFetch(DENCAR_BASE + "/consumerpassexceptions/" + id + "/", {credentials: "include"});
+        const d = parseDetail(await r2.text(), id);
+        await Promise.all([enrichConsumer(d), cacheExceptionImgs(d, prevCache)]);
+        fresh[id] = d;
+        const key = d.consumerPassId || id;
+        viaSeen[key] = viaSeen[key] || {};
+        viaSeen[key][id] = Date.now();
+        done++;
+        V$("viaStatus").textContent = "Loading exception " + done + " / " + ids.length;
+        await new Promise(r => setTimeout(r, 100));
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
     viaData = fresh;
     await viaSave();
 

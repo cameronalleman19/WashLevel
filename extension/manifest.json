@@ -16,7 +16,8 @@
     "https://www.mycryptopay.com/*",
     "https://geocoding-api.open-meteo.com/*",
     "https://archive-api.open-meteo.com/*",
-    "https://api.open-meteo.com/*"
+    "https://api.open-meteo.com/*",
+    "https://s3.us-east-2.amazonaws.com/*"
   ],
   "background": {
     "service_worker": "background.js"
