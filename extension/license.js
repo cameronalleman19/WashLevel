@@ -20,6 +20,17 @@ document.addEventListener("click", function (e) {
   }
 }, true);
 
+function licGoPage(page) {
+  try { chrome.storage.local.set({ sidecarActiveTab: page }); } catch (e) {}
+  const go = function () {
+    const b = document.querySelector('.nav-btn[data-page="' + page + '"]');
+    if (b) b.click();
+    if (page === "settings") { const inp = document.getElementById("licKeyInput"); if (inp && !inp.value) inp.focus(); }
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(go, 0); });
+  else setTimeout(go, 0);
+}
+
 async function licGetKey() {
   const st = (await chrome.storage.local.get(["sidecarLicenseKey"])) || {};
   return (st.sidecarLicenseKey || "").trim().toUpperCase();
@@ -164,6 +175,7 @@ if (licSaveBtnEl) {
     if (msgEl) msgEl.textContent = "Checking...";
     const state = await ensureLicense({ force: true });
     if (msgEl) {
+      if (state.valid) setTimeout(function () { licGoPage("overview"); }, 900);
       msgEl.textContent = state.valid
         ? "License active."
         : "Key not active" + (state.reason ? " (" + state.reason + ")" : "") + ". Check the key or call (717) 966-1794.";
@@ -174,4 +186,9 @@ if (licSaveBtnEl) {
 const licPortalBtnEl = document.getElementById("licPortalBtn");
 if (licPortalBtnEl) licPortalBtnEl.addEventListener("click", licOpenPortal);
 
-ensureLicense();
+const licBannerKeyBtnEl = document.getElementById("licBannerKeyBtn");
+if (licBannerKeyBtnEl) licBannerKeyBtnEl.addEventListener("click", function () { licGoPage("settings"); });
+
+ensureLicense().then(function (st) {
+  if (st && !st.valid && (st.reason === "no-key" || st.reason === "not-found")) licGoPage("settings");
+});

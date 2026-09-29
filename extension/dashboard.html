@@ -23,7 +23,7 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 </style>
 </head>
 <body>
-<div id="licenseBanner" hidden style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#b45309;color:#fff;padding:10px 16px;text-align:center;font-size:14px;">Sidecar license inactive — syncing is paused. <a href="https://washlevel.com/sidecar" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">Get a license</a> or call (717) 966-1794.</div>
+<div id="licenseBanner" hidden style="position:fixed;top:0;left:0;right:0;z-index:998;background:#b45309;color:#fff;padding:calc(10px + env(safe-area-inset-top, 0px)) 64px 10px;text-align:center;font-size:14px;line-height:1.5;">Sidecar license inactive — syncing is paused. <button id="licBannerKeyBtn" type="button" style="background:#fff;color:#b45309;border:0;border-radius:6px;padding:3px 10px;font-weight:600;cursor:pointer;margin:0 4px;">Enter license key</button> <a href="https://washlevel.com/sidecar" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">Get a license</a> or call (717) 966-1794.</div>
 <div class="app">
 <button id="hamburgerBtn" class="hamburger-btn" aria-label="Menu">&#9776;</button>
 <div id="navOverlay" class="nav-overlay"></div>
