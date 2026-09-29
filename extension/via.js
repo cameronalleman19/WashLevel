@@ -9,7 +9,7 @@ let viaActiveTab = "open"; // "open" or "auto"
 function vEsc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 function vDays(ts){ return (Date.now() - ts) / 86400000; }
 
-const VIA_IMG_MAX = 800;
+const VIA_IMG_MAX = 1280;
 function viaBlobToDataUrl(blob){
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -31,7 +31,7 @@ async function cacheImg(url){
       cv.height = Math.round(bmp.height * scale);
       cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
       if (bmp.close) bmp.close();
-      return cv.toDataURL("image/jpeg", 0.75);
+      return cv.toDataURL("image/jpeg", 0.85);
     } catch(_){ return await viaBlobToDataUrl(blob); }
   } catch(e){ return null; }
 }
