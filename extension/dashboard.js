@@ -251,10 +251,7 @@ async function syncAll(){
       if(typeof cLoad === "function") await cLoad();
       await cFullSync(function(msg){ setStatus("Sync All — Codes: "+msg); });
       if(typeof cUpdateDisplay === "function") cUpdateDisplay();
-    }],
-    ["CryptoPay sites", async function(){ if(typeof cpSync === "function") await cpSync(); }],
-    ["CryptoPay history", async function(){ if(typeof cpOvSync === "function") await cpOvSync(); }],
-    ["Weather", async function(){ if(typeof cpwSync === "function") await cpwSync(); }]
+    }]
   ];
   try {
     for (var i = 0; i < steps.length; i++){

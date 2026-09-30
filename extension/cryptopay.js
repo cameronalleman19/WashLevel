@@ -1264,6 +1264,32 @@ function cpOvRenderAnomalies(today){
   }
 }
 
+async function cpOvSyncAll(){
+  const allBtn = $("cpOvSyncAllBtn"), ovBtn = $("cpOvSyncBtn");
+  if (allBtn && allBtn.disabled) return;
+  if (allBtn) allBtn.disabled = true;
+  if (ovBtn) ovBtn.disabled = true;
+  const steps = [["Site status", cpSync], ["History", cpOvSync], ["Weather", (typeof cpwSync === "function") ? cpwSync : null]];
+  const errors = [];
+  let loggedOut = false;
+  try {
+    for (let i = 0; i < steps.length; i++){
+      if (!steps[i][1]) continue;
+      $("cpOvStatus").textContent = "Sync All — " + (i + 1) + "/" + steps.length + " " + steps[i][0] + "…";
+      try { await steps[i][1](); } catch (e){ errors.push(steps[i][0] + ": " + (e && e.message ? e.message : e)); }
+      const sb = $("cpSessionBanner");
+      if (sb && !sb.hidden){ loggedOut = true; break; }
+    }
+  } finally {
+    if (allBtn) allBtn.disabled = false;
+    if (ovBtn) ovBtn.disabled = false;
+  }
+  try { cpOvRender(); } catch (_){}
+  $("cpOvStatus").textContent = loggedOut
+    ? "Not logged in to MyCryptoPay. Log in, then press Sync All again."
+    : (errors.length ? "Sync All done with errors: " + errors.join("; ") : "Sync All complete ✔");
+}
+
 async function cpInit(){
   await cpLoad();
   cpRender();
@@ -1273,6 +1299,8 @@ async function cpInit(){
   if (btn) btn.addEventListener("click", cpSync);
   const ovBtn = $("cpOvSyncBtn");
   if (ovBtn) ovBtn.addEventListener("click", cpOvSync);
+  const ovAllBtn = $("cpOvSyncAllBtn");
+  if (ovAllBtn) ovAllBtn.addEventListener("click", cpOvSyncAll);
   // Canvas has zero width while its page is hidden, so the chart cannot draw at
   // load time. Redraw once the tab is actually visible.
   const ovNavBtn = document.querySelector('.nav-btn[data-page="cp-overview"]');
