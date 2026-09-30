@@ -193,19 +193,34 @@ function mRenderUsageSplit(){
       }
       html += "</tbody></table>";
     }
-    html += "<p style=\"margin-top:10px\"><button id=\"memUsageRebuildBtn\" style=\"font-size:13px;padding:6px 14px\">Rebuild usage history</button> <span id=\"memUsageRebuildStatus\" style=\"color:#8fa3c0;font-size:13px\">Only needed once, to fill in months from before usage tracking started.</span></p>";
+    html += "<p style=\"margin-top:10px\"><button id=\"memUsageRebuildBtn\" style=\"font-size:13px;padding:6px 14px\">Rebuild usage history</button> <span id=\"memUsageRebuildStatus\" style=\"color:#8fa3c0;font-size:13px\">Only needed once, to fill in months from before usage tracking started. Saves after every month, so it can resume if it stops.</span></p>";
     el.innerHTML = html;
   }
   const btn = M$("memUsageRebuildBtn");
-  if (btn) btn.addEventListener("click", async function(){
-    if (typeof consSync !== "function") return;
-    if (!confirm("Rebuild usage history from all of your Dencar payment history? This takes about as long as your first Consumers sync. Progress shows on the Consumers page.")) return;
-    btn.disabled = true;
-    const st = M$("memUsageRebuildStatus");
-    if (st) st.textContent = "Rebuilding... watch progress on the Consumers page.";
-    try { await consSync({forceFull: true}); } finally { btn.disabled = false; }
-    await memRender();
-  });
+  if (btn){
+    chrome.storage.local.get(["usageRebuild"]).then(function(r){
+      const ck = (r && r.usageRebuild) || null;
+      if (ck && !ck.complete && ck.done){ btn.textContent = "Resume usage rebuild"; const s = M$("memUsageRebuildStatus"); if (s) s.textContent = "Stopped after " + ck.done + " - press to continue from there."; }
+      else if (ck && ck.complete){ const s = M$("memUsageRebuildStatus"); if (s) s.textContent = "Rebuilt through " + ck.boundary + ". Regular Consumers syncs keep it current."; }
+    });
+    btn.addEventListener("click", async function(){
+      if (typeof consRebuildUsage !== "function") return;
+      const r = (await chrome.storage.local.get(["usageRebuild"])) || {};
+      const ck = r.usageRebuild || null;
+      const resuming = ck && !ck.complete && ck.done;
+      if (!resuming && !confirm("Rebuild usage history from your Dencar payment history? It goes one month at a time and saves as it goes, so you can stop and resume.")) return;
+      if (ck && ck.complete) await chrome.storage.local.set({usageRebuild: {}});
+      btn.disabled = true;
+      const st = M$("memUsageRebuildStatus");
+      try { await consRebuildUsage(function(t){ if (st) st.textContent = t; }); }
+      finally { btn.disabled = false; }
+      const keep = st ? st.textContent : "";
+      await memLoad();
+      mRenderUsageSplit();
+      const st2 = M$("memUsageRebuildStatus");
+      if (st2 && keep) st2.textContent = keep;
+    });
+  }
 }
 
 function mInitCollapsible(){

@@ -204,6 +204,84 @@ async function fetchVehBatch(ids, fresh){
   }
 }
 
+// Rebuilds per-member usage (washes by site + membership $ paid) one month at a time.
+// Saves after every month and resumes where it stopped. Leaves every other consumer field alone.
+// Covers payments through the last Consumers sync; later syncs add newer payments on their own.
+async function consRebuildUsage(say){
+  say = say || function(){};
+  const st = (await chrome.storage.local.get(["consumers", "lastPaymentSync", "usageRebuild"])) || {};
+  if (!st.lastPaymentSync || !st.consumers || !Object.keys(st.consumers).length){
+    say("Run Sync Payment History on the Consumers page first.");
+    return false;
+  }
+  consumers = st.consumers;
+  const B = st.lastPaymentSync;
+  const ck = st.usageRebuild || {};
+  const nextMonth = function(mk){ const y = +mk.slice(0, 4), m = +mk.slice(5, 7); return m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0"); };
+  const monthEnd = function(mk){ const y = +mk.slice(0, 4), m = +mk.slice(5, 7); return new Date(y, m, 0).toLocaleDateString("en-CA"); };
+  let first = "2015-01";
+  let minSign = null;
+  for (const c of Object.values(consumers)) if (c.signup && (!minSign || c.signup < minSign)) minSign = c.signup;
+  if (minSign){ const f = new Date(minSign).toLocaleDateString("en-CA").slice(0, 7); if (f > first) first = f; }
+  const lastMk = B.slice(0, 7);
+  let mk = (ck.done && !ck.complete) ? nextMonth(ck.done) : first;
+  const byName = {};
+  for (const c of Object.values(consumers)){ const k = cNorm(c.name); if (k) byName[k] = c; }
+  let total = 0;
+  for (let m = first; m <= lastMk; m = nextMonth(m)) total++;
+  let idx = 0;
+  for (let m = first; m < mk; m = nextMonth(m)) idx++;
+  const sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+  const csb = document.getElementById("consSyncBtn");
+  if (csb) csb.disabled = true;
+  try {
+    for (; mk <= lastMk; mk = nextMonth(mk)){
+      idx++;
+      const from = mk + "-01";
+      let to = monthEnd(mk);
+      if (to > B) to = B;
+      const tmp = {};
+      for (let page = 1; page <= 400; page++){
+        say("Rebuilding usage: " + mk + " (month " + idx + " of " + total + ", page " + page + ")...");
+        let batch = null;
+        for (let tries = 0; tries < 4; tries++){
+          try { batch = await fetchPaymentsPage(page, from, to); } catch (e) { batch = null; }
+          if (batch) break;
+          await sleep(2000 * (tries + 1));
+        }
+        if (!batch){
+          // The last completed month is already saved; nothing to write here.
+          say("Stopped at " + mk + " (Dencar didn't respond or the session expired). Progress is saved - log in to Dencar if needed and press Rebuild again to continue.");
+          return false;
+        }
+        for (const row of batch){
+          if (!/wash pass|new pass|pass renew/i.test(row.method)) continue;
+          const c = byName[cNorm(row.name)];
+          if (!c) continue;
+          const u = tmp[c.id] = tmp[c.id] || { w: {}, p: 0 };
+          if (/wash pass/i.test(row.method)){
+            const ws = (row.device || "").split(" - ")[0].trim() || "Unknown";
+            u.w[ws] = (u.w[ws] || 0) + 1;
+          } else {
+            u.p = Math.round((u.p + Math.max(0, (row.amt || 0) - (row.tax || 0))) * 100) / 100;
+          }
+        }
+        if (batch.length < 500) break;
+        await sleep(30);
+      }
+      for (const c of Object.values(consumers)){
+        if (c.use && c.use[mk]) delete c.use[mk];
+        if (tmp[c.id]){ c.use = c.use || {}; c.use[mk] = tmp[c.id]; }
+      }
+      await chrome.storage.local.set({ consumers: consumers, usageRebuild: { boundary: B, done: mk, complete: mk === lastMk } });
+    }
+    say("Usage history rebuilt through " + B + ".");
+    return true;
+  } finally {
+    if (csb) csb.disabled = false;
+  }
+}
+
 async function consSync(opts){
   const forceFull = !!(opts && opts.forceFull === true);
   C$("consSyncBtn").disabled = true;
