@@ -5,6 +5,10 @@
  *                    x growth trend (last 90 days vs same days last year, capped +/-25%)
  *                    x weather factor (forecast for the next 10 days, typical weather after that)
  *
+ * Phase 2: renewals for the rest of the month come from each member's billing date
+ * (Consumers sync), minus the site's recent decline rate. Member outlook simulates
+ * the base forward with cancellation rates by membership age.
+ *
  * Retail $, retail cars, new-member sales and new-member counts use the site's
  * learned retail weather response. Member washes use a separate member-usage
  * response. Renewals and VIA Pay are treated as weather-proof.
@@ -32,6 +36,7 @@ const PJ_WX_GROUP = { retail: "retail", retailCars: "retail", newMem: "retail", 
 let pjHist = {}, pjSites = [], pjSelected = null, pjLastSync = 0;
 let pjLoc = {}, pjWx = {}, pjWxThrough = {}, pjFc = {}, pjSnaps = {};
 let pjCache = {};
+let pjConsumers = {}, pjLastPaySync = null, pjCal = null, pjCalMeta = null;
 let pjRendering = false;
 
 /* ---------------------------------------------------------------- helpers */
@@ -88,7 +93,7 @@ function pjWxIcon(w) {
 
 /* ---------------------------------------------------------------- storage */
 async function pjLoad() {
-  const st = (await chrome.storage.local.get(["hist", "sites", "lastSync", "dxSiteLoc", "dxWeather", "dxWeatherThrough", "dxForecast", "projSnapshots"])) || {};
+  const st = (await chrome.storage.local.get(["hist", "sites", "lastSync", "dxSiteLoc", "dxWeather", "dxWeatherThrough", "dxForecast", "projSnapshots", "consumers", "lastPaymentSync"])) || {};
   pjHist = st.hist || {};
   pjSites = (st.sites || []).filter(function (s) { return pjHist[s.id] && Object.keys(pjHist[s.id]).length; });
   pjLastSync = st.lastSync || 0;
@@ -97,6 +102,8 @@ async function pjLoad() {
   pjWxThrough = st.dxWeatherThrough || {};
   pjFc = st.dxForecast || {};
   pjSnaps = st.projSnapshots || {};
+  pjConsumers = st.consumers || {};
+  pjLastPaySync = st.lastPaymentSync || null;
 }
 async function pjSaveWx() {
   await chrome.storage.local.set({ dxSiteLoc: pjLoc, dxWeather: pjWx, dxWeatherThrough: pjWxThrough, dxForecast: pjFc });
@@ -157,22 +164,37 @@ function pjFitWx(series, wx, rmap) {
     }
     return out;
   };
-  return { n: n, reliable: n >= PJ_WX_MIN_DAYS, p: shrink(B.p, 10), t: shrink(B.t, 10), s: shrink(B.s, 10), r: shrink(B.r, 10) };
+  const p = shrink(B.p, 10), t = shrink(B.t, 10);
+  const dryF = p.dry ? p.dry.f : 1;
+  for (const b of Object.keys(t)) t[b].f = t[b].f / dryF;
+  return { n: n, reliable: n >= PJ_WX_MIN_DAYS, p: p, t: t, s: shrink(B.s, 10), r: shrink(B.r, 10) };
 }
 
-function pjWxFactor(fit, w, rb) {
-  if (!fit || !fit.reliable || !w) return 1;
+const PJ_PRECIP_LBL = { dry: "Dry", light: "Light rain", rain: "Rain", heavy: "Heavy rain" };
+const PJ_TEMP_LBL = { extreme: "Under 32\u00B0", cold: "32-39\u00B0", cool: "40-59\u00B0", mild: "60-84\u00B0", hot: "85\u00B0+" };
+const PJ_REC_LBL = { day1: "Day after snow", day2: "2 days after snow", day3to5: "3-5 days after snow" };
+
+// Weather multiplier for one day, broken into its parts so the UI can explain it.
+function pjWxParts(fit, w, rb) {
+  if (!fit || !fit.reliable || !w) return { f: 1, parts: [] };
   const g = function (tbl, b) { return tbl[b] ? tbl[b].f : 1; };
-  let f = 1;
-  const snow = cpwHadSnow(w);
-  if (snow) f *= g(fit.s, "yes");
+  const parts = [];
+  if (cpwHadSnow(w)) parts.push({ lbl: "Snow", f: g(fit.s, "yes") });
   else {
     const pb = (w.pop !== undefined && w.pop !== null) ? cpwPrecipBucketForecast(w.precip, w.pop) : cpwPrecipBucket(w.precip);
-    f *= g(fit.p, pb);
+    parts.push({ lbl: PJ_PRECIP_LBL[pb], f: g(fit.p, pb) });
   }
-  if (w.tmax !== undefined && w.tmax !== null) f *= g(fit.t, cpwTempBucket(w.tmax));
-  if (rb === "day1" || rb === "day2" || rb === "day3to5") f *= g(fit.r, rb);
-  return Math.max(0.25, Math.min(2, f));
+  if (w.tmax !== undefined && w.tmax !== null) { const tb = cpwTempBucket(w.tmax); parts.push({ lbl: PJ_TEMP_LBL[tb], f: g(fit.t, tb) }); }
+  if (rb === "day1" || rb === "day2" || rb === "day3to5") parts.push({ lbl: PJ_REC_LBL[rb], f: g(fit.r, rb) });
+  let f = 1;
+  parts.forEach(function (p) { f *= p.f; });
+  return { f: Math.max(0.25, Math.min(2, f)), parts: parts };
+}
+function pjWxFactor(fit, w, rb) { return pjWxParts(fit, w, rb).f; }
+function pjWxReason(parts) {
+  const big = parts.filter(function (p) { return Math.abs(p.f - 1) >= 0.05; })
+    .sort(function (a, b) { return Math.abs(b.f - 1) - Math.abs(a.f - 1); }).slice(0, 2);
+  return big.map(function (p) { return p.lbl + " " + pjPct(p.f - 1); }).join(", ");
 }
 
 /* ---------------------------------------------------------------- per-site context */
@@ -192,7 +214,7 @@ function pjCtx(sid) {
   if (key && pjFc[key]) for (const f of (pjFc[key].days || [])) fc[f.date] = f;
   const rmap = key ? pjRecencyMap(key) : {};
   const fits = { retail: pjFitWx(series.retail, wx, rmap), member: pjFitWx(series.memberCars, wx, rmap) };
-  const ctx = { sid: sid, series: series, wx: wx, fc: fc, rmap: rmap, fits: fits, hasLoc: !!loc, wxDays: Object.keys(wx).length, trend: {}, norm: {} };
+  const ctx = { sid: sid, series: series, wx: wx, fc: fc, rmap: rmap, fits: fits, hasLoc: !!loc, wxDays: Object.keys(wx).length, trend: {}, norm: {}, calShare: 0 };
   pjCache[sid] = ctx;
   return ctx;
 }
@@ -252,6 +274,7 @@ function pjBase(ctx, m, D, asOf) {
 }
 
 function pjProjectDay(ctx, m, D, asOf, useActualWx) {
+  if (m === "renew" && !useActualWx && pjCal && D >= asOf && D <= pjCal.end) return (pjCal.due[D] || 0) * ctx.calShare * pjCal.dollarPer;
   const b = pjBase(ctx, m, D, asOf).v;
   const g = PJ_WX_GROUP[m];
   if (!g) return b;
@@ -321,6 +344,198 @@ function pjBacktest(sitesArr, today) {
   let typical = null;
   if (errs.length >= 3) typical = errs[Math.floor(errs.length / 2)];
   return { rows: rows, typical: typical };
+}
+
+
+/* ---------------------------------------------------------------- membership (Phase 2) */
+function pjAddMonths(t, k) {
+  const d = new Date(t);
+  const y = d.getFullYear(), mo = d.getMonth() + k, day = d.getDate();
+  const last = new Date(y, mo + 1, 0).getDate();
+  return new Date(y, mo, Math.min(day, last));
+}
+
+// Renewal calendar from each active member's last billing date (Consumers sync).
+function pjBuildCalendar(today) {
+  pjCal = null;
+  pjCalMeta = null;
+  const ids = Object.keys(pjConsumers);
+  if (!ids.length) { pjCalMeta = { reason: "none" }; return; }
+  if (!pjLastPaySync || pjAdd(pjLastPaySync, 35) < today) { pjCalMeta = { reason: "stale", lps: pjLastPaySync }; return; }
+  const from = pjAdd(today, -90), to = pjAdd(today, -1);
+  let amt = 0, n = 0, fail = 0;
+  const per = {};
+  for (const s of pjSites) {
+    const h = pjHist[s.id] || {};
+    let sa = 0;
+    for (const dt of Object.keys(h)) {
+      if (dt < from || dt > to) continue;
+      const r = h[dt];
+      sa += r.passRenewAmt || 0; n += r.passRenew || 0; fail += r.renewFailure || 0;
+    }
+    per[s.id] = sa; amt += sa;
+  }
+  if (!n || !amt) { pjCalMeta = { reason: "norenew" }; return; }
+  const failRate = fail / (n + fail);
+  const end = pjAdd(today, 40);
+  const lpsT = pjDate(pjLastPaySync).getTime();
+  const todayT = pjDate(today).getTime(), endT = pjDate(end).getTime();
+  const due = {};
+  let active = 0, lapsed = 0;
+  for (const id of ids) {
+    const c = pjConsumers[id];
+    if (c.cancelled && c.cancelled > (c.lastNew || 0)) continue;
+    const lb = Math.max(c.lastNew || 0, c.lastRenew || 0);
+    if (!lb) continue;
+    if (lb < lpsT - 40 * 86400000) { lapsed++; continue; }
+    active++;
+    for (let k = 1; k < 40; k++) {
+      const nd = pjAddMonths(lb, k);
+      nd.setHours(0, 0, 0, 0);
+      const t = nd.getTime();
+      if (t < todayT) continue;
+      if (t > endT) break;
+      const key = pjDs(nd);
+      due[key] = (due[key] || 0) + 1;
+    }
+  }
+  pjCal = { due: due, end: end, perRenewal: amt / n, failRate: failRate, dollarPer: (amt / n) * (1 - failRate), active: active, lapsed: lapsed, lps: pjLastPaySync };
+  for (const s of pjSites) pjCtx(s.id).calShare = per[s.id] / amt;
+}
+
+function pjCalDue(from, to, share) {
+  if (!pjCal) return 0;
+  let t = 0;
+  for (const d of Object.keys(pjCal.due)) if (d >= from && d <= to) t += pjCal.due[d];
+  return t * share;
+}
+
+// Member base stats for a set of sites from the Dencar daily reports (always available).
+function pjMemberStats(sids, today) {
+  const from = pjAdd(today, -90), to = pjAdd(today, -1);
+  const span = 90 / 30.44;
+  const o = { vehNow: 0, vehAgo: 0, avgVeh: 0, renewAmt: 0, renewN: 0, fail: 0, cancels: 0, news: 0, newAmt: 0, renewMetric: 0 };
+  const ago = pjAdd(today, -30), ago90 = pjAdd(today, -90);
+  o.vehAgo90 = 0;
+  for (const sid of sids) {
+    const h = pjHist[sid] || {};
+    const ctx = pjCtx(sid);
+    let vs = 0, vd = 0;
+    for (const dt of Object.keys(h)) {
+      if (dt < from || dt > to) continue;
+      const r = h[dt];
+      o.renewAmt += r.passRenewAmt || 0; o.renewN += r.passRenew || 0; o.fail += r.renewFailure || 0;
+      o.cancels += r.passCancelled || 0; o.news += (r.newPass || 0) + (r.newPassOnline || 0);
+      o.newAmt += ctx.series.newMem[dt] || 0; o.renewMetric += ctx.series.renew[dt] || 0;
+      if (r.consumerVehicles) { vs += r.consumerVehicles; vd++; }
+    }
+    o.avgVeh += vd ? vs / vd : 0;
+    const days = Object.keys(h).sort();
+    for (let i = days.length - 1; i >= 0; i--) if (h[days[i]].consumerVehicles) { o.vehNow += h[days[i]].consumerVehicles; break; }
+    for (let i = days.length - 1; i >= 0; i--) if (days[i] <= ago && h[days[i]].consumerVehicles) { o.vehAgo += h[days[i]].consumerVehicles; break; }
+    for (let i = days.length - 1; i >= 0; i--) if (days[i] <= ago90 && h[days[i]].consumerVehicles) { o.vehAgo90 += h[days[i]].consumerVehicles; break; }
+  }
+  o.failRate = (o.renewN + o.fail) ? o.fail / (o.renewN + o.fail) : 0;
+  o.cancelOnly = o.avgVeh ? o.cancels / o.avgVeh / span : 0;
+  // Members also drop off without a 'Pass Cancelled' (e.g. cards that keep declining). Measure total losses
+  // from the actual change in Dencar's member count: losses = new members - net change.
+  o.cancelRate = o.cancelOnly;
+  if (o.vehAgo90 && o.avgVeh) {
+    const lost = o.news - (o.vehNow - o.vehAgo90);
+    if (lost > 0) o.cancelRate = Math.max(o.cancelOnly, lost / o.avgVeh / span);
+  }
+  o.revPerVeh = o.avgVeh ? o.renewMetric / o.avgVeh / span : 0;
+  o.newPerMonth = o.news / span;
+  o.newDollarPer = o.news ? o.newAmt / o.news : 0;
+  return o;
+}
+
+const PJ_TEN_B = [[1, "Month 1"], [2, "Month 2"], [3, "Month 3"], [6, "Months 4-6"], [12, "Months 7-12"], [1e9, "Year 2+"]];
+function pjTenBucket(mo) { for (let i = 0; i < PJ_TEN_B.length; i++) if (mo < PJ_TEN_B[i][0]) return i; return PJ_TEN_B.length - 1; }
+
+// Monthly cancellation rate by membership age over the last 12 months (Consumers sync).
+function pjTenureCurve(today) {
+  const ids = Object.keys(pjConsumers);
+  if (!ids.length) return null;
+  const MO = 30.44 * 86400000, DAY = 86400000;
+  const now = pjDate(today).getTime();
+  const lpsT = pjLastPaySync ? pjDate(pjLastPaySync).getTime() : now;
+  const expo = PJ_TEN_B.map(function () { return 0; }), canc = PJ_TEN_B.map(function () { return 0; });
+  const mix = new Array(13).fill(0);
+  let mixN = 0;
+  for (const id of ids) {
+    const c = pjConsumers[id];
+    if (!c.signup) continue;
+    const isCan = !!(c.cancelled && c.cancelled > (c.lastNew || 0));
+    const lb = Math.max(c.lastNew || 0, c.lastRenew || 0);
+    for (let i = 1; i <= 12; i++) {
+      const pt = now - i * MO;
+      if (c.signup > pt) continue;
+      const on = isCan ? c.cancelled > pt : (lb + 45 * DAY >= pt);
+      if (on) expo[pjTenBucket((pt - c.signup) / MO)]++;
+    }
+    if (isCan && c.cancelled >= now - 12 * MO) canc[pjTenBucket((c.cancelled - c.signup) / MO)]++;
+    if (!isCan && lb && lb >= lpsT - 40 * DAY) {
+      const t = Math.floor((now - c.signup) / MO);
+      if (t >= 0) { mix[Math.min(12, t)]++; mixN++; }
+    }
+  }
+  const totE = expo.reduce(function (a, b) { return a + b; }, 0), totC = canc.reduce(function (a, b) { return a + b; }, 0);
+  const out = { expo: expo, canc: canc, mix: mixN ? mix.map(function (x) { return x / mixN; }) : null, totC: totC, totE: totE, reliable: false };
+  if (totE < 50 || totC < 10) return out;
+  const h = totC / totE;
+  let rel = PJ_TEN_B.map(function (b, i) { const K = 30; const raw = expo[i] ? canc[i] / expo[i] : h; return ((expo[i] * raw + K * h) / (expo[i] + K)) / h; });
+  if (out.mix) {
+    let avg = 0;
+    for (let t = 0; t < 13; t++) avg += out.mix[t] * rel[pjTenBucket(t)];
+    if (avg > 0) rel = rel.map(function (r) { return r / avg; });
+  }
+  out.rel = rel;
+  out.reliable = true;
+  return out;
+}
+
+function pjNewForMonth(sids, ms, today) {
+  let t = 0;
+  const lyS = pjLyMonth(ms), lyE = pjMonthEnd(lyS);
+  for (const sid of sids) {
+    const ctx = pjCtx(sid);
+    const h = pjHist[sid] || {};
+    let days = 0;
+    for (let d = lyS; d <= lyE; d = pjAdd(d, 1)) if (h[d]) days++;
+    if (days >= 20) t += pjActualRange(ctx, lyS, lyE).newCount * pjTrend(ctx, "newCount", today).t;
+    else t += pjActualRange(ctx, pjAdd(today, -90), pjAdd(today, -1)).newCount / (90 / 30.44);
+  }
+  return t;
+}
+
+// Simulates the member base forward 12 months: cancellations by membership age, plus projected new members.
+function pjMemberOutlook(sids, today, st, ten, restThisMonth) {
+  if (!st.vehNow) return null;
+  let counts = new Array(13).fill(0);
+  if (ten && ten.mix) for (let t = 0; t < 13; t++) counts[t] = st.vehNow * ten.mix[t];
+  else counts[12] = st.vehNow;
+  const rel = function (t) { return ten && ten.reliable ? ten.rel[pjTenBucket(t)] : 1; };
+  const mEnd = pjMonthEnd(today.slice(0, 8) + "01");
+  const frac = (pjDate(mEnd) - pjDate(today)) / 86400000 / 30.44 + 1 / 30.44;
+  for (let t = 0; t < 13; t++) counts[t] -= counts[t] * Math.min(0.9, st.cancelRate * rel(t)) * frac;
+  counts[0] += restThisMonth.newCount;
+  const rows = [];
+  const base = pjDate(today.slice(0, 8) + "01");
+  for (let i = 1; i <= 12; i++) {
+    const ms = pjDs(new Date(base.getFullYear(), base.getMonth() + i, 1));
+    const start = counts.reduce(function (a, b) { return a + b; }, 0);
+    let cancels = 0;
+    for (let t = 0; t < 13; t++) { const x = counts[t] * Math.min(0.9, st.cancelRate * rel(t)); cancels += x; counts[t] -= x; }
+    const next = new Array(13).fill(0);
+    for (let t = 0; t < 13; t++) next[Math.min(12, t + 1)] += counts[t];
+    counts = next;
+    const newN = pjNewForMonth(sids, ms, today);
+    counts[0] += newN;
+    const end = counts.reduce(function (a, b) { return a + b; }, 0);
+    rows.push({ m: ms, start: start, newN: newN, cancels: cancels, end: end, renew: (start + end) / 2 * st.revPerVeh, newAmt: newN * st.newDollarPer });
+  }
+  return rows;
 }
 
 /* ---------------------------------------------------------------- geocoding */
@@ -541,19 +756,91 @@ function pjRenderOutlook(results, today) {
   const rows = [];
   let wxSite = null;
   for (const r of results) if (Object.keys(r.ctx.fc).length) { wxSite = r.ctx; break; }
+  let impact = 0;
+  const notable = [];
   for (let i = 0; i < 10; i++) {
     const d = pjAdd(today, i);
     const t = pjEmpty();
-    for (const r of results) for (const m of PJ_METRICS) t[m] += pjProjectDay(r.ctx, m, d, today, false);
+    let typical = 0, withWx = 0;
+    for (const r of results) {
+      for (const m of PJ_METRICS) t[m] += pjProjectDay(r.ctx, m, d, today, false);
+      for (const m of ["retail", "newMem"]) {
+        const b = pjBase(r.ctx, m, d, today).v;
+        typical += b;
+        withWx += b * pjWxFactor(r.ctx.fits.retail, r.ctx.fc[d], r.ctx.rmap[d]);
+      }
+    }
+    const delta = withWx - typical;
+    impact += delta;
     const w = wxSite ? wxSite.fc[d] : null;
-    const wxCell = w ? (pjWxIcon(w) + " " + Math.round(w.tmax) + "&deg;" + (w.pop !== undefined && w.pop !== null ? " &middot; " + w.pop + "%" : "")) : "--";
+    const wp = wxSite ? pjWxParts(wxSite.fits.retail, w, wxSite.rmap[d]) : { f: 1, parts: [] };
+    const why = pjWxReason(wp.parts);
     const lbl = pjDate(d).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
-    rows.push(pjTr([i === 0 ? lbl + " (today)" : lbl, wxCell, pjInt(t.retailCars + t.memberCars), pjMoney(t.retail),
+    if (Math.abs(delta) >= 0.1 * Math.max(1, typical) && why) notable.push({ lbl: pjDate(d).toLocaleDateString("en-US", { weekday: "long" }), delta: delta, why: why });
+    const wxCell = w ? (pjWxIcon(w) + " " + Math.round(w.tmax) + "&deg;" + (w.pop !== undefined && w.pop !== null ? " &middot; " + w.pop + "%" : "")) : "--";
+    const effCell = (!w || Math.abs(delta) < 1) ? "<span style=\"color:#8fa3c0\">--</span>" :
+      "<span style=\"color:" + (delta >= 0 ? "#4ade80" : "#f87171") + "\">" + (delta >= 0 ? "+" : "-") + pjMoney(Math.abs(delta)) + "</span>" +
+      (why ? " <small style=\"color:#8fa3c0\">" + pjEsc(why) + "</small>" : "");
+    rows.push(pjTr([i === 0 ? lbl + " (today)" : lbl, wxCell, effCell, pjInt(t.retailCars + t.memberCars), pjMoney(t.retail),
       pjMoney(t.renew + t.newMem), t.newCount.toFixed(1), pjMoney(pjSum(t, PJ_REV_METRICS))]));
   }
-  let html = pjTable(["Day", "Weather", "Cars", "Retail", "Membership", "New members", "Total"], rows);
-  if (results.length > 1 && wxSite) html += pjNote("Weather column shows the first site's forecast; each site's projection uses its own forecast.");
-  html += pjNote("Membership by day reflects typical renewal timing. Phase 2 replaces it with each member's actual billing date.");
+  let html = "";
+  if (wxSite) {
+    const col = impact >= 0 ? "#4ade80" : "#f87171";
+    let msg = "Forecast weather is worth <b style=\"color:" + col + "\">" + (impact >= 0 ? "+" : "-") + pjMoney(Math.abs(impact)) +
+      "</b> over the next 10 days compared with average weather for these dates.";
+    if (notable.length) msg += " Biggest swings: " + notable.sort(function (a, b) { return Math.abs(b.delta) - Math.abs(a.delta); }).slice(0, 3).map(function (n) {
+      return n.lbl + " " + (n.delta >= 0 ? "+" : "-") + pjMoney(Math.abs(n.delta)) + " (" + pjEsc(n.why) + ")";
+    }).join(", ") + ".";
+    html += "<div class=\"card\" style=\"margin-bottom:10px\">" + msg + "</div>";
+  }
+  html += pjTable(["Day", "Weather", "Weather effect", "Cars", "Retail", "Membership", "New members", "Total"], rows);
+  html += pjNote("Weather effect = retail and new-member sales vs. an average-weather day for that date. Renewals don't move with weather." +
+    (results.length > 1 && wxSite ? " The weather column shows the first site's forecast; each site uses its own." : ""));
+  html += pjNote(pjCal ? "Membership by day uses each member's actual billing date (Consumers sync " + pjEsc(pjCal.lps) + "), minus the recent decline rate."
+    : "Membership by day reflects typical renewal timing. Run the Consumers sync to use each member's actual billing date.");
+  return html;
+}
+
+function pjRenderWeatherResponse(results) {
+  let html = "";
+  for (const r of results) {
+    const s = pjSites.find(function (x) { return x.id === r.sid; });
+    const fr = r.ctx.fits.retail, fm = r.ctx.fits.member;
+    html += "<h3 style=\"font-size:14px;margin:14px 0 8px\">" + pjEsc(s ? s.name : r.sid) +
+      " <small style=\"color:#8fa3c0;font-weight:400\">(" + fr.n + " days with sales and weather" + (fr.reliable ? "" : " - needs " + PJ_WX_MIN_DAYS + " before it's used") + ")</small></h3>";
+    if (!r.ctx.wxDays) { html += pjNote("No weather history for this site yet - press Sync Weather."); continue; }
+    const cell = function (fit, tbl, b) {
+      const x = fit[tbl][b];
+      if (!x) return "<span style=\"color:#8fa3c0\">--</span>";
+      const f = x.f - 1;
+      return (Math.abs(f) < 0.03 ? "<span style=\"color:#8fa3c0\">about average</span>" : pjPctSpan(f));
+    };
+    const nOf = function (tbl, b) { const x = fr[tbl][b]; return x ? pjInt(x.n) : "0"; };
+    const rows = [];
+    rows.push("<tr><td colspan=\"4\" style=\"color:#8fa3c0;font-size:12px;text-transform:uppercase\">Precipitation</td></tr>");
+    for (const b of ["dry", "light", "rain", "heavy"]) rows.push(pjTr([PJ_PRECIP_LBL[b], nOf("p", b), cell(fr, "p", b), cell(fm, "p", b)]));
+    rows.push("<tr><td colspan=\"4\" style=\"color:#8fa3c0;font-size:12px;text-transform:uppercase\">High temperature (vs. an average dry day)</td></tr>");
+    for (const b of ["extreme", "cold", "cool", "mild", "hot"]) rows.push(pjTr([PJ_TEMP_LBL[b], nOf("t", b), cell(fr, "t", b), cell(fm, "t", b)]));
+    rows.push("<tr><td colspan=\"4\" style=\"color:#8fa3c0;font-size:12px;text-transform:uppercase\">Snow</td></tr>");
+    rows.push(pjTr(["Snow that day", nOf("s", "yes"), cell(fr, "s", "yes"), cell(fm, "s", "yes")]));
+    for (const b of ["day1", "day2", "day3to5"]) rows.push(pjTr([PJ_REC_LBL[b], nOf("r", b), cell(fr, "r", b), cell(fm, "r", b)]));
+    html += pjTable(["Condition", "Days seen", "Retail sales", "Member washes"], rows);
+    const events = [];
+    for (const dt of Object.keys(r.ctx.wx).sort().reverse()) {
+      const lbl = cpwWinterEventLabel(r.ctx.wx[dt].code);
+      if (!lbl) continue;
+      events.push(pjTr([pjDate(dt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), lbl,
+        r.ctx.series.retail[dt] !== undefined ? pjMoney(r.ctx.series.retail[dt]) : "--"]));
+      if (events.length >= 10) break;
+    }
+    if (events.length) {
+      html += pjNote("Freezing rain, sleet and heavy snow are too rare to model reliably, so recent ones are listed instead:");
+      html += pjTable(["Date", "Condition", "Retail that day"], events);
+    }
+  }
+  html += pjNote("Each number compares that kind of day with an average day at the same site and time of year. A dry day usually shows a small plus because the average includes rainy days. " +
+    "Conditions with only a few days seen are pulled toward average so one odd day can't swing the projection. Rain and temperature effects multiply together, and the days-after-snow bump stacks on top.");
   return html;
 }
 
@@ -585,23 +872,76 @@ function pjRenderRetail(results, today) {
 }
 
 function pjRenderMembership(results, today) {
+  const sids = results.map(function (r) { return r.sid; });
+  const st = pjMemberStats(sids, today);
+  const ten = pjTenureCurve(today);
+  const mStart = today.slice(0, 8) + "01", mEnd = pjMonthEnd(mStart);
+  const share = results.reduce(function (a, r) { return a + (r.ctx.calShare || 0); }, 0);
+  const R = pjEmpty();
+  for (const r of results) pjAddInto(R, r.rest);
+  let html = "<section class=\"summary\">";
+  html += pjTile("Active members now", pjInt(st.vehNow), st.vehAgo ? "30 days ago " + pjInt(st.vehAgo) + " " + pjPctSpan(pjChange(st.vehNow, st.vehAgo)) : "vehicles, per Dencar's daily report");
+  if (pjCal) {
+    const dueN = pjCalDue(today, mEnd, share);
+    html += pjTile("Renewals left this month", pjInt(dueN), "&asymp; " + pjMoney(dueN * pjCal.dollarPer) + " after declines &middot; " + pjMoney(pjCal.perRenewal) + " avg");
+    html += pjTile("Expected declines", pjInt(dueN * pjCal.failRate), (pjCal.failRate * 100).toFixed(1) + "% of renewals (90 days) &middot; &asymp; " + pjMoney(dueN * pjCal.failRate * pjCal.perRenewal) + " at risk");
+  } else {
+    html += pjTile("Renewals left this month", pjMoney(R.renew), "estimated from renewal history");
+    html += pjTile("Decline rate", (st.failRate * 100).toFixed(1) + "%", "of renewal attempts, last 90 days");
+  }
+  let canSub = "cancels " + (st.cancelOnly * 100).toFixed(1) + "% + other losses " + (Math.max(0, st.cancelRate - st.cancelOnly) * 100).toFixed(1) + "% (last 90 days)";
+  if (ten && ten.reliable) canSub += " &middot; month-1 members " + (st.cancelRate * ten.rel[0] * 100).toFixed(1) + "%, year 2+ " + (st.cancelRate * ten.rel[5] * 100).toFixed(1) + "%";
+  html += pjTile("Monthly member loss", (st.cancelRate * 100).toFixed(1) + "%", canSub);
+  html += "</section>";
+  if (!pjCal) {
+    const why = pjCalMeta && pjCalMeta.reason === "stale" ? "Consumers data is from " + pjEsc(pjCalMeta.lps || "a while ago") + " - run Sync Payment History on Consumers to refresh it."
+      : "Run Sync Payment History on the Consumers page to project renewals from each member's billing date.";
+    html += pjNote(why);
+  }
+
+  // per-site month table
   const rows = [];
   const T = { ren: 0, nm: 0, tot: 0, ly: 0, nc: 0, lync: 0, mc: 0 };
   for (const r of results) {
     const s = pjSites.find(function (x) { return x.id === r.sid; });
     const mem = r.total.renew + r.total.newMem, ly = r.ly.renew + r.ly.newMem;
     const cap = r.trail.retailCars > 0 ? r.trail.newCount / r.trail.retailCars : null;
-    const trn = pjTrend(r.ctx, "renew", today);
     rows.push(pjTr([pjEsc(s ? s.name : r.sid), pjMoney(r.total.renew), pjMoney(r.total.newMem), pjMoney(mem) + " " + pjPctSpan(pjChange(mem, ly)),
       pjInt(r.total.newCount) + " <small style=\"color:#8fa3c0\">(LY " + pjInt(r.ly.newCount) + ")</small>",
-      cap === null ? "--" : (cap * 100).toFixed(1) + "%", pjInt(r.total.memberCars), trn.raw === null ? "--" : pjPct(trn.t - 1)]));
+      cap === null ? "--" : (cap * 100).toFixed(1) + "%", pjInt(r.total.memberCars)]));
     T.ren += r.total.renew; T.nm += r.total.newMem; T.tot += mem; T.ly += ly; T.nc += r.total.newCount; T.lync += r.ly.newCount; T.mc += r.total.memberCars;
   }
   if (results.length > 1) rows.push(pjTr(["All sites", pjMoney(T.ren), pjMoney(T.nm), pjMoney(T.tot) + " " + pjPctSpan(pjChange(T.tot, T.ly)),
-    pjInt(T.nc) + " <small style=\"color:#8fa3c0\">(LY " + pjInt(T.lync) + ")</small>", "", pjInt(T.mc), ""], true));
-  let html = pjTable(["Site", "Renewals", "New member $", "Membership total", "New members", "Capture rate (30d)", "Member washes", "Renewal trend"], rows);
-  html += pjNote("Renewals are treated as weather-proof. New member sales follow projected retail traffic, so they move with the weather. Capture rate = new members / retail cars over the last 30 days.");
-  html += pjNote("Coming in Phase 2: renewals from each member's billing date, expected declines, cancellations by membership age, and a 3/6/12-month member count outlook.");
+    pjInt(T.nc) + " <small style=\"color:#8fa3c0\">(LY " + pjInt(T.lync) + ")</small>", "", pjInt(T.mc)], true));
+  html += "<h3 style=\"font-size:14px;margin:16px 0 8px\">This month</h3>";
+  html += pjTable(["Site", "Renewals", "New member $", "Membership total", "New members", "Capture rate (30d)", "Member washes"], rows);
+  html += pjNote("Capture rate = new members / retail cars over the last 30 days. New member sales follow projected retail traffic, so they move with the weather.");
+
+  // 12-month outlook
+  const out = pjMemberOutlook(sids, today, st, ten, R);
+  html += "<h3 style=\"font-size:14px;margin:18px 0 8px\">Member outlook</h3>";
+  if (!out) {
+    html += pjNote("Needs Dencar's daily member count - sync Overview first.");
+  } else {
+    html += "<section class=\"summary\">";
+    for (const k of [2, 5, 11]) {
+      const o = out[k];
+      html += pjTile("In " + (k + 1) + " months", pjInt(o.end), pjPctSpan(pjChange(o.end, st.vehNow)) + " &middot; renewals &asymp; " + pjMoney(o.renew) + "/mo");
+    }
+    html += "</section>";
+    html += pjTable(["Month", "Start", "+ New", "- Cancels", "End", "Renewal revenue", "New member $"], out.map(function (o) {
+      return pjTr([pjMonthLabel(o.m), pjInt(o.start), "+" + pjInt(o.newN), "-" + pjInt(o.cancels), "<b>" + pjInt(o.end) + "</b>", pjMoney(o.renew), pjMoney(o.newAmt)]);
+    }));
+    html += pjNote("New members per month = same month last year &times; your current new-member trend. Losses use your last-90-day loss rate, measured from the actual change in Dencar's member count so lapsed cards count too" +
+      (ten && ten.reliable ? ", adjusted by membership age (new members cancel more often than long-time ones)." : ". Run the Consumers sync to adjust by membership age.") +
+      " Member counts are vehicles, the way Dencar's daily report counts them.");
+  }
+  if (ten && ten.reliable) {
+    html += "<h3 style=\"font-size:14px;margin:18px 0 8px\">Cancellations by membership age <small style=\"color:#8fa3c0;font-weight:400\">(all sites, last 12 months)</small></h3>";
+    html += pjTable(["Membership age", "Member-months", "Cancels", "Monthly cancel rate"], PJ_TEN_B.map(function (b, i) {
+      return pjTr([b[1], pjInt(ten.expo[i]), pjInt(ten.canc[i]), ten.expo[i] ? (ten.canc[i] / ten.expo[i] * 100).toFixed(1) + "%" : "--"]);
+    }));
+  }
   return html;
 }
 
@@ -692,6 +1032,7 @@ async function pjRender() {
       return;
     }
     const today = pjDs(new Date());
+    pjBuildCalendar(today);
     const results = sitesArr.map(function (s) { return pjMonthSite(s.id, today); });
     const bt = pjSafe("Backtest", function () { return pjBacktest(sitesArr, today); });
     const btOk = bt && bt.rows ? bt : { rows: [], typical: null };
@@ -703,6 +1044,7 @@ async function pjRender() {
     html += "<h2 data-key=\"outlook\">Next 10 days</h2>" + pjSafe("Next 10 days", function () { return pjRenderOutlook(results, today); });
     html += "<h2 data-key=\"retail\">Retail projection</h2>" + pjSafe("Retail projection", function () { return pjRenderRetail(results, today); });
     html += "<h2 data-key=\"membership\">Membership projection</h2>" + pjSafe("Membership projection", function () { return pjRenderMembership(results, today); });
+    html += "<h2 data-key=\"weather\">How weather affects your sites</h2>" + pjSafe("Weather response", function () { return pjRenderWeatherResponse(results); });
 
     const T = pjEmpty(), A = pjEmpty();
     for (const r of results) { pjAddInto(T, r.total); pjAddInto(A, r.actual); }
