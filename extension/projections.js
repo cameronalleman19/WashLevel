@@ -1,4 +1,4 @@
-/* projections.js - Dencar Projections tab (Phase 1)
+/* projections.js - Dencar Projections tab (Phases 1-2)
  *
  * Model, per site and per metric:
  *   projected(day) = base(same weekday last year, weather-normalized, smoothed)
@@ -214,7 +214,7 @@ function pjCtx(sid) {
   if (key && pjFc[key]) for (const f of (pjFc[key].days || [])) fc[f.date] = f;
   const rmap = key ? pjRecencyMap(key) : {};
   const fits = { retail: pjFitWx(series.retail, wx, rmap), member: pjFitWx(series.memberCars, wx, rmap) };
-  const ctx = { sid: sid, series: series, wx: wx, fc: fc, rmap: rmap, fits: fits, hasLoc: !!loc, wxDays: Object.keys(wx).length, trend: {}, norm: {}, calShare: 0 };
+  const ctx = { sid: sid, series: series, wx: wx, fc: fc, rmap: rmap, fits: fits, hasLoc: !!loc, wxDays: Object.keys(wx).length, trend: {}, norm: {} };
   pjCache[sid] = ctx;
   return ctx;
 }
@@ -274,7 +274,10 @@ function pjBase(ctx, m, D, asOf) {
 }
 
 function pjProjectDay(ctx, m, D, asOf, useActualWx) {
-  if (m === "renew" && !useActualWx && pjCal && D >= asOf && D <= pjCal.end) return (pjCal.due[D] || 0) * ctx.calShare * pjCal.dollarPer;
+  if (m === "renew" && !useActualWx && pjCal && pjCal.site[ctx.sid] && D >= asOf && D <= pjCal.end) {
+    const o = pjCal.site[ctx.sid];
+    return pjCalSiteDay(ctx.sid, D) * o.perRenewal * (1 - o.failRate);
+  }
   const b = pjBase(ctx, m, D, asOf).v;
   const g = PJ_WX_GROUP[m];
   if (!g) return b;
@@ -356,6 +359,22 @@ function pjAddMonths(t, k) {
 }
 
 // Renewal calendar from each active member's last billing date (Consumers sync).
+// Each member's renewal belongs to their favorite (home) site - the site that collects it.
+function pjNormName(x) { return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function pjSiteForName(name, cache) {
+  const n = pjNormName(name);
+  if (!n) return null;
+  if (cache[n] !== undefined) return cache[n];
+  let hit = null;
+  for (const s of pjSites) if (pjNormName(s.name) === n) { hit = s.id; break; }
+  if (!hit) {
+    const c = pjSites.filter(function (s) { const sn = pjNormName(s.name); return sn && (sn.indexOf(n) >= 0 || n.indexOf(sn) >= 0); });
+    if (c.length === 1) hit = c[0].id;
+  }
+  cache[n] = hit;
+  return hit;
+}
+
 function pjBuildCalendar(today) {
   pjCal = null;
   pjCalMeta = null;
@@ -364,24 +383,32 @@ function pjBuildCalendar(today) {
   if (!pjLastPaySync || pjAdd(pjLastPaySync, 35) < today) { pjCalMeta = { reason: "stale", lps: pjLastPaySync }; return; }
   const from = pjAdd(today, -90), to = pjAdd(today, -1);
   let amt = 0, n = 0, fail = 0;
-  const per = {};
+  const site = {};
   for (const s of pjSites) {
     const h = pjHist[s.id] || {};
-    let sa = 0;
+    const o = { amt: 0, n: 0, fail: 0, due: {} };
     for (const dt of Object.keys(h)) {
       if (dt < from || dt > to) continue;
       const r = h[dt];
-      sa += r.passRenewAmt || 0; n += r.passRenew || 0; fail += r.renewFailure || 0;
+      o.amt += r.passRenewAmt || 0; o.n += r.passRenew || 0; o.fail += r.renewFailure || 0;
     }
-    per[s.id] = sa; amt += sa;
+    site[s.id] = o;
+    amt += o.amt; n += o.n; fail += o.fail;
   }
   if (!n || !amt) { pjCalMeta = { reason: "norenew" }; return; }
-  const failRate = fail / (n + fail);
+  const all = { perRenewal: amt / n, failRate: fail / (n + fail) };
+  for (const sid of Object.keys(site)) {
+    const o = site[sid];
+    o.share = o.amt / amt;
+    o.perRenewal = o.n >= 10 ? o.amt / o.n : all.perRenewal;
+    o.failRate = (o.n + o.fail) >= 20 ? o.fail / (o.n + o.fail) : all.failRate;
+  }
   const end = pjAdd(today, 40);
   const lpsT = pjDate(pjLastPaySync).getTime();
   const todayT = pjDate(today).getTime(), endT = pjDate(end).getTime();
-  const due = {};
-  let active = 0, lapsed = 0;
+  const unassigned = {};
+  const nameCache = {};
+  let active = 0, lapsed = 0, matched = 0;
   for (const id of ids) {
     const c = pjConsumers[id];
     if (c.cancelled && c.cancelled > (c.lastNew || 0)) continue;
@@ -389,6 +416,9 @@ function pjBuildCalendar(today) {
     if (!lb) continue;
     if (lb < lpsT - 40 * 86400000) { lapsed++; continue; }
     active++;
+    const home = pjSiteForName(c.favSite, nameCache);
+    if (home && site[home]) matched++;
+    const bucket = (home && site[home]) ? site[home].due : unassigned;
     for (let k = 1; k < 40; k++) {
       const nd = pjAddMonths(lb, k);
       nd.setHours(0, 0, 0, 0);
@@ -396,18 +426,34 @@ function pjBuildCalendar(today) {
       if (t < todayT) continue;
       if (t > endT) break;
       const key = pjDs(nd);
-      due[key] = (due[key] || 0) + 1;
+      bucket[key] = (bucket[key] || 0) + 1;
     }
   }
-  pjCal = { due: due, end: end, perRenewal: amt / n, failRate: failRate, dollarPer: (amt / n) * (1 - failRate), active: active, lapsed: lapsed, lps: pjLastPaySync };
-  for (const s of pjSites) pjCtx(s.id).calShare = per[s.id] / amt;
+  pjCal = { site: site, unassigned: unassigned, end: end, all: all, active: active, lapsed: lapsed, matched: matched, lps: pjLastPaySync };
 }
 
-function pjCalDue(from, to, share) {
-  if (!pjCal) return 0;
-  let t = 0;
-  for (const d of Object.keys(pjCal.due)) if (d >= from && d <= to) t += pjCal.due[d];
-  return t * share;
+// Renewals due for one site on one day: its own members, plus a share of members with no known home site.
+function pjCalSiteDay(sid, d) {
+  const o = pjCal.site[sid];
+  if (!o) return 0;
+  return (o.due[d] || 0) + (pjCal.unassigned[d] || 0) * o.share;
+}
+function pjCalRange(from, to, sids) {
+  const out = { n: 0, dollars: 0, fails: 0, atRisk: 0 };
+  if (!pjCal) return out;
+  for (const sid of sids) {
+    const o = pjCal.site[sid];
+    if (!o) continue;
+    for (let d = from; d <= to; d = pjAdd(d, 1)) {
+      const k = pjCalSiteDay(sid, d);
+      if (!k) continue;
+      out.n += k;
+      out.dollars += k * o.perRenewal * (1 - o.failRate);
+      out.fails += k * o.failRate;
+      out.atRisk += k * o.failRate * o.perRenewal;
+    }
+  }
+  return out;
 }
 
 // Member base stats for a set of sites from the Dencar daily reports (always available).
@@ -797,7 +843,7 @@ function pjRenderOutlook(results, today) {
   html += pjTable(["Day", "Weather", "Weather effect", "Cars", "Retail", "Membership", "New members", "Total"], rows);
   html += pjNote("Weather effect = retail and new-member sales vs. an average-weather day for that date. Renewals don't move with weather." +
     (results.length > 1 && wxSite ? " The weather column shows the first site's forecast; each site uses its own." : ""));
-  html += pjNote(pjCal ? "Membership by day uses each member's actual billing date (Consumers sync " + pjEsc(pjCal.lps) + "), minus the recent decline rate."
+  html += pjNote(pjCal ? "Membership by day uses each member's actual billing date and home site (Consumers sync " + pjEsc(pjCal.lps) + "), minus that site's recent decline rate."
     : "Membership by day reflects typical renewal timing. Run the Consumers sync to use each member's actual billing date.");
   return html;
 }
@@ -876,15 +922,14 @@ function pjRenderMembership(results, today) {
   const st = pjMemberStats(sids, today);
   const ten = pjTenureCurve(today);
   const mStart = today.slice(0, 8) + "01", mEnd = pjMonthEnd(mStart);
-  const share = results.reduce(function (a, r) { return a + (r.ctx.calShare || 0); }, 0);
   const R = pjEmpty();
   for (const r of results) pjAddInto(R, r.rest);
   let html = "<section class=\"summary\">";
   html += pjTile("Active members now", pjInt(st.vehNow), st.vehAgo ? "30 days ago " + pjInt(st.vehAgo) + " " + pjPctSpan(pjChange(st.vehNow, st.vehAgo)) : "vehicles, per Dencar's daily report");
   if (pjCal) {
-    const dueN = pjCalDue(today, mEnd, share);
-    html += pjTile("Renewals left this month", pjInt(dueN), "&asymp; " + pjMoney(dueN * pjCal.dollarPer) + " after declines &middot; " + pjMoney(pjCal.perRenewal) + " avg");
-    html += pjTile("Expected declines", pjInt(dueN * pjCal.failRate), (pjCal.failRate * 100).toFixed(1) + "% of renewals (90 days) &middot; &asymp; " + pjMoney(dueN * pjCal.failRate * pjCal.perRenewal) + " at risk");
+    const cr = pjCalRange(today, mEnd, sids);
+    html += pjTile("Renewals left this month", pjInt(cr.n), "&asymp; " + pjMoney(cr.dollars) + " after declines");
+    html += pjTile("Expected declines", pjInt(cr.fails), (cr.n ? (cr.fails / cr.n * 100).toFixed(1) : "0.0") + "% of renewals (90 days) &middot; &asymp; " + pjMoney(cr.atRisk) + " at risk");
   } else {
     html += pjTile("Renewals left this month", pjMoney(R.renew), "estimated from renewal history");
     html += pjTile("Decline rate", (st.failRate * 100).toFixed(1) + "%", "of renewal attempts, last 90 days");
@@ -893,6 +938,11 @@ function pjRenderMembership(results, today) {
   if (ten && ten.reliable) canSub += " &middot; month-1 members " + (st.cancelRate * ten.rel[0] * 100).toFixed(1) + "%, year 2+ " + (st.cancelRate * ten.rel[5] * 100).toFixed(1) + "%";
   html += pjTile("Monthly member loss", (st.cancelRate * 100).toFixed(1) + "%", canSub);
   html += "</section>";
+  if (pjCal) {
+    const pct = pjCal.active ? Math.round(pjCal.matched / pjCal.active * 100) : 0;
+    html += pjNote("Renewals are credited to each member's favorite site (the site that collects them). " + pjInt(pjCal.matched) + " of " + pjInt(pjCal.active) +
+      " active members (" + pct + "%) have a favorite site on file; the rest are split by each site's share of renewal revenue.");
+  }
   if (!pjCal) {
     const why = pjCalMeta && pjCalMeta.reason === "stale" ? "Consumers data is from " + pjEsc(pjCalMeta.lps || "a while ago") + " - run Sync Payment History on Consumers to refresh it."
       : "Run Sync Payment History on the Consumers page to project renewals from each member's billing date.";
@@ -935,12 +985,6 @@ function pjRenderMembership(results, today) {
     html += pjNote("New members per month = same month last year &times; your current new-member trend. Losses use your last-90-day loss rate, measured from the actual change in Dencar's member count so lapsed cards count too" +
       (ten && ten.reliable ? ", adjusted by membership age (new members cancel more often than long-time ones)." : ". Run the Consumers sync to adjust by membership age.") +
       " Member counts are vehicles, the way Dencar's daily report counts them.");
-  }
-  if (ten && ten.reliable) {
-    html += "<h3 style=\"font-size:14px;margin:18px 0 8px\">Cancellations by membership age <small style=\"color:#8fa3c0;font-weight:400\">(all sites, last 12 months)</small></h3>";
-    html += pjTable(["Membership age", "Member-months", "Cancels", "Monthly cancel rate"], PJ_TEN_B.map(function (b, i) {
-      return pjTr([b[1], pjInt(ten.expo[i]), pjInt(ten.canc[i]), ten.expo[i] ? (ten.canc[i] / ten.expo[i] * 100).toFixed(1) + "%" : "--"]);
-    }));
   }
   return html;
 }
