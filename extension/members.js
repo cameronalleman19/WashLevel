@@ -14,6 +14,12 @@ function mFilteredSites(){ return mSelectedSite ? mSites.filter(s => s.id === mS
 async function memLoad(){
   const st = (await chrome.storage.local.get(["consumers", "hist", "sites", "viaSeen", "memCohortBase", "deviceSiteMap"])) || {};
   mDevMap = st.deviceSiteMap || {};
+  // For each "parent" name, the sites of known devices that are that parent or share it:
+  // "Cumberland" and "Cumberland - Bay 1" both register under parent "Cumberland".
+  mDevBase = {};
+  const par = function(d){ const i = d.lastIndexOf(" - "); return i > 0 ? d.slice(0, i).trim() : null; };
+  const reg = function(k, sid){ (mDevBase[k] = mDevBase[k] || {})[sid] = true; };
+  for (const d of Object.keys(mDevMap)){ reg(d, mDevMap[d]); const p = par(d); if (p) reg(p, mDevMap[d]); }
   mConsumers = st.consumers || {};
   mHist = st.hist || {};
   mSites = st.sites || [];
@@ -105,7 +111,7 @@ function mRenderChart(){
 }
 
 function mNormName(x){ return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
-let mDevMap = {};
+let mDevMap = {}, mDevBase = {};
 // "201 N 2nd St" and "201 2nd Street" both become "201|2nd": house number + first street word.
 function mAddrKey(x){
   const t = String(x || "").toLowerCase().replace(/[.,#]/g, " ").split(/\s+/).filter(Boolean);
@@ -126,6 +132,13 @@ function mSiteIdFor(name, cache){
   if (cache[n] !== undefined) return cache[n];
   const dm = mDevMap[raw.replace(/\s+/g, " ")];
   if (dm && mSites.some(function(s){ return s.id === dm; })){ cache[n] = dm; return dm; }
+  const rw = raw.replace(/\s+/g, " ");
+  const pi = rw.lastIndexOf(" - ");
+  if (pi > 0){
+    const cand = mDevBase[rw.slice(0, pi).trim()];
+    const ids = cand ? Object.keys(cand) : [];
+    if (ids.length === 1 && mSites.some(function(s){ return s.id === ids[0]; })){ cache[n] = ids[0]; return ids[0]; }
+  }
   let hit = null, best = 0;
   const ak = mAddrKey(raw);
   if (ak){
@@ -161,15 +174,22 @@ function mRenderUsageSplit(){
   const cache = {};
   let any = false, noHome = 0, noHomeAmt = 0;
   const missWash = {}, missFav = {};
-  let noFav = 0;
+  let noFav = 0, guessed = 0;
   for (const c of Object.values(mConsumers)){
     if (!c.use) continue;
-    const home = mSiteIdFor(c.favSite, cache);
+    const favTxt = /^[\s\-\u2013\u2014]*$/.test(c.favSite || "") ? "" : c.favSite;
+    const favHome = mSiteIdFor(favTxt, cache);
     for (const mk of Object.keys(c.use)){
       if (mk < m1 || mk > m2) continue;
       const u = c.use[mk];
       any = true;
-      if (home && rows[home]) rows[home].collected += u.p; else { noHome++; noHomeAmt += u.p; if (c.favSite) missFav[c.favSite] = (missFav[c.favSite] || 0) + 1; else noFav++; }
+      let home = favHome;
+      if (!home && !favTxt){
+        let bestN = 0;
+        for (const ws of Object.keys(u.w)){ const sid = mSiteIdFor(ws, cache); if (sid && rows[sid] && u.w[ws] > bestN){ bestN = u.w[ws]; home = sid; } }
+        if (home) guessed++;
+      }
+      if (home && rows[home]) rows[home].collected += u.p; else { noHome++; noHomeAmt += u.p; if (favTxt) missFav[favTxt] = (missFav[favTxt] || 0) + 1; else noFav++; }
       const matched = [];
       let tot = 0;
       for (const ws of Object.keys(u.w)){
@@ -212,10 +232,10 @@ function mRenderUsageSplit(){
     html += "</tbody></table>";
     html += "<p style=\"color:#8fa3c0;font-size:13px;margin:8px 0 0\">Collected = membership payments (before tax) from members whose favorite site is this site. " +
       "Earned = the same payments split by where those members actually washed that month - a $30 member who washed 5 times at A, 3 at B and 2 at C earns A $15, B $9 and C $6. " +
-      "Months with no washes stay with the home site.</p>";
+      "Months with no washes stay with the home site." + (guessed ? " " + guessed + " member-month" + (guessed === 1 ? " has" : "s have") + " no favorite site in Dencar, so " + (guessed === 1 ? "it's" : "they're") + " credited to the site washed at most." : "") + "</p>";
     const top = function(o){ return Object.keys(o).sort(function(a, b){ return o[b] - o[a]; }).slice(0, 5).map(function(k){ return "\"" + mEsc(k) + "\" (" + o[k] + ")"; }).join(", "); };
     const warn = [];
-    if (noFav) warn.push(noFav + " member-months are from members with no favorite site on file yet - press Rebuild usage history to look them up.");
+    if (noFav) warn.push(noFav + " member-months are from members with no favorite site and no washes to go by.");
     if (Object.keys(missFav).length) warn.push("Favorite sites that don't match a site: " + top(missFav) + ".");
     if (Object.keys(missWash).length) warn.push("Wash devices that don't match a site: " + top(missWash) + ".");
     if (warn.length) html += "<p style=\"color:#ffd166;font-size:13px;margin:8px 0 0\">" + warn.join(" ") + "</p>";

@@ -221,7 +221,7 @@ async function consLearnDeviceMap(say){
   const start = sd.toLocaleDateString("en-CA");
   const seen = {};
   for (const site of sites){
-    for (let page = 1; page <= 3; page++){
+    for (let page = 1; page <= 6; page++){
       say("Matching devices to sites: " + site.name + (page > 1 ? " (page " + page + ")" : "") + "...");
       let batch = null;
       for (let tries = 0; tries < 3 && !batch; tries++){
