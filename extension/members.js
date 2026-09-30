@@ -120,25 +120,12 @@ function mSiteIdFor(name, cache){
 
 // Each member's payments for a month are split across sites by where they washed that month.
 // Months with no washes stay with the member's home (favorite) site.
-let mUsagePeriod = "mtd";
-function mUsageRange(months){
-  const cur = new Date().toLocaleDateString("en-CA").slice(0, 7);
-  const v = mUsagePeriod;
-  if (v === "ytd") return {m1: cur.slice(0, 4) + "-01", m2: cur, label: "Year to date"};
-  if (v === "all") return {m1: months.length ? months[months.length - 1] : cur, m2: cur, label: "All time"};
-  if (/^\d{4}$/.test(v)) return {m1: v + "-01", m2: v + "-12", label: v};
-  if (/^\d{4}-\d{2}$/.test(v)) return {m1: v, m2: v, label: new Date(+v.slice(0, 4), +v.slice(5, 7) - 1, 1).toLocaleString("en-US", {month: "long", year: "numeric"})};
-  return {m1: cur, m2: cur, label: "Month to date"};
-}
-
 function mRenderUsageSplit(){
   const el = M$("memUsageSplit");
   if (!el) return;
-  const monthSet = {};
-  for (const c of Object.values(mConsumers)) if (c.use) for (const k of Object.keys(c.use)) monthSet[k] = true;
-  const months = Object.keys(monthSet).sort().reverse();
-  const tr = mUsageRange(months);
-  const m1 = tr.m1, m2 = tr.m2;
+  const tr = mTimeRange();
+  const m1 = tr.from.slice(0, 7), m2 = tr.to.slice(0, 7);
+  const tfv = (M$("memTimeFrame") || {}).value || "mtd";
   const rows = {};
   for (const s of mSites) rows[s.id] = {collected: 0, earned: 0, washes: 0, fromOthers: 0, homeAway: 0, homeWashes: 0};
   const grid = {};
@@ -177,17 +164,8 @@ function mRenderUsageSplit(){
       "To fill in past months, rebuild once (takes about as long as your first Consumers sync).</p><button id=\"memUsageRebuildBtn\">Rebuild usage history</button> <span id=\"memUsageRebuildStatus\"></span>";
   } else {
     const sites = mFilteredSites();
-    const curMk = new Date().toLocaleDateString("en-CA").slice(0, 7);
-    const years = {};
-    months.forEach(function(k){ years[k.slice(0, 4)] = true; });
-    let opts = "<option value=\"mtd\">Month to date</option><option value=\"ytd\">Year to date</option><optgroup label=\"Months\">";
-    months.filter(function(k){ return k !== curMk; }).forEach(function(k){
-      opts += "<option value=\"" + k + "\">" + new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 1).toLocaleString("en-US", {month: "long", year: "numeric"}) + "</option>";
-    });
-    opts += "</optgroup><optgroup label=\"Years\">";
-    Object.keys(years).sort().reverse().forEach(function(y){ opts += "<option value=\"" + y + "\">" + y + "</option>"; });
-    opts += "</optgroup><option value=\"all\">All time</option>";
-    let html = "<p style=\"margin:0 0 10px\"><select id=\"memUsagePeriod\">" + opts + "</select></p>";
+    let html = "<p style=\"color:#8fa3c0;font-size:13px;margin:0 0 8px\">" + mEsc(tr.label) +
+      (/^(today|7d|30d)$/.test(tfv) ? " - membership payments are monthly, so this shows the whole month" + (m1 !== m2 ? "s it touches" : "") : "") + "</p>";
     html += "<table class=\"via\"><thead><tr><th>Site</th><th>Collected</th><th>Earned by washes</th><th>Difference</th><th>Member washes</th><th>From other sites' members</th><th>Own members washing elsewhere</th></tr></thead><tbody>";
     let tc = 0, te = 0;
     for (const s of sites){
@@ -219,12 +197,6 @@ function mRenderUsageSplit(){
     }
     html += "<p style=\"margin-top:10px\"><button id=\"memUsageRebuildBtn\" style=\"font-size:13px;padding:6px 14px\">Rebuild usage history</button> <span id=\"memUsageRebuildStatus\" style=\"color:#8fa3c0;font-size:13px\">Only needed once, to fill in months from before usage tracking started. Saves after every month, so it can resume if it stops.</span></p>";
     el.innerHTML = html;
-    const ps = M$("memUsagePeriod");
-    if (ps){
-      ps.value = mUsagePeriod;
-      if (ps.value !== mUsagePeriod){ mUsagePeriod = "mtd"; ps.value = "mtd"; }
-      ps.addEventListener("change", function(){ mUsagePeriod = ps.value; mRenderUsageSplit(); });
-    }
   }
   const btn = M$("memUsageRebuildBtn");
   if (btn){
@@ -981,6 +953,7 @@ onReady( () => {
   const memLP = M$("memLostPeriod");
   if (memLP) memLP.addEventListener("change", mRenderLostMembers);
   const memTF = M$("memTimeFrame");
-  if (memTF) memTF.addEventListener("change", () => { mRenderTiles(); });
-  memRender().then(() => { mPopulateSiteFilter(); mPopulateTimeFrame(); });
+  if (memTF) memTF.addEventListener("change", () => { memRender(); });
+  mPopulateTimeFrame();
+  memRender().then(() => { mPopulateSiteFilter(); });
 });
