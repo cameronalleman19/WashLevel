@@ -336,6 +336,22 @@ async function pjGeocode(address) {
   const re = /\b([A-Z]{2})\b/g;
   let m;
   while ((m = re.exec(flat))) if (PJ_STATES[m[1]]) { st = m[1]; stIdx = m.index; }
+  // ZIP first: Open-Meteo's geocoder accepts a postal code as the search term.
+  if (zip) {
+    try {
+      const zr = await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" + zip + "&count=10&language=en&format=json&countryCode=US");
+      const zd = await zr.json();
+      let zs = (zd && zd.results) || [];
+      if (st) zs = zs.filter(function (r) { return r.admin1 === PJ_STATES[st]; });
+      if (zs.length) {
+        const z = zs[0];
+        let ab = st;
+        if (!ab) for (const k of Object.keys(PJ_STATES)) if (PJ_STATES[k] === z.admin1) ab = k;
+        return { lat: z.latitude, lon: z.longitude, label: z.name + (ab ? ", " + ab : "") + " (ZIP " + zip + ")" };
+      }
+    } catch (e) {}
+  }
+  // Fallback: no ZIP, or the ZIP isn't in the geocoder - match on city + state.
   const before = (stIdx >= 0 ? flat.slice(0, stIdx) : flat.replace(/\b\d{5}(-\d{4})?\b.*$/, "")).replace(/[,\s]+$/, "");
   const cands = [];
   const parts = before.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
