@@ -681,6 +681,11 @@ function mRenderYoY(){
   var netPcYtd = lyYtd.net ? mYoyPc(ytd.net, lyYtd.net) : null;
   html += mTile("Net vs LY (MTD)", (mtd.net >= 0 ? "+" : "") + mtd.net + mYoySpan(netPcMtd) + "<br><small>LY: " + (lyMtd.net >= 0 ? "+" : "") + lyMtd.net + "</small>");
   html += mTile("Net vs LY (YTD)", (ytd.net >= 0 ? "+" : "") + ytd.net + mYoySpan(netPcYtd) + "<br><small>LY: " + (lyYtd.net >= 0 ? "+" : "") + lyYtd.net + "</small>");
+  html += mTile("Member washes vs LY (MTD)", mtd.passUse.toLocaleString() + mYoySpan(mYoyPc(mtd.passUse, lyMtd.passUse)) + "<br><small>LY: " + lyMtd.passUse.toLocaleString() + "</small>");
+  html += mTile("Member washes vs LY (YTD)", ytd.passUse.toLocaleString() + mYoySpan(mYoyPc(ytd.passUse, lyYtd.passUse)) + "<br><small>LY: " + lyYtd.passUse.toLocaleString() + "</small>");
+  var mPer = function(o){ return o.passUse ? o.rev / o.passUse : 0; };
+  html += mTile("Member $/wash vs LY (MTD)", "$" + mPer(mtd).toFixed(2) + mYoySpan(mYoyPc(mPer(mtd), mPer(lyMtd))) + "<br><small>LY: $" + mPer(lyMtd).toFixed(2) + "</small>");
+  html += mTile("Member $/wash vs LY (YTD)", "$" + mPer(ytd).toFixed(2) + mYoySpan(mYoyPc(mPer(ytd), mPer(lyYtd))) + "<br><small>LY: $" + mPer(lyYtd).toFixed(2) + "</small>");
 
   var cwrap = M$("memYoYChartWrap");
   if (cwrap) cwrap.innerHTML = '<div id="memYoYToggles" style="margin-bottom:6px"></div><div id="memYoYView" style="margin-bottom:10px"></div><canvas id="memYoYChart" style="width:100%"></canvas>';
@@ -711,7 +716,8 @@ function mRenderYoY(){
       {key: "rev", label: "Revenue", extract: function(r){ return r.rev; }, fmt: mMoney0},
       {key: "news", label: "New Passes", extract: function(r){ return r.news; }, fmt: function(v){ return Math.round(v).toLocaleString(); }},
       {key: "cancels", label: "Cancels", extract: function(r){ return r.cancels; }, fmt: function(v){ return Math.round(v).toLocaleString(); }},
-      {key: "net", label: "Net", extract: function(r){ return r.net; }, fmt: function(v){ return (v >= 0 ? "+" : "") + Math.round(v).toLocaleString(); }}
+      {key: "net", label: "Net", extract: function(r){ return r.net; }, fmt: function(v){ return (v >= 0 ? "+" : "") + Math.round(v).toLocaleString(); }},
+      {key: "uses", label: "Member washes", extract: function(r){ return r.passUse; }, fmt: function(v){ return Math.round(v).toLocaleString(); }}
     ];
     var curM = "rev", curV = "mtd";
     function memByDay(extractFn){
@@ -723,6 +729,7 @@ function mRenderYoY(){
             rev: (r.newPassAmt||0)+(r.passRenewAmt||0)+(r.newPassOnlineAmt||0)+(r.onlineGiftAmt||0)+(r.viaAddAmt||0),
             news: (r.newPass||0)+(r.newPassOnline||0),
             cancels: r.passCancelled||0,
+            passUse: r.passUse||0,
             net: (r.newPass||0)+(r.newPassOnline||0)-(r.passCancelled||0)
           });
           out[dt] = (out[dt]||0) + val;

@@ -243,33 +243,30 @@ async function syncAll(){
   var vsb = document.getElementById("viaSyncBtn");
   var errors = [];
 
-  // 1 — Overview
-  setStatus("Sync All — 1/4 Overview…");
-  try { await sync(); } catch(e){ errors.push("Overview: "+e.message); }
-  $("syncBtn").disabled = true;
-
-  // 2 — Consumers
-  setStatus("Sync All — 2/4 Consumers…");
-  if(csb) csb.disabled = true;
-  try { await consSync(); } catch(e){ errors.push("Consumers: "+e.message); }
-
-  // 3 — VIA Guard
-  setStatus("Sync All — 3/4 VIA Guard…");
-  if(vsb) vsb.disabled = true;
-  try { await viaSync(); } catch(e){ errors.push("VIA: "+e.message); }
-
-  // 4 — Codes
-  setStatus("Sync All — 4/4 Codes…");
+  var steps = [
+    ["Overview", async function(){ await sync(); $("syncBtn").disabled = true; }],
+    ["Consumers", async function(){ if(csb) csb.disabled = true; await consSync(); }],
+    ["VIA Guard", async function(){ if(vsb) vsb.disabled = true; await viaSync(); }],
+    ["Codes", async function(){
+      if(typeof cLoad === "function") await cLoad();
+      await cFullSync(function(msg){ setStatus("Sync All — Codes: "+msg); });
+      if(typeof cUpdateDisplay === "function") cUpdateDisplay();
+    }],
+    ["CryptoPay sites", async function(){ if(typeof cpSync === "function") await cpSync(); }],
+    ["CryptoPay history", async function(){ if(typeof cpOvSync === "function") await cpOvSync(); }],
+    ["Weather", async function(){ if(typeof cpwSync === "function") await cpwSync(); }]
+  ];
   try {
-    if(typeof cLoad === "function") await cLoad();
-    await cFullSync(function(msg){ setStatus("Sync All — Codes: "+msg); });
-    if(typeof cUpdateDisplay === "function") cUpdateDisplay();
-  } catch(e){ errors.push("Codes: "+e.message); }
-
-  $("syncBtn").disabled = false;
-  if(csb) csb.disabled = false;
-  if(vsb) vsb.disabled = false;
-  ab.disabled = false;
+    for (var i = 0; i < steps.length; i++){
+      setStatus("Sync All — " + (i + 1) + "/" + steps.length + " " + steps[i][0] + "…");
+      try { await steps[i][1](); } catch(e){ errors.push(steps[i][0] + ": " + (e && e.message ? e.message : e)); }
+    }
+  } finally {
+    $("syncBtn").disabled = false;
+    if(csb) csb.disabled = false;
+    if(vsb) vsb.disabled = false;
+    ab.disabled = false;
+  }
   if(errors.length){
     setStatus("Sync All done with errors: "+errors.join("; "));
   } else {
