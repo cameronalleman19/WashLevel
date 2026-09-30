@@ -513,7 +513,6 @@ function pjRenderTiles(results, bt) {
   html += pjTile("Actual so far", pjMoney(act), "through yesterday &middot; " + pjMoney(rest) + " still to come");
   html += pjTile("Retail", pjMoney(T.retail), lyTxt(L.retail, T.retail, pjMoney));
   html += pjTile("Membership", pjMoney(mem), "renewals " + pjMoney(T.renew) + " + new " + pjMoney(T.newMem) + " &middot; " + lyTxt(lyMem, mem, pjMoney));
-  html += pjTile("Other (VIA Pay)", pjMoney(T.other), lyTxt(L.other, T.other, pjMoney));
   html += pjTile("Cars this month", pjInt(cars), "retail " + pjInt(T.retailCars) + " + member " + pjInt(T.memberCars) + " &middot; " + lyTxt(lyCars, cars, pjInt));
   html += pjTile("New members", pjInt(T.newCount), lyTxt(L.newCount, T.newCount, pjInt));
   html += "</section>";
