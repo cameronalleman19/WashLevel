@@ -232,7 +232,7 @@ async function consLearnDeviceMap(say){
       for (const row of batch){
         const d = (row.device || "").replace(/\s+/g, " ").trim();
         if (!d) continue;
-        if (seen[d] && seen[d] !== site.id){ say("Dencar's site filter didn't narrow payments by site, so device matching was skipped."); return false; }
+        if (seen[d] && seen[d] !== site.id){ say("Dencar's payment filter doesn't separate sites, so devices are matched by which site's members use them instead."); return false; }
         seen[d] = site.id;
       }
       if (batch.length < 500) break;

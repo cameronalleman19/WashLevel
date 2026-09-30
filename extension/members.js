@@ -25,6 +25,8 @@ async function memLoad(){
   mSites = st.sites || [];
   mViaSeen = st.viaSeen || {};
   mCohortBase = st.memCohortBase || {};
+  mDevInfer = {};
+  try { mInferDevices(); } catch (e) { console.error("[Sidecar] device inference failed", e); }
 }
 
 function mHasBuckets(){
@@ -111,7 +113,37 @@ function mRenderChart(){
 }
 
 function mNormName(x){ return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
-let mDevMap = {}, mDevBase = {};
+let mDevMap = {}, mDevBase = {}, mDevInfer = {}, mDevInferInfo = [];
+
+// When Dencar can't tell us a device's site, infer it from who uses it: a bay whose washes come mostly
+// from one site's members (by their favorite site) belongs to that site. Needs 15+ washes and a 50%+ majority.
+function mInferDevices(){
+  mDevInfer = {};
+  mDevInferInfo = [];
+  const cache = {}, counts = {};
+  for (const c of Object.values(mConsumers)){
+    if (!c.use) continue;
+    const fav = /^[\s\-\u2013\u2014]*$/.test(c.favSite || "") ? "" : c.favSite;
+    const home = fav ? mSiteIdFor(fav, cache) : null;
+    if (!home) continue;
+    for (const mk of Object.keys(c.use)){
+      const w = c.use[mk].w || {};
+      for (const ws of Object.keys(w)){
+        const d = ws.replace(/\s+/g, " ").trim();
+        if (mSiteIdFor(d, cache)) continue;
+        const o = counts[d] = counts[d] || {};
+        o[home] = (o[home] || 0) + w[ws];
+      }
+    }
+  }
+  for (const d of Object.keys(counts)){
+    const o = counts[d];
+    let tot = 0, top = null, tn = 0;
+    for (const sid of Object.keys(o)){ tot += o[sid]; if (o[sid] > tn){ tn = o[sid]; top = sid; } }
+    if (tot >= 15 && tn / tot >= 0.5){ mDevInfer[d] = top; mDevInferInfo.push({d: d, sid: top, share: tn / tot, n: tot}); }
+  }
+  mDevInferInfo.sort(function(a, b){ return b.n - a.n; });
+}
 // "201 N 2nd St" and "201 2nd Street" both become "201|2nd": house number + first street word.
 function mAddrKey(x){
   const t = String(x || "").toLowerCase().replace(/[.,#]/g, " ").split(/\s+/).filter(Boolean);
@@ -156,6 +188,7 @@ function mSiteIdFor(name, cache){
       .sort(function(a, b){ return b.d.length - a.d.length; });
     if (cands.length && (cands.length === 1 || cands[0].d.length > cands[1].d.length)) hit = cands[0].s.id;
   }
+  if (!hit && mDevInfer[rw] && mSites.some(function(s){ return s.id === mDevInfer[rw]; })) hit = mDevInfer[rw];
   cache[n] = hit;
   return hit;
 }
@@ -238,6 +271,12 @@ function mRenderUsageSplit(){
     if (noFav) warn.push(noFav + " member-months are from members with no favorite site and no washes to go by.");
     if (Object.keys(missFav).length) warn.push("Favorite sites that don't match a site: " + top(missFav) + ".");
     if (Object.keys(missWash).length) warn.push("Wash devices that don't match a site: " + top(missWash) + ".");
+    if (mDevInferInfo.length){
+      const nm = function(id){ const s = mSites.find(function(x){ return x.id === id; }); return s ? s.name : id; };
+      html += "<p style=\"color:#8fa3c0;font-size:13px;margin:8px 0 0\">Matched by who uses them: " + mDevInferInfo.slice(0, 6).map(function(x){
+        return "\"" + mEsc(x.d) + "\" &rarr; " + mEsc(nm(x.sid)) + " (" + Math.round(x.share * 100) + "% of its washes are that site's members)";
+      }).join(", ") + (mDevInferInfo.length > 6 ? ", and " + (mDevInferInfo.length - 6) + " more" : "") + ".</p>";
+    }
     if (warn.length) html += "<p style=\"color:#ffd166;font-size:13px;margin:8px 0 0\">" + warn.join(" ") + "</p>";
     if (Object.keys(missWash).length) html += "<p style=\"margin:6px 0 0\"><button id=\"memDevMapBtn\" style=\"font-size:13px;padding:6px 14px\">Match devices to sites</button> <span id=\"memDevMapStatus\" style=\"color:#8fa3c0;font-size:13px\">Asks Dencar which site each device belongs to.</span></p>";
     if (mSites.length > 1){
