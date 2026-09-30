@@ -204,9 +204,37 @@ async function fetchVehBatch(ids, fresh){
   }
 }
 
-// Rebuilds per-member usage (washes by site + membership $ paid) one month at a time.
-// Saves after every month and resumes where it stopped. Leaves every other consumer field alone.
+// Rebuilds per-member usage (washes by device + membership $ paid) one month at a time, then fills in
+// any missing favorite sites. Saves as it goes and resumes where it stopped. Leaves other consumer fields alone.
 // Covers payments through the last Consumers sync; later syncs add newer payments on their own.
+const CONS_USAGE_V = 2;
+async function consFillFavSites(say){
+  const ids = Object.keys(consumers).filter(function(id){
+    const c = consumers[id];
+    return c.use && Object.keys(c.use).length && !c.favSite && !c.favChecked;
+  }).sort(function(a, b){
+    const la = Object.keys(consumers[a].use).sort().pop() || "", lb = Object.keys(consumers[b].use).sort().pop() || "";
+    return la < lb ? 1 : -1;
+  });
+  for (let i = 0; i < ids.length; i++){
+    say("Looking up favorite sites: " + (i + 1) + " of " + ids.length + "...");
+    let info = null;
+    for (let tries = 0; tries < 3 && !info; tries++){
+      info = await fetchConsumerPhone(ids[i]);
+      if (!info) await new Promise(function(r){ setTimeout(r, 1500 * (tries + 1)); });
+    }
+    if (!info){ await consSave(); return false; }
+    const c = consumers[ids[i]];
+    if (info.favSite) c.favSite = info.favSite;
+    if (info.phone && !c.phone) c.phone = info.phone;
+    c.favChecked = true;
+    if (i % 10 === 9) await consSave();
+    await new Promise(function(r){ setTimeout(r, 80); });
+  }
+  await consSave();
+  return true;
+}
+
 async function consRebuildUsage(say){
   say = say || function(){};
   const st = (await chrome.storage.local.get(["consumers", "lastPaymentSync", "usageRebuild"])) || {};
@@ -215,8 +243,9 @@ async function consRebuildUsage(say){
     return false;
   }
   consumers = st.consumers;
-  const B = st.lastPaymentSync;
-  const ck = st.usageRebuild || {};
+  let ck = st.usageRebuild || {};
+  if (ck.v !== CONS_USAGE_V) ck = {};
+  const B = ck.boundary && !ck.monthsComplete ? st.lastPaymentSync : (ck.boundary || st.lastPaymentSync);
   const nextMonth = function(mk){ const y = +mk.slice(0, 4), m = +mk.slice(5, 7); return m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0"); };
   const monthEnd = function(mk){ const y = +mk.slice(0, 4), m = +mk.slice(5, 7); return new Date(y, m, 0).toLocaleDateString("en-CA"); };
   let first = "2015-01";
@@ -224,57 +253,67 @@ async function consRebuildUsage(say){
   for (const c of Object.values(consumers)) if (c.signup && (!minSign || c.signup < minSign)) minSign = c.signup;
   if (minSign){ const f = new Date(minSign).toLocaleDateString("en-CA").slice(0, 7); if (f > first) first = f; }
   const lastMk = B.slice(0, 7);
-  let mk = (ck.done && !ck.complete) ? nextMonth(ck.done) : first;
   const byName = {};
   for (const c of Object.values(consumers)){ const k = cNorm(c.name); if (k) byName[k] = c; }
-  let total = 0;
-  for (let m = first; m <= lastMk; m = nextMonth(m)) total++;
-  let idx = 0;
-  for (let m = first; m < mk; m = nextMonth(m)) idx++;
   const sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
   const csb = document.getElementById("consSyncBtn");
   if (csb) csb.disabled = true;
   try {
-    for (; mk <= lastMk; mk = nextMonth(mk)){
-      idx++;
-      const from = mk + "-01";
-      let to = monthEnd(mk);
-      if (to > B) to = B;
-      const tmp = {};
-      for (let page = 1; page <= 400; page++){
-        say("Rebuilding usage: " + mk + " (month " + idx + " of " + total + ", page " + page + ")...");
-        let batch = null;
-        for (let tries = 0; tries < 4; tries++){
-          try { batch = await fetchPaymentsPage(page, from, to); } catch (e) { batch = null; }
-          if (batch) break;
-          await sleep(2000 * (tries + 1));
-        }
-        if (!batch){
-          // The last completed month is already saved; nothing to write here.
-          say("Stopped at " + mk + " (Dencar didn't respond or the session expired). Progress is saved - log in to Dencar if needed and press Rebuild again to continue.");
-          return false;
-        }
-        for (const row of batch){
-          if (!/wash pass|new pass|pass renew/i.test(row.method)) continue;
-          const c = byName[cNorm(row.name)];
-          if (!c) continue;
-          const u = tmp[c.id] = tmp[c.id] || { w: {}, p: 0 };
-          if (/wash pass/i.test(row.method)){
-            const ws = (row.device || "").split(" - ")[0].trim() || "Unknown";
-            u.w[ws] = (u.w[ws] || 0) + 1;
-          } else {
-            u.p = Math.round((u.p + Math.max(0, (row.amt || 0) - (row.tax || 0))) * 100) / 100;
+    if (!ck.monthsComplete){
+      let mk = ck.done ? nextMonth(ck.done) : first;
+      let total = 0, idx = 0;
+      for (let m = first; m <= lastMk; m = nextMonth(m)) total++;
+      for (let m = first; m < mk; m = nextMonth(m)) idx++;
+      for (; mk <= lastMk; mk = nextMonth(mk)){
+        idx++;
+        const from = mk + "-01";
+        let to = monthEnd(mk);
+        if (to > B) to = B;
+        const tmp = {};
+        for (let page = 1; page <= 400; page++){
+          say("Rebuilding usage: " + mk + " (month " + idx + " of " + total + ", page " + page + ")...");
+          let batch = null;
+          for (let tries = 0; tries < 4; tries++){
+            try { batch = await fetchPaymentsPage(page, from, to); } catch (e) { batch = null; }
+            if (batch) break;
+            await sleep(2000 * (tries + 1));
           }
+          if (!batch){
+            say("Stopped at " + mk + " (Dencar didn't respond or the session expired). Progress is saved - log in to Dencar if needed and press Resume to continue.");
+            return false;
+          }
+          for (const row of batch){
+            if (!/wash pass|new pass|pass renew/i.test(row.method)) continue;
+            const c = byName[cNorm(row.name)];
+            if (!c) continue;
+            const u = tmp[c.id] = tmp[c.id] || { w: {}, p: 0 };
+            if (/wash pass/i.test(row.method)){
+              const ws = (row.device || "").replace(/\s+/g, " ").trim() || "Unknown";
+              u.w[ws] = (u.w[ws] || 0) + 1;
+            } else {
+              u.p = Math.round((u.p + Math.max(0, (row.amt || 0) - (row.tax || 0))) * 100) / 100;
+            }
+          }
+          if (batch.length < 500) break;
+          await sleep(30);
         }
-        if (batch.length < 500) break;
-        await sleep(30);
+        for (const c of Object.values(consumers)){
+          if (c.use && c.use[mk]) delete c.use[mk];
+          if (tmp[c.id]){ c.use = c.use || {}; c.use[mk] = tmp[c.id]; }
+        }
+        ck = { v: CONS_USAGE_V, boundary: B, done: mk, monthsComplete: mk === lastMk, complete: false };
+        await chrome.storage.local.set({ consumers: consumers, usageRebuild: ck });
       }
-      for (const c of Object.values(consumers)){
-        if (c.use && c.use[mk]) delete c.use[mk];
-        if (tmp[c.id]){ c.use = c.use || {}; c.use[mk] = tmp[c.id]; }
-      }
-      await chrome.storage.local.set({ consumers: consumers, usageRebuild: { boundary: B, done: mk, complete: mk === lastMk } });
+      ck = { v: CONS_USAGE_V, boundary: B, done: lastMk, monthsComplete: true, complete: false };
+      await chrome.storage.local.set({ usageRebuild: ck });
     }
+    const favOk = await consFillFavSites(say);
+    if (!favOk){
+      say("Stopped while looking up favorite sites (Dencar didn't respond or the session expired). Progress is saved - press Resume to continue.");
+      return false;
+    }
+    ck.complete = true;
+    await chrome.storage.local.set({ usageRebuild: ck });
     say("Usage history rebuilt through " + B + ".");
     return true;
   } finally {
@@ -389,7 +428,7 @@ async function consSync(opts){
           c.use = c.use || {};
           const u = c.use[umk] = c.use[umk] || {w: {}, p: 0};
           if (/wash pass/i.test(row.method)){
-            const ws = (row.device || "").split(" - ")[0].trim() || "Unknown";
+            const ws = (row.device || "").replace(/\s+/g, " ").trim() || "Unknown";
             u.w[ws] = (u.w[ws] || 0) + 1;
           } else {
             u.p = Math.round((u.p + Math.max(0, (row.amt || 0) - (row.tax || 0))) * 100) / 100;

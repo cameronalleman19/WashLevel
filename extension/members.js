@@ -104,15 +104,25 @@ function mRenderChart(){
 }
 
 function mNormName(x){ return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function mSiteWords(x){ return String(x || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); }
+// Matches a Dencar device name ("Mermaid - Dillsburg - Tunnel 1") or favorite-site text to a site.
+// 1) longest site name the text starts with; 2) the site whose distinctive words (not shared by most sites) all appear.
 function mSiteIdFor(name, cache){
-  const n = mNormName(name);
+  const raw = String(name || "").trim();
+  const n = mNormName(raw);
   if (!n) return null;
   if (cache[n] !== undefined) return cache[n];
-  let hit = null;
-  for (const s of mSites) if (mNormName(s.name) === n){ hit = s.id; break; }
+  let hit = null, best = 0;
+  for (const s of mSites){ const sn = mNormName(s.name); if (sn && n.indexOf(sn) === 0 && sn.length > best){ best = sn.length; hit = s.id; } }
   if (!hit){
-    const c = mSites.filter(function(s){ const sn = mNormName(s.name); return sn && (sn.indexOf(n) >= 0 || n.indexOf(sn) >= 0); });
-    if (c.length === 1) hit = c[0].id;
+    const freq = {};
+    mSites.forEach(function(s){ Array.from(new Set(mSiteWords(s.name))).forEach(function(w){ freq[w] = (freq[w] || 0) + 1; }); });
+    const lim = Math.max(2, mSites.length / 2);
+    const have = new Set(mSiteWords(raw));
+    const cands = mSites.map(function(s){ return {s: s, d: mSiteWords(s.name).filter(function(w){ return freq[w] < lim; })}; })
+      .filter(function(x){ return x.d.length && x.d.every(function(w){ return have.has(w); }); })
+      .sort(function(a, b){ return b.d.length - a.d.length; });
+    if (cands.length && (cands.length === 1 || cands[0].d.length > cands[1].d.length)) hit = cands[0].s.id;
   }
   cache[n] = hit;
   return hit;
@@ -131,6 +141,8 @@ function mRenderUsageSplit(){
   const grid = {};
   const cache = {};
   let any = false, noHome = 0, noHomeAmt = 0;
+  const missWash = {}, missFav = {};
+  let noFav = 0;
   for (const c of Object.values(mConsumers)){
     if (!c.use) continue;
     const home = mSiteIdFor(c.favSite, cache);
@@ -138,12 +150,12 @@ function mRenderUsageSplit(){
       if (mk < m1 || mk > m2) continue;
       const u = c.use[mk];
       any = true;
-      if (home && rows[home]) rows[home].collected += u.p; else { noHome++; noHomeAmt += u.p; }
+      if (home && rows[home]) rows[home].collected += u.p; else { noHome++; noHomeAmt += u.p; if (c.favSite) missFav[c.favSite] = (missFav[c.favSite] || 0) + 1; else noFav++; }
       const matched = [];
       let tot = 0;
       for (const ws of Object.keys(u.w)){
         const sid = mSiteIdFor(ws, cache);
-        if (sid && rows[sid]){ matched.push([sid, u.w[ws]]); tot += u.w[ws]; }
+        if (sid && rows[sid]){ matched.push([sid, u.w[ws]]); tot += u.w[ws]; } else missWash[ws] = (missWash[ws] || 0) + u.w[ws];
       }
       if (!tot){ if (home && rows[home]) rows[home].earned += u.p; continue; }
       for (const pair of matched){
@@ -181,7 +193,13 @@ function mRenderUsageSplit(){
     html += "</tbody></table>";
     html += "<p style=\"color:#8fa3c0;font-size:13px;margin:8px 0 0\">Collected = membership payments (before tax) from members whose favorite site is this site. " +
       "Earned = the same payments split by where those members actually washed that month - a $30 member who washed 5 times at A, 3 at B and 2 at C earns A $15, B $9 and C $6. " +
-      "Months with no washes stay with the home site." + (noHome ? " " + noHome + " member-months (" + mMoney0(noHomeAmt) + ") had no matching favorite site and aren't in Collected." : "") + "</p>";
+      "Months with no washes stay with the home site.</p>";
+    const top = function(o){ return Object.keys(o).sort(function(a, b){ return o[b] - o[a]; }).slice(0, 5).map(function(k){ return "\"" + mEsc(k) + "\" (" + o[k] + ")"; }).join(", "); };
+    const warn = [];
+    if (noFav) warn.push(noFav + " member-months are from members with no favorite site on file yet - press Rebuild usage history to look them up.");
+    if (Object.keys(missFav).length) warn.push("Favorite sites that don't match a site: " + top(missFav) + ".");
+    if (Object.keys(missWash).length) warn.push("Wash devices that don't match a site: " + top(missWash) + ".");
+    if (warn.length) html += "<p style=\"color:#ffd166;font-size:13px;margin:8px 0 0\">" + warn.join(" ") + "</p>";
     if (mSites.length > 1){
       html += "<h3 style=\"font-size:14px;margin:16px 0 8px\">Who washes where <small style=\"color:#8fa3c0;font-weight:400\">(share of each home site's member washes)</small></h3>";
       html += "<table class=\"via\"><thead><tr><th>Home site</th>" + mSites.map(function(s){ return "<th>" + mEsc(s.name) + "</th>"; }).join("") + "</tr></thead><tbody>";
@@ -202,14 +220,16 @@ function mRenderUsageSplit(){
   if (btn){
     chrome.storage.local.get(["usageRebuild"]).then(function(r){
       const ck = (r && r.usageRebuild) || null;
-      if (ck && !ck.complete && ck.done){ btn.textContent = "Resume usage rebuild"; const s = M$("memUsageRebuildStatus"); if (s) s.textContent = "Stopped after " + ck.done + " - press to continue from there."; }
-      else if (ck && ck.complete){ const s = M$("memUsageRebuildStatus"); if (s) s.textContent = "Rebuilt through " + ck.boundary + ". Regular Consumers syncs keep it current."; }
+      const s = M$("memUsageRebuildStatus");
+      if (ck && ck.v !== 2 && ck.complete){ if (s) s.textContent = "Press once more - an improved rebuild matches wash devices and favorite sites correctly."; }
+      else if (ck && ck.v === 2 && !ck.complete && (ck.done || ck.monthsComplete)){ btn.textContent = "Resume usage rebuild"; if (s) s.textContent = ck.monthsComplete ? "Months done - press to finish looking up favorite sites." : "Stopped after " + ck.done + " - press to continue from there."; }
+      else if (ck && ck.v === 2 && ck.complete){ if (s) s.textContent = "Rebuilt through " + ck.boundary + ". Regular Consumers syncs keep it current."; }
     });
     btn.addEventListener("click", async function(){
       if (typeof consRebuildUsage !== "function") return;
       const r = (await chrome.storage.local.get(["usageRebuild"])) || {};
       const ck = r.usageRebuild || null;
-      const resuming = ck && !ck.complete && ck.done;
+      const resuming = ck && ck.v === 2 && !ck.complete && (ck.done || ck.monthsComplete);
       if (!resuming && !confirm("Rebuild usage history from your Dencar payment history? It goes one month at a time and saves as it goes, so you can stop and resume.")) return;
       if (ck && ck.complete) await chrome.storage.local.set({usageRebuild: {}});
       btn.disabled = true;
