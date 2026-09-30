@@ -323,11 +323,50 @@ function pjBacktest(sitesArr, today) {
   return { rows: rows, typical: typical };
 }
 
+/* ---------------------------------------------------------------- geocoding */
+const PJ_STATES = {AL:"Alabama",AK:"Alaska",AZ:"Arizona",AR:"Arkansas",CA:"California",CO:"Colorado",CT:"Connecticut",DE:"Delaware",DC:"District of Columbia",FL:"Florida",GA:"Georgia",HI:"Hawaii",ID:"Idaho",IL:"Illinois",IN:"Indiana",IA:"Iowa",KS:"Kansas",KY:"Kentucky",LA:"Louisiana",ME:"Maine",MD:"Maryland",MA:"Massachusetts",MI:"Michigan",MN:"Minnesota",MS:"Mississippi",MO:"Missouri",MT:"Montana",NE:"Nebraska",NV:"Nevada",NH:"New Hampshire",NJ:"New Jersey",NM:"New Mexico",NY:"New York",NC:"North Carolina",ND:"North Dakota",OH:"Ohio",OK:"Oklahoma",OR:"Oregon",PA:"Pennsylvania",RI:"Rhode Island",SC:"South Carolina",SD:"South Dakota",TN:"Tennessee",TX:"Texas",UT:"Utah",VT:"Vermont",VA:"Virginia",WA:"Washington",WV:"West Virginia",WI:"Wisconsin",WY:"Wyoming"};
+
+// Dencar addresses can arrive with line breaks and no commas between street and city.
+// Tries several city guesses and only accepts a match in the right state (and ZIP when known).
+async function pjGeocode(address) {
+  const flat = String(address || "").replace(/[\r\n\t]+/g, ", ").replace(/\s{2,}/g, " ").replace(/(,\s*)+/g, ", ").trim();
+  const zipM = flat.match(/\b(\d{5})(?:-\d{4})?\b(?!.*\b\d{5}\b)/);
+  const zip = zipM ? zipM[1] : null;
+  let st = null, stIdx = -1;
+  const re = /\b([A-Z]{2})\b/g;
+  let m;
+  while ((m = re.exec(flat))) if (PJ_STATES[m[1]]) { st = m[1]; stIdx = m.index; }
+  const before = (stIdx >= 0 ? flat.slice(0, stIdx) : flat.replace(/\b\d{5}(-\d{4})?\b.*$/, "")).replace(/[,\s]+$/, "");
+  const cands = [];
+  const parts = before.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+  if (parts.length > 1) cands.push(parts[parts.length - 1]);
+  const words = before.replace(/,/g, " ").split(/\s+/).filter(Boolean);
+  for (let n = 1; n <= 3 && n <= words.length; n++) cands.push(words.slice(words.length - n).join(" "));
+  const seen = {};
+  for (const c of cands) {
+    const name = c.replace(/[^A-Za-z .'-]/g, "").trim();
+    if (name.length < 3 || seen[name.toLowerCase()]) continue;
+    seen[name.toLowerCase()] = true;
+    try {
+      const res = await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(name) + "&count=20&language=en&format=json&countryCode=US");
+      const data = await res.json();
+      let rs = (data && data.results) || [];
+      if (st) rs = rs.filter(function (r) { return r.admin1 === PJ_STATES[st]; });
+      if (!rs.length) continue;
+      const byZip = zip ? rs.filter(function (r) { return (r.postcodes || []).indexOf(zip) >= 0; }) : [];
+      const pick = byZip[0] || rs[0];
+      return { lat: pick.latitude, lon: pick.longitude, label: pick.name + (st ? ", " + st : "") };
+    } catch (e) {}
+  }
+  return null;
+}
+
 /* ---------------------------------------------------------------- weather sync */
 async function pjWxSync(statusFn) {
   const say = typeof statusFn === "function" ? statusFn : function (t) { const el = PJ$("projStatus"); if (el) el.textContent = t; };
   const btn = PJ$("pjWxSyncBtn");
   if (btn) btn.disabled = true;
+  let resultMsg = "";
   try {
     await pjLoad();
     if (!pjSites.length) { say("No Dencar history yet. Sync Overview first, then Sync Weather."); return; }
@@ -342,9 +381,9 @@ async function pjWxSync(statusFn) {
       if (!loc) {
         if (!s.address) { failed.push(s.name + " (no address on file - press Overview Sync once)"); continue; }
         say("Weather: locating " + s.name + "...");
-        const g = await cpwGeocode(s.address);
+        const g = await pjGeocode(s.address);
         if (!g) { failed.push(s.name + " (couldn't locate \"" + s.address + "\")"); continue; }
-        loc = { lat: g.lat, lon: g.lon, key: pjLocKey(g.lat, g.lon) };
+        loc = { lat: g.lat, lon: g.lon, key: pjLocKey(g.lat, g.lon), label: g.label };
         pjLoc[s.id] = loc;
         located++;
         await pjSaveWx();
@@ -385,13 +424,18 @@ async function pjWxSync(statusFn) {
       }
     }
     await pjSaveWx();
-    say("Weather done: " + located + " located, " + fetched + " days fetched, " + reused + " reused from CryptoPay, " + fcN + " forecast" + (fcN === 1 ? "" : "s") + "." +
-      (failed.length ? " Not located: " + failed.join("; ") : ""));
+    resultMsg = "Weather done: " + located + " located, " + fetched + " days fetched, " + reused + " reused from CryptoPay, " + fcN + " forecast" + (fcN === 1 ? "" : "s") + "." +
+      (failed.length ? " Not located: " + failed.join("; ") : "");
+    await chrome.storage.local.set({ dxWeatherLastMsg: { at: Date.now(), msg: resultMsg, failed: failed.length } });
+  } catch (e) {
+    console.error("[Sidecar] Weather sync failed", e);
+    resultMsg = "Weather sync failed: " + (e && e.message ? e.message : e);
   } finally {
     if (btn) btn.disabled = false;
   }
   const pg = PJ$("page-projections");
-  if (pg && pg.classList.contains("active")) pjRender();
+  if (pg && pg.classList.contains("active")) await pjRender();
+  if (resultMsg) say(resultMsg);
 }
 
 /* ---------------------------------------------------------------- snapshots */
@@ -434,7 +478,13 @@ function pjPopulateSites() {
   if (pjSelected && !pjSites.some(function (s) { return s.id === pjSelected; })) { pjSelected = null; sel.value = ""; }
 }
 
-function pjWxStatusLine(results) {
+function pjWxStatusLine(results, last) {
+  const extra = (last && last.failed) ? pjNote("<span style=\"color:#ffd166\">Last weather sync: " + pjEsc(last.msg) + "</span>") : "";
+  const where = results.map(function (r) { const s = pjSites.find(function (x) { return x.id === r.sid; }); const l = pjLoc[r.sid];
+    return pjEsc(s ? s.name : r.sid) + ": " + (l ? pjEsc(l.label || (l.lat.toFixed(2) + ", " + l.lon.toFixed(2))) + " (" + r.ctx.wxDays + " days)" : "not located"); }).join(" &middot; ");
+  return pjWxStatusLineInner(results) + pjNote("Locations: " + where) + extra;
+}
+function pjWxStatusLineInner(results) {
   let located = 0, reliable = 0, learning = [];
   for (const r of results) {
     if (r.ctx.hasLoc && r.ctx.wxDays) located++;
@@ -632,7 +682,8 @@ async function pjRender() {
     const btOk = bt && bt.rows ? bt : { rows: [], typical: null };
     const key = pjSelected || "all";
 
-    let html = pjWxStatusLine(results);
+    const lastWx = ((await chrome.storage.local.get(["dxWeatherLastMsg"])) || {}).dxWeatherLastMsg || null;
+    let html = pjWxStatusLine(results, lastWx);
     html += pjSafe("Summary", function () { return pjRenderTiles(results, btOk); });
     html += "<h2 data-key=\"outlook\">Next 10 days</h2>" + pjSafe("Next 10 days", function () { return pjRenderOutlook(results, today); });
     html += "<h2 data-key=\"retail\">Retail projection</h2>" + pjSafe("Retail projection", function () { return pjRenderRetail(results, today); });
