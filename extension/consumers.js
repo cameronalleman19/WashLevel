@@ -204,7 +204,8 @@ async function fetchVehBatch(ids, fresh){
   }
 }
 
-async function consSync(){
+async function consSync(opts){
+  const forceFull = !!(opts && opts.forceFull === true);
   C$("consSyncBtn").disabled = true;
   C$("consStatus").textContent = "Loading consumer list...";
   try {
@@ -222,14 +223,16 @@ async function consSync(){
     const pv = stored.plateVisits || {};
     const psm = stored.plateSiteMap || [];
     const hasWashData = Object.values(consumers).some(function(c){ return c.washes > 0; });
-    const isIncr = !!stored.lastPaymentSync && hasWashData;
+    const isIncr = !forceFull && !!stored.lastPaymentSync && hasWashData;
     const byName = {};
     const fresh = {};
     for (const c of list){
-      const ex = isIncr ? consumers[c.id] : null;
+      const prev = consumers[c.id] || null;
+      const ex = isIncr ? prev : null;
       fresh[c.id] = ex
-        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0, veh: ex.veh || 1, vehChecked: ex.vehChecked || false, phone: ex.phone || "", favSite: ex.favSite || "", washPlan: ex.washPlan || ""}
-        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, cancelled: 0, lastNew: 0, lastRenew: 0, veh: 1, vehChecked: false, phone: "", favSite: "", washPlan: ""};
+        ? {id: c.id, name: c.name, signup: c.signup, washes: ex.washes || 0, others: ex.others || 0, lastWash: ex.lastWash || 0, months: Object.assign({}, ex.months), use: JSON.parse(JSON.stringify(ex.use || {})), cancelled: ex.cancelled || 0, lastNew: ex.lastNew || 0, lastRenew: ex.lastRenew || 0, veh: ex.veh || 1, vehChecked: ex.vehChecked || false, phone: ex.phone || "", favSite: ex.favSite || "", washPlan: ex.washPlan || ""}
+        : {id: c.id, name: c.name, signup: c.signup, washes: 0, others: 0, lastWash: 0, months: {}, use: {}, cancelled: 0, lastNew: 0, lastRenew: 0,
+           veh: prev ? (prev.veh || 1) : 1, vehChecked: prev ? !!prev.vehChecked : false, phone: prev ? (prev.phone || "") : "", favSite: prev ? (prev.favSite || "") : "", washPlan: prev ? (prev.washPlan || "") : ""};
       const k = cNorm(c.name);
       if (k) byName[k] = fresh[c.id];
     }
@@ -303,6 +306,17 @@ async function consSync(){
         if (!c) continue;
         const rowDate = new Date(row.t).toLocaleDateString("en-CA");
         if (rowDate > latestPayDate) latestPayDate = rowDate;
+        if (/wash pass|new pass|pass renew/i.test(row.method)){
+          const umk = rowDate.slice(0, 7);
+          c.use = c.use || {};
+          const u = c.use[umk] = c.use[umk] || {w: {}, p: 0};
+          if (/wash pass/i.test(row.method)){
+            const ws = (row.device || "").split(" - ")[0].trim() || "Unknown";
+            u.w[ws] = (u.w[ws] || 0) + 1;
+          } else {
+            u.p = Math.round((u.p + Math.max(0, (row.amt || 0) - (row.tax || 0))) * 100) / 100;
+          }
+        }
         if (/pass cancelled/i.test(row.method)){ if (row.t > c.cancelled) c.cancelled = row.t; }
         if (/new pass/i.test(row.method)){ if (row.t > c.lastNew) c.lastNew = row.t; }
         if (/pass renew/i.test(row.method)){ if (row.t > c.lastRenew) c.lastRenew = row.t; }

@@ -285,6 +285,12 @@ function pjProjectDay(ctx, m, D, asOf, useActualWx) {
   return b * pjWxFactor(ctx.fits[g], w, ctx.rmap[D]);
 }
 
+// Same projection with average weather (history + trend only).
+function pjProjectDayNoWx(ctx, m, D, asOf) {
+  if (PJ_WX_GROUP[m]) return pjBase(ctx, m, D, asOf).v;
+  return pjProjectDay(ctx, m, D, asOf, false);
+}
+
 /* ---------------------------------------------------------------- aggregations */
 function pjEmpty() { const o = {}; PJ_METRICS.forEach(function (m) { o[m] = 0; }); return o; }
 function pjAddInto(a, b) { PJ_METRICS.forEach(function (m) { a[m] += b[m] || 0; }); }
@@ -303,20 +309,20 @@ function pjMonthSite(sid, today) {
   const ctx = pjCtx(sid);
   const mStart = today.slice(0, 8) + "01";
   const mEnd = pjMonthEnd(mStart);
-  const actual = pjEmpty(), rest = pjEmpty();
+  const actual = pjEmpty(), rest = pjEmpty(), restNoWx = pjEmpty();
   const h = pjHist[sid] || {};
   for (let d = mStart; d <= mEnd; d = pjAdd(d, 1)) {
     if (d < today && h[d]) {
       for (const m of PJ_METRICS) actual[m] += ctx.series[m][d] || 0;
     } else {
-      for (const m of PJ_METRICS) rest[m] += pjProjectDay(ctx, m, d, today, false);
+      for (const m of PJ_METRICS) { rest[m] += pjProjectDay(ctx, m, d, today, false); restNoWx[m] += pjProjectDayNoWx(ctx, m, d, today); }
     }
   }
   const total = pjEmpty(); pjAddInto(total, actual); pjAddInto(total, rest);
   const lyStart = pjLyMonth(mStart);
   const ly = pjActualRange(ctx, lyStart, pjMonthEnd(lyStart));
   const trail = pjActualRange(ctx, pjAdd(today, -30), pjAdd(today, -1));
-  return { sid: sid, ctx: ctx, actual: actual, rest: rest, total: total, ly: ly, trail: trail };
+  return { sid: sid, ctx: ctx, actual: actual, rest: rest, restNoWx: restNoWx, total: total, ly: ly, trail: trail };
 }
 
 function pjBacktest(sitesArr, today) {
@@ -775,8 +781,8 @@ function pjWxStatusLineInner(results) {
 }
 
 function pjRenderTiles(results, bt) {
-  const T = pjEmpty(), A = pjEmpty(), R = pjEmpty(), L = pjEmpty();
-  for (const r of results) { pjAddInto(T, r.total); pjAddInto(A, r.actual); pjAddInto(R, r.rest); pjAddInto(L, r.ly); }
+  const T = pjEmpty(), A = pjEmpty(), R = pjEmpty(), L = pjEmpty(), RN = pjEmpty();
+  for (const r of results) { pjAddInto(T, r.total); pjAddInto(A, r.actual); pjAddInto(R, r.rest); pjAddInto(L, r.ly); pjAddInto(RN, r.restNoWx); }
   const tot = pjSum(T, PJ_REV_METRICS), lyTot = pjSum(L, PJ_REV_METRICS);
   const act = pjSum(A, PJ_REV_METRICS), rest = pjSum(R, PJ_REV_METRICS);
   const typ = bt.typical !== null ? Math.max(0.03, bt.typical) : 0.10;
@@ -787,6 +793,9 @@ function pjRenderTiles(results, bt) {
   let html = "<section class=\"summary\">";
   html += pjTile("Projected month total", pjMoney(tot),
     pjMoney(tot - band) + " - " + pjMoney(tot + band) + " &middot; " + lyTxt(lyTot, tot, pjMoney));
+  const totNo = act + pjSum(RN, PJ_REV_METRICS), wxAdd = tot - totNo;
+  html += pjTile("Without weather", pjMoney(totNo), "history and trend only, average weather for the rest of the month &middot; forecast " +
+    "<span style=\"color:" + (wxAdd >= 0 ? "#4ade80" : "#f87171") + "\">" + (wxAdd >= 0 ? "+" : "-") + pjMoney(Math.abs(wxAdd)) + "</span>");
   html += pjTile("Actual so far", pjMoney(act), "through yesterday &middot; " + pjMoney(rest) + " still to come");
   html += pjTile("Retail", pjMoney(T.retail), lyTxt(L.retail, T.retail, pjMoney));
   html += pjTile("Membership", pjMoney(mem), "renewals " + pjMoney(T.renew) + " + new " + pjMoney(T.newMem) + " &middot; " + lyTxt(lyMem, mem, pjMoney));
@@ -822,25 +831,25 @@ function pjRenderOutlook(results, today) {
     const wp = wxSite ? pjWxParts(wxSite.fits.retail, w, wxSite.rmap[d]) : { f: 1, parts: [] };
     const why = pjWxReason(wp.parts);
     const lbl = pjDate(d).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
-    if (Math.abs(delta) >= 0.1 * Math.max(1, typical) && why) notable.push({ lbl: pjDate(d).toLocaleDateString("en-US", { weekday: "long" }), delta: delta, why: why });
+    if (Math.abs(delta) >= 0.1 * Math.max(1, typical) && why) notable.push({ lbl: lbl, delta: delta, why: why });
     const wxCell = w ? (pjWxIcon(w) + " " + Math.round(w.tmax) + "&deg;" + (w.pop !== undefined && w.pop !== null ? " &middot; " + w.pop + "%" : "")) : "--";
     const effCell = (!w || Math.abs(delta) < 1) ? "<span style=\"color:#8fa3c0\">--</span>" :
       "<span style=\"color:" + (delta >= 0 ? "#4ade80" : "#f87171") + "\">" + (delta >= 0 ? "+" : "-") + pjMoney(Math.abs(delta)) + "</span>" +
       (why ? " <small style=\"color:#8fa3c0\">" + pjEsc(why) + "</small>" : "");
     rows.push(pjTr([i === 0 ? lbl + " (today)" : lbl, wxCell, effCell, pjInt(t.retailCars + t.memberCars), pjMoney(t.retail),
-      pjMoney(t.renew + t.newMem), t.newCount.toFixed(1), pjMoney(pjSum(t, PJ_REV_METRICS))]));
+      pjMoney(t.renew + t.newMem), t.newCount.toFixed(1), pjMoney(pjSum(t, PJ_REV_METRICS) - delta), "<b>" + pjMoney(pjSum(t, PJ_REV_METRICS)) + "</b>"]));
   }
   let html = "";
   if (wxSite) {
     const col = impact >= 0 ? "#4ade80" : "#f87171";
     let msg = "Forecast weather is worth <b style=\"color:" + col + "\">" + (impact >= 0 ? "+" : "-") + pjMoney(Math.abs(impact)) +
-      "</b> over the next 10 days compared with average weather for these dates.";
+      "</b> over the next 10 days compared with the same days at average weather (what history and your current trend alone would project).";
     if (notable.length) msg += " Biggest swings: " + notable.sort(function (a, b) { return Math.abs(b.delta) - Math.abs(a.delta); }).slice(0, 3).map(function (n) {
       return n.lbl + " " + (n.delta >= 0 ? "+" : "-") + pjMoney(Math.abs(n.delta)) + " (" + pjEsc(n.why) + ")";
     }).join(", ") + ".";
     html += "<div class=\"card\" style=\"margin-bottom:10px\">" + msg + "</div>";
   }
-  html += pjTable(["Day", "Weather", "Weather effect", "Cars", "Retail", "Membership", "New members", "Total"], rows);
+  html += pjTable(["Day", "Weather", "Weather effect", "Cars", "Retail", "Membership", "New members", "Total at avg. weather", "Total with forecast"], rows);
   html += pjNote("Weather effect = retail and new-member sales vs. an average-weather day for that date. Renewals don't move with weather." +
     (results.length > 1 && wxSite ? " The weather column shows the first site's forecast; each site uses its own." : ""));
   html += pjNote(pjCal ? "Membership by day uses each member's actual billing date and home site (Consumers sync " + pjEsc(pjCal.lps) + "), minus that site's recent decline rate."
@@ -938,11 +947,7 @@ function pjRenderMembership(results, today) {
   if (ten && ten.reliable) canSub += " &middot; month-1 members " + (st.cancelRate * ten.rel[0] * 100).toFixed(1) + "%, year 2+ " + (st.cancelRate * ten.rel[5] * 100).toFixed(1) + "%";
   html += pjTile("Monthly member loss", (st.cancelRate * 100).toFixed(1) + "%", canSub);
   html += "</section>";
-  if (pjCal) {
-    const pct = pjCal.active ? Math.round(pjCal.matched / pjCal.active * 100) : 0;
-    html += pjNote("Renewals are credited to each member's favorite site (the site that collects them). " + pjInt(pjCal.matched) + " of " + pjInt(pjCal.active) +
-      " active members (" + pct + "%) have a favorite site on file; the rest are split by each site's share of renewal revenue.");
-  }
+  if (pjCal) html += pjNote("Renewals are credited to each member's favorite site, the site that collects them.");
   if (!pjCal) {
     const why = pjCalMeta && pjCalMeta.reason === "stale" ? "Consumers data is from " + pjEsc(pjCalMeta.lps || "a while ago") + " - run Sync Payment History on Consumers to refresh it."
       : "Run Sync Payment History on the Consumers page to project renewals from each member's billing date.";

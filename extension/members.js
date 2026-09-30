@@ -103,6 +103,111 @@ function mRenderChart(){
   wlLineChart(cv, labels, vals);
 }
 
+function mNormName(x){ return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function mSiteIdFor(name, cache){
+  const n = mNormName(name);
+  if (!n) return null;
+  if (cache[n] !== undefined) return cache[n];
+  let hit = null;
+  for (const s of mSites) if (mNormName(s.name) === n){ hit = s.id; break; }
+  if (!hit){
+    const c = mSites.filter(function(s){ const sn = mNormName(s.name); return sn && (sn.indexOf(n) >= 0 || n.indexOf(sn) >= 0); });
+    if (c.length === 1) hit = c[0].id;
+  }
+  cache[n] = hit;
+  return hit;
+}
+
+// Each member's payments for a month are split across sites by where they washed that month.
+// Months with no washes stay with the member's home (favorite) site.
+function mRenderUsageSplit(){
+  const el = M$("memUsageSplit");
+  if (!el) return;
+  const tr = mTimeRange();
+  const m1 = tr.from.slice(0, 7), m2 = tr.to.slice(0, 7);
+  const rows = {};
+  for (const s of mSites) rows[s.id] = {collected: 0, earned: 0, washes: 0, fromOthers: 0, homeAway: 0, homeWashes: 0};
+  const grid = {};
+  const cache = {};
+  let any = false, noHome = 0, noHomeAmt = 0;
+  for (const c of Object.values(mConsumers)){
+    if (!c.use) continue;
+    const home = mSiteIdFor(c.favSite, cache);
+    for (const mk of Object.keys(c.use)){
+      if (mk < m1 || mk > m2) continue;
+      const u = c.use[mk];
+      any = true;
+      if (home && rows[home]) rows[home].collected += u.p; else { noHome++; noHomeAmt += u.p; }
+      const matched = [];
+      let tot = 0;
+      for (const ws of Object.keys(u.w)){
+        const sid = mSiteIdFor(ws, cache);
+        if (sid && rows[sid]){ matched.push([sid, u.w[ws]]); tot += u.w[ws]; }
+      }
+      if (!tot){ if (home && rows[home]) rows[home].earned += u.p; continue; }
+      for (const pair of matched){
+        const sid = pair[0], n = pair[1];
+        rows[sid].earned += u.p * n / tot;
+        rows[sid].washes += n;
+        if (home && rows[home]){
+          rows[home].homeWashes += n;
+          if (sid !== home){ rows[sid].fromOthers += n; rows[home].homeAway += n; }
+          grid[home] = grid[home] || {};
+          grid[home][sid] = (grid[home][sid] || 0) + n;
+        }
+      }
+    }
+  }
+  if (!any){
+    el.innerHTML = "<p>No usage history yet. Run <b>Sync Payment History</b> on the Consumers page to start tracking where members wash. " +
+      "To fill in past months, rebuild once (takes about as long as your first Consumers sync).</p><button id=\"memUsageRebuildBtn\">Rebuild usage history</button> <span id=\"memUsageRebuildStatus\"></span>";
+  } else {
+    const sites = mFilteredSites();
+    let html = "<p style=\"color:#8fa3c0;font-size:13px;margin:0 0 8px\">" + mEsc(tr.label) + (tr.from.slice(8) !== "01" || (tr.to.slice(8) < "28" && tr.to.slice(0,7) !== new Date().toLocaleDateString("en-CA").slice(0,7)) ? " (counted in whole months)" : "") + "</p>";
+    html += "<table class=\"via\"><thead><tr><th>Site</th><th>Collected</th><th>Earned by washes</th><th>Difference</th><th>Member washes</th><th>From other sites' members</th><th>Own members washing elsewhere</th></tr></thead><tbody>";
+    let tc = 0, te = 0;
+    for (const s of sites){
+      const r = rows[s.id];
+      const d = r.earned - r.collected;
+      tc += r.collected; te += r.earned;
+      html += "<tr><td>" + mEsc(s.name) + "</td><td>" + mMoney0(r.collected) + "</td><td>" + mMoney0(r.earned) + "</td>" +
+        "<td style=\"color:" + (d >= 0 ? "#4ade80" : "#f87171") + "\">" + (d >= 0 ? "+" : "-") + mMoney0(Math.abs(d)) + "</td>" +
+        "<td>" + r.washes.toLocaleString() + "</td><td>" + (r.washes ? Math.round(r.fromOthers / r.washes * 100) : 0) + "%</td>" +
+        "<td>" + (r.homeWashes ? Math.round(r.homeAway / r.homeWashes * 100) : 0) + "%</td></tr>";
+    }
+    if (sites.length > 1) html += "<tr style=\"font-weight:700\"><td>All sites</td><td>" + mMoney0(tc) + "</td><td>" + mMoney0(te) + "</td><td></td><td></td><td></td><td></td></tr>";
+    html += "</tbody></table>";
+    html += "<p style=\"color:#8fa3c0;font-size:13px;margin:8px 0 0\">Collected = membership payments (before tax) from members whose favorite site is this site. " +
+      "Earned = the same payments split by where those members actually washed that month - a $30 member who washed 5 times at A, 3 at B and 2 at C earns A $15, B $9 and C $6. " +
+      "Months with no washes stay with the home site." + (noHome ? " " + noHome + " member-months (" + mMoney0(noHomeAmt) + ") had no matching favorite site and aren't in Collected." : "") + "</p>";
+    if (mSites.length > 1){
+      html += "<h3 style=\"font-size:14px;margin:16px 0 8px\">Who washes where <small style=\"color:#8fa3c0;font-weight:400\">(share of each home site's member washes)</small></h3>";
+      html += "<table class=\"via\"><thead><tr><th>Home site</th>" + mSites.map(function(s){ return "<th>" + mEsc(s.name) + "</th>"; }).join("") + "</tr></thead><tbody>";
+      for (const h of mSites){
+        const g = grid[h.id] || {};
+        const tot = Object.values(g).reduce(function(a, b){ return a + b; }, 0);
+        html += "<tr><td>" + mEsc(h.name) + "</td>" + mSites.map(function(s){
+          const v = tot ? (g[s.id] || 0) / tot : 0;
+          return "<td" + (s.id === h.id ? " style=\"font-weight:700\"" : "") + ">" + (tot ? Math.round(v * 100) + "%" : "--") + "</td>";
+        }).join("") + "</tr>";
+      }
+      html += "</tbody></table>";
+    }
+    html += "<p style=\"margin-top:10px\"><button id=\"memUsageRebuildBtn\" style=\"font-size:13px;padding:6px 14px\">Rebuild usage history</button> <span id=\"memUsageRebuildStatus\" style=\"color:#8fa3c0;font-size:13px\">Only needed once, to fill in months from before usage tracking started.</span></p>";
+    el.innerHTML = html;
+  }
+  const btn = M$("memUsageRebuildBtn");
+  if (btn) btn.addEventListener("click", async function(){
+    if (typeof consSync !== "function") return;
+    if (!confirm("Rebuild usage history from all of your Dencar payment history? This takes about as long as your first Consumers sync. Progress shows on the Consumers page.")) return;
+    btn.disabled = true;
+    const st = M$("memUsageRebuildStatus");
+    if (st) st.textContent = "Rebuilding... watch progress on the Consumers page.";
+    try { await consSync({forceFull: true}); } finally { btn.disabled = false; }
+    await memRender();
+  });
+}
+
 function mInitCollapsible(){
   const page = document.getElementById("page-members");
   if (!page) return;
@@ -795,6 +900,7 @@ async function memRender(){
   await run("economics", mRenderEconomics);
   await run("vehicles", mRenderVehicles);
   await run("tiers", mRenderTierBreakdown);
+  await run("usage-split", mRenderUsageSplit);
   await run("chart", mRenderChart);
   await run("tips-tiles", function(){ if (typeof wlTips === "function"){ wlTips("memTiles", WL_TIP_MEM_TILES); } });
   await run("incomplete", mRenderIncomplete);
