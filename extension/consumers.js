@@ -39,8 +39,8 @@ async function fetchConsumerPage(page){
   return out;
 }
 
-async function fetchPaymentsPage(page, startStr, endStr){
-  const body = "currentPage=" + page + "&itemsPerPage=500&PaymentType=&SiteId=&DeviceId=&StartDate=" + startStr + "&EndDate=" + endStr + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=";
+async function fetchPaymentsPage(page, startStr, endStr, siteId){
+  const body = "currentPage=" + page + "&itemsPerPage=500&PaymentType=&SiteId=" + encodeURIComponent(siteId || "") + "&DeviceId=&StartDate=" + startStr + "&EndDate=" + endStr + "&LicensePlateNum=&Code=&MaskedCardNumber=&ConsumerFirstName=&ConsumerLastName=&ConsumerId=";
   const res = await safeFetch(DENCAR_BASE + "/Payment/IndexFilterTable", {method: "POST", credentials: "include", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: body});
   if (!res.ok) return null;
   const txt = await res.text();
@@ -208,6 +208,40 @@ async function fetchVehBatch(ids, fresh){
 // any missing favorite sites. Saves as it goes and resumes where it stopped. Leaves other consumer fields alone.
 // Covers payments through the last Consumers sync; later syncs add newer payments on their own.
 const CONS_USAGE_V = 2;
+
+// Asks Dencar for recent payments one site at a time (its own Site filter), so every device name seen
+// is tied to a site ID - no guessing from names. Aborts if the filter doesn't actually narrow by site.
+async function consLearnDeviceMap(say){
+  say = say || function(){};
+  const st = (await chrome.storage.local.get(["sites", "deviceSiteMap"])) || {};
+  const sites = st.sites || [];
+  if (!sites.length) return false;
+  const end = new Date().toLocaleDateString("en-CA");
+  const sd = new Date(); sd.setDate(sd.getDate() - 90);
+  const start = sd.toLocaleDateString("en-CA");
+  const seen = {};
+  for (const site of sites){
+    for (let page = 1; page <= 3; page++){
+      say("Matching devices to sites: " + site.name + (page > 1 ? " (page " + page + ")" : "") + "...");
+      let batch = null;
+      for (let tries = 0; tries < 3 && !batch; tries++){
+        try { batch = await fetchPaymentsPage(page, start, end, site.id); } catch (e) { batch = null; }
+        if (!batch) await new Promise(function(r){ setTimeout(r, 1500 * (tries + 1)); });
+      }
+      if (!batch) return false;
+      for (const row of batch){
+        const d = (row.device || "").replace(/\s+/g, " ").trim();
+        if (!d) continue;
+        if (seen[d] && seen[d] !== site.id){ say("Dencar's site filter didn't narrow payments by site, so device matching was skipped."); return false; }
+        seen[d] = site.id;
+      }
+      if (batch.length < 500) break;
+    }
+  }
+  if (!Object.keys(seen).length) return false;
+  await chrome.storage.local.set({ deviceSiteMap: Object.assign({}, st.deviceSiteMap || {}, seen), deviceSiteMapAt: Date.now() });
+  return true;
+}
 async function consFillFavSites(say){
   const ids = Object.keys(consumers).filter(function(id){
     const c = consumers[id];
@@ -259,6 +293,7 @@ async function consRebuildUsage(say){
   const csb = document.getElementById("consSyncBtn");
   if (csb) csb.disabled = true;
   try {
+    await consLearnDeviceMap(say);
     if (!ck.monthsComplete){
       let mk = ck.done ? nextMonth(ck.done) : first;
       let total = 0, idx = 0;

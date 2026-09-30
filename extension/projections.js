@@ -367,12 +367,25 @@ function pjAddMonths(t, k) {
 // Renewal calendar from each active member's last billing date (Consumers sync).
 // Each member's renewal belongs to their favorite (home) site - the site that collects it.
 function pjNormName(x) { return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function pjAddrKey(x) {
+  const t = String(x || "").toLowerCase().replace(/[.,#]/g, " ").split(/\s+/).filter(Boolean);
+  const i = t.findIndex(function (w) { return /^\d+[a-z]?$/.test(w); });
+  if (i < 0) return null;
+  const dirs = { n: 1, s: 1, e: 1, w: 1, north: 1, south: 1, east: 1, west: 1, ne: 1, nw: 1, se: 1, sw: 1 };
+  let j = i + 1;
+  while (j < t.length && dirs[t[j]]) j++;
+  return j < t.length ? t[i] + "|" + t[j] : null;
+}
 function pjSiteForName(name, cache) {
   const n = pjNormName(name);
   if (!n) return null;
   if (cache[n] !== undefined) return cache[n];
   let hit = null;
   for (const s of pjSites) if (pjNormName(s.name) === n) { hit = s.id; break; }
+  if (!hit) {
+    const ak = pjAddrKey(name);
+    if (ak) { const a = pjSites.filter(function (s) { return s.address && pjAddrKey(s.address) === ak; }); if (a.length === 1) hit = a[0].id; }
+  }
   if (!hit) {
     const c = pjSites.filter(function (s) { const sn = pjNormName(s.name); return sn && (sn.indexOf(n) >= 0 || n.indexOf(sn) >= 0); });
     if (c.length === 1) hit = c[0].id;

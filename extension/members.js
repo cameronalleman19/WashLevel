@@ -12,7 +12,8 @@ let mSelectedSite = null;
 function mFilteredSites(){ return mSelectedSite ? mSites.filter(s => s.id === mSelectedSite) : mSites; }
 
 async function memLoad(){
-  const st = (await chrome.storage.local.get(["consumers", "hist", "sites", "viaSeen", "memCohortBase"])) || {};
+  const st = (await chrome.storage.local.get(["consumers", "hist", "sites", "viaSeen", "memCohortBase", "deviceSiteMap"])) || {};
+  mDevMap = st.deviceSiteMap || {};
   mConsumers = st.consumers || {};
   mHist = st.hist || {};
   mSites = st.sites || [];
@@ -104,6 +105,17 @@ function mRenderChart(){
 }
 
 function mNormName(x){ return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+let mDevMap = {};
+// "201 N 2nd St" and "201 2nd Street" both become "201|2nd": house number + first street word.
+function mAddrKey(x){
+  const t = String(x || "").toLowerCase().replace(/[.,#]/g, " ").split(/\s+/).filter(Boolean);
+  const i = t.findIndex(function(w){ return /^\d+[a-z]?$/.test(w); });
+  if (i < 0) return null;
+  const dirs = {n: 1, s: 1, e: 1, w: 1, north: 1, south: 1, east: 1, west: 1, ne: 1, nw: 1, se: 1, sw: 1};
+  let j = i + 1;
+  while (j < t.length && dirs[t[j]]) j++;
+  return j < t.length ? t[i] + "|" + t[j] : null;
+}
 function mSiteWords(x){ return String(x || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); }
 // Matches a Dencar device name ("Mermaid - Dillsburg - Tunnel 1") or favorite-site text to a site.
 // 1) longest site name the text starts with; 2) the site whose distinctive words (not shared by most sites) all appear.
@@ -112,7 +124,14 @@ function mSiteIdFor(name, cache){
   const n = mNormName(raw);
   if (!n) return null;
   if (cache[n] !== undefined) return cache[n];
+  const dm = mDevMap[raw.replace(/\s+/g, " ")];
+  if (dm && mSites.some(function(s){ return s.id === dm; })){ cache[n] = dm; return dm; }
   let hit = null, best = 0;
+  const ak = mAddrKey(raw);
+  if (ak){
+    const byAddr = mSites.filter(function(s){ return s.address && mAddrKey(s.address) === ak; });
+    if (byAddr.length === 1){ cache[n] = byAddr[0].id; return byAddr[0].id; }
+  }
   for (const s of mSites){ const sn = mNormName(s.name); if (sn && n.indexOf(sn) === 0 && sn.length > best){ best = sn.length; hit = s.id; } }
   if (!hit){
     const freq = {};
@@ -200,6 +219,7 @@ function mRenderUsageSplit(){
     if (Object.keys(missFav).length) warn.push("Favorite sites that don't match a site: " + top(missFav) + ".");
     if (Object.keys(missWash).length) warn.push("Wash devices that don't match a site: " + top(missWash) + ".");
     if (warn.length) html += "<p style=\"color:#ffd166;font-size:13px;margin:8px 0 0\">" + warn.join(" ") + "</p>";
+    if (Object.keys(missWash).length) html += "<p style=\"margin:6px 0 0\"><button id=\"memDevMapBtn\" style=\"font-size:13px;padding:6px 14px\">Match devices to sites</button> <span id=\"memDevMapStatus\" style=\"color:#8fa3c0;font-size:13px\">Asks Dencar which site each device belongs to.</span></p>";
     if (mSites.length > 1){
       html += "<h3 style=\"font-size:14px;margin:16px 0 8px\">Who washes where <small style=\"color:#8fa3c0;font-weight:400\">(share of each home site's member washes)</small></h3>";
       html += "<table class=\"via\"><thead><tr><th>Home site</th>" + mSites.map(function(s){ return "<th>" + mEsc(s.name) + "</th>"; }).join("") + "</tr></thead><tbody>";
@@ -216,6 +236,19 @@ function mRenderUsageSplit(){
     html += "<p style=\"margin-top:10px\"><button id=\"memUsageRebuildBtn\" style=\"font-size:13px;padding:6px 14px\">Rebuild usage history</button> <span id=\"memUsageRebuildStatus\" style=\"color:#8fa3c0;font-size:13px\">Only needed once, to fill in months from before usage tracking started. Saves after every month, so it can resume if it stops.</span></p>";
     el.innerHTML = html;
   }
+  const dmb = M$("memDevMapBtn");
+  if (dmb) dmb.addEventListener("click", async function(){
+    if (typeof consLearnDeviceMap !== "function") return;
+    dmb.disabled = true;
+    const st = M$("memDevMapStatus");
+    let ok = false;
+    try { ok = await consLearnDeviceMap(function(t){ if (st) st.textContent = t; }); } finally { dmb.disabled = false; }
+    const msg = st ? st.textContent : "";
+    await memLoad();
+    mRenderUsageSplit();
+    const st2 = M$("memDevMapStatus");
+    if (st2 && !ok) st2.textContent = msg || "Couldn't reach Dencar - make sure you're logged in and try again.";
+  });
   const btn = M$("memUsageRebuildBtn");
   if (btn){
     chrome.storage.local.get(["usageRebuild"]).then(function(r){
