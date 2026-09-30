@@ -1,11 +1,11 @@
 const SIDECAR_API_BASE = "https://washlevel.com/api/sidecar";
 const SIDECAR_CACHE_MS = 24 * 60 * 60 * 1000;
-const SIDECAR_SYNC_BTN_IDS = ["syncBtn", "syncAllBtn", "consSyncBtn", "viaSyncBtn"];
+const SIDECAR_SYNC_BTN_IDS = ["syncBtn", "syncAllBtn", "consSyncBtn", "viaSyncBtn", "cSyncBtn", "cGenBtn", "cpSyncBtn", "cpOvSyncBtn", "cpOvSyncAllBtn", "cpwSyncBtn"];
 
 let sidecarLicenseState = null;
 
 document.addEventListener("click", function (e) {
-  const btn = e.target.closest && e.target.closest("#syncBtn, #syncAllBtn, #consSyncBtn, #viaSyncBtn");
+  const btn = e.target.closest && e.target.closest(SIDECAR_SYNC_BTN_IDS.map(function (id) { return "#" + id; }).join(", "));
   if (!btn) return;
   if (sidecarLicenseState && !sidecarLicenseState.valid) {
     e.preventDefault();
