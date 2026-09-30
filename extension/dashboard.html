@@ -37,6 +37,7 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
       <button class="nav-btn" data-page="via">VIA Guard</button>
       <button class="nav-btn" data-page="members">Members</button>
       <button class="nav-btn" data-page="retail">Retail</button>
+      <button class="nav-btn" data-page="projections">Projections</button>
       <button class="nav-btn" data-page="codes">Codes</button>
     </div>
   </div>
@@ -192,6 +193,16 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <div id="retPlateInsights"></div>
 </div>
 
+<div class="page" id="page-projections">
+<header>
+  <h1>Projections</h1>
+  <button id="pjWxSyncBtn">Sync Weather</button>
+  <span id="projStatus"></span>
+  <select id="projSiteFilter"><option value="">All Sites</option></select>
+</header>
+<div id="projBody"></div>
+</div>
+
 <div class="page" id="page-codes">
 <header><h1>Wash Codes</h1></header>
 <div id="codesBody"></div>
@@ -327,6 +338,7 @@ ul.cpj-notes li{margin:6px 0;color:#b9c6da;font-size:13px;line-height:1.5;}
 <script src="consumers.js"></script>
 <script src="members.js"></script>
 <script src="retail.js"></script>
+<script src="projections.js"></script>
 <script src="cryptopay.js"></script>
 <script src="cpproj.js"></script>
 <script src="cpweather.js"></script>

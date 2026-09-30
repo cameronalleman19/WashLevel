@@ -251,7 +251,8 @@ async function syncAll(){
       if(typeof cLoad === "function") await cLoad();
       await cFullSync(function(msg){ setStatus("Sync All — Codes: "+msg); });
       if(typeof cUpdateDisplay === "function") cUpdateDisplay();
-    }]
+    }],
+    ["Weather", async function(){ if(typeof pjWxSync === "function") await pjWxSync(setStatus); }]
   ];
   try {
     for (var i = 0; i < steps.length; i++){
